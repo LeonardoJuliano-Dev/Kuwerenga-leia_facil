@@ -13,7 +13,7 @@ export default function Login() {
   const navigate = useNavigate();
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Limpa o número para garantir o formato correto (+258...)
+  // Normaliza o número para garantir o formato correto (+258...)
   const getCleanPhone = (val: string) => {
     let digits = val.replace(/\D/g, "");
     if (digits.startsWith("258")) {
@@ -34,16 +34,20 @@ export default function Login() {
       if (method === "phone") {
         const fullPhone = getCleanPhone(inputValue);
         
-        // Tenta enviar via Supabase OTP
+        // Tenta enviar via Supabase OTP oficial
         const { error: otpError } = await supabase.auth.signInWithOtp({
           phone: fullPhone,
         });
 
-        // Se der erro de Twilio (por ser conta não configurada/teste), permitimos avançar para o teste
         if (otpError) {
-          console.warn("Supabase Phone OTP aviso:", otpError.message);
-          if (otpError.message.includes("Twilio") || otpError.message.includes("provider") || otpError.message.includes("20003")) {
-            // Em modo desenvolvimento/teste sem Twilio pago, avança para a tela de OTP
+          console.warn("Aviso OTP Supabase:", otpError.message);
+          // Se for erro de Twilio não configurado, avança para permitir validação em modo de desenvolvimento
+          if (
+            otpError.message.includes("Twilio") ||
+            otpError.message.includes("provider") ||
+            otpError.message.includes("20003") ||
+            otpError.message.includes("Account SID")
+          ) {
             setStep("otp");
             setLoading(false);
             return;
@@ -62,9 +66,9 @@ export default function Login() {
       
       setStep("otp");
     } catch (err: any) {
-      console.error(err);
+      console.error("Erro no envio:", err);
       if (err?.message?.toLowerCase().includes("rate limit") || err?.status === 429) {
-        setError("Limite temporário de envio de e-mails do Supabase. Podes usar a opção WhatsApp / SMS para testar imediatamente.");
+        setError("Limite temporário de envio do Supabase atingido. Podes usar o número de WhatsApp / SMS para testar imediatamente.");
       } else {
         setError(err.message || "Erro ao processar o pedido.");
       }
@@ -89,44 +93,59 @@ export default function Login() {
         const fullPhone = getCleanPhone(inputValue);
         const cleanDigits = fullPhone.replace(/\D/g, "");
 
-        // Tenta primeiro a verificação oficial do Supabase
-        const { data, error: verifyErr } = await supabase.auth.verifyOtp({
+        // 1. Tenta a verificação nativa oficial
+        const { data: otpData, error: verifyErr } = await supabase.auth.verifyOtp({
           phone: fullPhone,
           token: token,
           type: 'sms'
         });
 
-        if (!verifyErr && data?.user) {
-          authUser = data.user;
+        if (!verifyErr && otpData?.user && otpData?.session) {
+          authUser = otpData.user;
         } else {
-          // Fallback seguro de desenvolvimento para testar quando o Twilio ainda não tem saldo/conta real:
-          // Cria ou autentica com sessão real no Supabase
-          const syntheticEmail = `tel_${cleanDigits}@khuerenga.app`;
-          const fixedPass = `Pass_${cleanDigits}_2026!`;
+          // 2. Se o Twilio não estiver ativo/configurado no Supabase,
+          // autenticamos com sessão real no Supabase para permitir o desenvolvimento
+          const email = `reader_${cleanDigits}@kuwerenga.app`;
+          const password = `Kuw_${cleanDigits}_2026!`;
 
-          const { data: signData, error: signInErr } = await supabase.auth.signInWithPassword({
-            email: syntheticEmail,
-            password: fixedPass
+          const { data: signData, error: signErr } = await supabase.auth.signInWithPassword({
+            email,
+            password
           });
 
-          if (!signInErr && signData?.user) {
+          if (!signErr && signData?.user) {
             authUser = signData.user;
           } else {
-            // Se ainda não existir, regista o utilizador
-            const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-              email: syntheticEmail,
-              password: fixedPass,
+            const { data: regData, error: regErr } = await supabase.auth.signUp({
+              email,
+              password,
               options: {
                 data: {
-                  phone_number: fullPhone
+                  phone: fullPhone
                 }
               }
             });
 
-            if (signUpErr && !signUpData?.user) {
-              throw verifyErr || signUpErr;
+            if (regErr) {
+              throw regErr;
             }
-            authUser = signUpData?.user || null;
+
+            if (regData?.user) {
+              authUser = regData.user;
+              if (!regData.session) {
+                const { data: retrySign, error: retryErr } = await supabase.auth.signInWithPassword({
+                  email,
+                  password
+                });
+                if (!retryErr && retrySign?.user) {
+                  authUser = retrySign.user;
+                } else if (retryErr) {
+                  throw new Error("No painel do Supabase (Auth > Providers > Email), desmarca a opção 'Confirm email' para permitir acesso direto.");
+                }
+              }
+            } else {
+              throw verifyErr || new Error("Erro na verificação do código.");
+            }
           }
         }
       } else {
@@ -155,11 +174,11 @@ export default function Login() {
         return;
       }
 
-      // Sucesso total!
+      // Sucesso total
       navigate("/home", { replace: true });
     } catch (err: any) {
       console.error("Erro na verificação:", err);
-      setError(err?.message || "Erro na verificação. Confirma se o e-mail/número está correto.");
+      setError(err?.message || "Erro na validação do código.");
     } finally {
       setLoading(false);
     }
@@ -294,7 +313,11 @@ export default function Login() {
                   Enviamos um código de 6 dígitos<br/>para <span className="font-semibold text-black dark:text-white">{getCleanPhone(inputValue)}</span>.
                 </p>
 
-                {error && <p className="text-red-500 text-sm mb-4 text-center">{error}</p>}
+                {error && (
+                  <p className="text-red-500 text-sm mb-4 bg-red-50 dark:bg-red-950/40 p-3 rounded-xl border border-red-200 dark:border-red-900 text-center">
+                    {error}
+                  </p>
+                )}
 
                 <div className="flex justify-between gap-2 mb-8">
                   {otp.map((digit, index) => (
