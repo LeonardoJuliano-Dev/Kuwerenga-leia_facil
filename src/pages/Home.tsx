@@ -258,7 +258,7 @@ export default function Home() {
               {featuredBooks.map((book) => (
                 <Link
                   key={book.id}
-                  to={`/reader?bookId=${book.id}`}
+                  to={`/book/${book.id}`}
                   className="w-28 flex-shrink-0 snap-start group"
                 >
                   <div className="w-full h-40 bg-gray-100 dark:bg-gray-800 rounded-xl mb-2 overflow-hidden flex flex-col items-center justify-center border border-gray-200 dark:border-gray-700 shadow-xs relative">

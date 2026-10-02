@@ -74,26 +74,9 @@ export default function Explore() {
     return matchesSearch && matchesCategory && matchesType;
   });
 
-  // Abrir Livro e adicionar à biblioteca do utilizador
-  const handleOpenBook = async (book: Book) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // Regista na biblioteca se ainda não estiver
-        await supabase.from("user_books").upsert(
-          {
-            user_id: user.id,
-            book_id: book.id,
-            status: "reading",
-            last_read_at: new Date().toISOString()
-          },
-          { onConflict: "user_id,book_id" }
-        );
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    navigate(`/reader?bookId=${book.id}`);
+  // Abrir Página de Detalhes do Livro
+  const handleOpenBook = (book: Book) => {
+    navigate(`/book/${book.id}`);
   };
 
   return (
