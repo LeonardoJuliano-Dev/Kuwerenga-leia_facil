@@ -1,4 +1,5 @@
 import { Search, BookHeart, Users, MoreHorizontal, Bell } from "lucide-react";
+import { Link } from "react-router-dom";
 import BottomNav from "../components/BottomNav";
 
 export default function Home() {
@@ -51,9 +52,9 @@ export default function Home() {
               </div>
             </div>
             
-            <button className="w-full mt-2 bg-black dark:bg-white text-white dark:text-black py-3 rounded-xl text-sm font-semibold">
-              Continuar
-            </button>
+            <Link to="/reader" className="w-full mt-2 bg-black dark:bg-white text-white dark:text-black py-3 rounded-xl text-sm font-semibold flex items-center justify-center active:scale-95 transition-transform">
+              Continuar a Leitura
+            </Link>
           </div>
         </section>
 
