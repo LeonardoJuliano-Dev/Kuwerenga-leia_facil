@@ -60,26 +60,26 @@ export default function Home() {
 
         {/* Quick Actions (Round Buttons) */}
         <section className="px-6 mb-10 flex justify-between">
-          <div className="flex flex-col items-center gap-2 cursor-pointer">
-            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-sm">
+          <Link to="/explore" className="flex flex-col items-center gap-2 cursor-pointer group">
+            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
               <Search className="w-6 h-6" />
             </div>
             <span className="text-xs font-medium">Pesquisar</span>
-          </div>
-          <div className="flex flex-col items-center gap-2 cursor-pointer">
-            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-sm">
+          </Link>
+          <Link to="/donate-book" className="flex flex-col items-center gap-2 cursor-pointer group">
+            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
               <BookHeart className="w-6 h-6" />
             </div>
             <span className="text-xs font-medium">Doar livro</span>
-          </div>
-          <div className="flex flex-col items-center gap-2 cursor-pointer">
-            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-sm">
+          </Link>
+          <div className="flex flex-col items-center gap-2 cursor-pointer group">
+            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
               <Users className="w-6 h-6" />
             </div>
             <span className="text-xs font-medium">Clubes</span>
           </div>
-          <div className="flex flex-col items-center gap-2 cursor-pointer">
-            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-sm">
+          <div className="flex flex-col items-center gap-2 cursor-pointer group">
+            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
               <MoreHorizontal className="w-6 h-6" />
             </div>
             <span className="text-xs font-medium">Mais</span>

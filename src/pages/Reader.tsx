@@ -163,7 +163,10 @@ export default function Reader() {
         const context = canvas.getContext("2d");
         if (!context) return;
 
-        const viewport = page.getViewport({ scale });
+        const containerWidth = Math.min(window.innerWidth - (window.innerWidth < 640 ? 16 : 48), 720);
+        const unscaledViewport = page.getViewport({ scale: 1 });
+        const autoScale = (containerWidth / unscaledViewport.width) * scale;
+        const viewport = page.getViewport({ scale: autoScale });
         const pixelRatio = window.devicePixelRatio || 1;
 
         canvas.width = viewport.width * pixelRatio;
