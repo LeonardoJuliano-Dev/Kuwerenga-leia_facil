@@ -222,12 +222,12 @@ export default function Home() {
             </div>
             <span className="text-xs font-medium">Doar livro</span>
           </Link>
-          <div className="flex flex-col items-center gap-2 cursor-pointer group opacity-60">
-            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-xs">
+          <Link to="/community" className="flex flex-col items-center gap-2 cursor-pointer group">
+            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
               <Users className="w-6 h-6" />
             </div>
             <span className="text-xs font-medium">Clubes</span>
-          </div>
+          </Link>
           <div className="flex flex-col items-center gap-2 cursor-pointer group opacity-60">
             <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-xs">
               <MoreHorizontal className="w-6 h-6" />
