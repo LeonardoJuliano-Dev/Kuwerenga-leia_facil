@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Users,
   Plus,
@@ -35,6 +36,7 @@ interface Discussion {
 }
 
 export default function Community() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"clubs" | "my_clubs" | "discussions">("clubs");
   const [clubs, setClubs] = useState<Club[]>(() => getCached<Club[]>("community_clubs") || []);
   const [myClubIds, setMyClubIds] = useState<string[]>(() => getCached<string[]>("my_club_ids") || []);
@@ -338,6 +340,30 @@ export default function Community() {
 
       {/* Conteúdo Principal */}
       <main className="flex-1 p-6">
+        {/* Banner do Chat Geral da Comunidade */}
+        <div
+          onClick={() => navigate("/club/geral")}
+          className="p-5 rounded-3xl bg-black dark:bg-white text-white dark:text-black shadow-md cursor-pointer transition-all active:scale-[0.99] flex items-center justify-between gap-4 mb-6 hover:opacity-95"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 dark:bg-black/10 flex items-center justify-center flex-shrink-0">
+              <MessageSquare className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm sm:text-base leading-tight">Chat Geral da Comunidade</h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20 dark:bg-black/20 uppercase tracking-wider">Aberto</span>
+              </div>
+              <p className="text-xs opacity-75 mt-0.5 line-clamp-1">
+                Conversa livre com chat em direto: texto, fotos e notas de voz de até 30s
+              </p>
+            </div>
+          </div>
+          <button className="px-4 py-2 rounded-xl bg-white text-black dark:bg-black dark:text-white text-xs font-bold whitespace-nowrap shadow-xs">
+            Abrir Chat
+          </button>
+        </div>
+
         {/* ABA 1: Todos os Clubes */}
         {activeTab === "clubs" && (
           <section className="space-y-4">
@@ -366,11 +392,12 @@ export default function Community() {
               clubs.map((club) => (
                 <div
                   key={club.id}
-                  className="p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/60 shadow-xs flex flex-col justify-between gap-4"
+                  onClick={() => navigate(`/club/${club.id}`)}
+                  className="p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/60 shadow-xs flex flex-col justify-between gap-4 cursor-pointer hover:border-black/30 dark:hover:border-white/30 transition-all group"
                 >
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <h3 className="font-bold text-base leading-tight">{club.name}</h3>
+                      <h3 className="font-bold text-base leading-tight group-hover:underline">{club.name}</h3>
                       <span className="text-[11px] text-gray-400 font-medium flex items-center gap-1">
                         <Users className="w-3.5 h-3.5" />
                         {club.member_count} {club.member_count === 1 ? "membro" : "membros"}
@@ -397,16 +424,33 @@ export default function Community() {
                     <span className="text-[11px] text-gray-400">
                       {club.is_member ? "Já és membro deste clube" : "Aberto à comunidade"}
                     </span>
-                    <button
-                      onClick={() => handleToggleJoinClub(club.id, !!club.is_member)}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
-                        club.is_member
-                          ? "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-red-50 hover:text-red-500"
-                          : "bg-black dark:bg-white text-white dark:text-black shadow-xs"
-                      }`}
-                    >
-                      {club.is_member ? "Sair do Clube" : "Participar"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/club/${club.id}`);
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-black dark:text-white transition-all flex items-center gap-1.5"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>Entrar no Clube</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleJoinClub(club.id, !!club.is_member);
+                        }}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
+                          club.is_member
+                            ? "bg-transparent text-gray-400 hover:text-red-500"
+                            : "bg-black dark:bg-white text-white dark:text-black shadow-xs"
+                        }`}
+                      >
+                        {club.is_member ? "Sair" : "Participar"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
@@ -437,11 +481,12 @@ export default function Community() {
               myClubs.map((club) => (
                 <div
                   key={club.id}
-                  className="p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/60 shadow-xs flex flex-col justify-between gap-4"
+                  onClick={() => navigate(`/club/${club.id}`)}
+                  className="p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/60 shadow-xs flex flex-col justify-between gap-4 cursor-pointer hover:border-black/30 dark:hover:border-white/30 transition-all group"
                 >
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <h3 className="font-bold text-base leading-tight">{club.name}</h3>
+                      <h3 className="font-bold text-base leading-tight group-hover:underline">{club.name}</h3>
                       <span className="text-[11px] text-emerald-500 font-medium flex items-center gap-1">
                         <Check className="w-3.5 h-3.5" />
                         Membro
@@ -462,9 +507,24 @@ export default function Community() {
                     )}
                   </div>
 
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
                     <button
-                      onClick={() => handleToggleJoinClub(club.id, true)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/club/${club.id}`);
+                      }}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold active:scale-95 transition-transform shadow-xs"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>Entrar no Chat & Fórum</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleJoinClub(club.id, true);
+                      }}
                       className="text-xs text-red-500 hover:underline font-medium"
                     >
                       Sair do Clube

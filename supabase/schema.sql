@@ -249,16 +249,8 @@ create table public.club_members (
 
 alter table public.club_members enable row level security;
 
-create policy "Members can view their club memberships"
-  on public.club_members for select using (auth.uid() = user_id);
-
-create policy "Club members are viewable by other members"
-  on public.club_members for select using (
-    exists (
-      select 1 from public.club_members cm
-      where cm.club_id = club_members.club_id and cm.user_id = auth.uid()
-    )
-  );
+create policy "Club members are viewable by everyone"
+  on public.club_members for select using (true);
 
 create policy "Authenticated users can join clubs"
   on public.club_members for insert with check (auth.uid() = user_id);
@@ -299,21 +291,11 @@ create table public.club_discussions (
 
 alter table public.club_discussions enable row level security;
 
-create policy "Club members can view discussions"
-  on public.club_discussions for select using (
-    exists (
-      select 1 from public.club_members cm
-      where cm.club_id = club_discussions.club_id and cm.user_id = auth.uid()
-    )
-  );
+create policy "Discussions are viewable by everyone"
+  on public.club_discussions for select using (true);
 
-create policy "Club members can post discussions"
-  on public.club_discussions for insert with check (
-    exists (
-      select 1 from public.club_members cm
-      where cm.club_id = club_discussions.club_id and cm.user_id = auth.uid()
-    )
-  );
+create policy "Authenticated users can post discussions"
+  on public.club_discussions for insert with check (auth.uid() = user_id);
 
 
 -- ========== STORAGE BUCKETS ==========

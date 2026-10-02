@@ -12,6 +12,7 @@ import Reader from "./pages/Reader";
 import DonateBook from "./pages/DonateBook";
 import BookDetails from "./pages/BookDetails";
 import Community from "./pages/Community";
+import ClubDetails from "./pages/ClubDetails";
 
 function AuthRouter() {
   const navigate = useNavigate();
@@ -92,6 +93,7 @@ function AuthRouter() {
       <Route path="/donate-book" element={<DonateBook />} />
       <Route path="/book/:id" element={<BookDetails />} />
       <Route path="/community" element={<Community />} />
+      <Route path="/club/:id" element={<ClubDetails />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
