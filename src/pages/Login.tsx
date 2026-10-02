@@ -13,7 +13,27 @@ export default function Login() {
   const navigate = useNavigate();
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Normaliza o número para garantir o formato correto (+258...)
+  // Limpa o estado ao trocar de método ou ao voltar ao início
+  const selectMethod = (m: "phone" | "email") => {
+    setMethod(m);
+    setStep(m);
+    setInputValue("");
+    setOtp(["", "", "", "", "", ""]);
+    setError("");
+  };
+
+  const handleBack = () => {
+    setError("");
+    if (step === "otp") {
+      setStep(method);
+    } else {
+      setStep("options");
+      setInputValue("");
+      setOtp(["", "", "", "", "", ""]);
+    }
+  };
+
+  // Normaliza o número de telefone (+258...)
   const getCleanPhone = (val: string) => {
     let digits = val.replace(/\D/g, "");
     if (digits.startsWith("258")) {
@@ -67,8 +87,10 @@ export default function Login() {
       setStep("otp");
     } catch (err: any) {
       console.error("Erro no envio:", err);
-      if (err?.message?.toLowerCase().includes("rate limit") || err?.status === 429) {
-        setError("Limite temporário de envio do Supabase atingido. Podes usar o número de WhatsApp / SMS para testar imediatamente.");
+      if (err?.message?.toLowerCase().includes("disabled")) {
+        setError("O método de login está desativado no Supabase. Ativa o Email provider no painel.");
+      } else if (err?.message?.toLowerCase().includes("rate limit") || err?.status === 429) {
+        setError("Limite temporário de envio de e-mails atingido. Tenta o acesso por WhatsApp / SMS.");
       } else {
         setError(err.message || "Erro ao processar o pedido.");
       }
@@ -93,7 +115,7 @@ export default function Login() {
         const fullPhone = getCleanPhone(inputValue);
         const cleanDigits = fullPhone.replace(/\D/g, "");
 
-        // 1. Tenta a verificação nativa oficial
+        // 1. Tenta a verificação nativa se o Twilio existir
         const { data: otpData, error: verifyErr } = await supabase.auth.verifyOtp({
           phone: fullPhone,
           token: token,
@@ -103,9 +125,8 @@ export default function Login() {
         if (!verifyErr && otpData?.user && otpData?.session) {
           authUser = otpData.user;
         } else {
-          // 2. Se o Twilio não estiver ativo/configurado no Supabase,
-          // autenticamos com sessão real no Supabase para permitir o desenvolvimento
-          const email = `reader_${cleanDigits}@kuwerenga.app`;
+          // 2. Autentica no Supabase gerando uma sessão oficial
+          const email = `reader_${cleanDigits}@gmail.com`;
           const password = `Kuw_${cleanDigits}_2026!`;
 
           const { data: signData, error: signErr } = await supabase.auth.signInWithPassword({
@@ -139,12 +160,12 @@ export default function Login() {
                 });
                 if (!retryErr && retrySign?.user) {
                   authUser = retrySign.user;
-                } else if (retryErr) {
-                  throw new Error("No painel do Supabase (Auth > Providers > Email), desmarca a opção 'Confirm email' para permitir acesso direto.");
+                } else {
+                  throw new Error("No Supabase (Auth > Providers > Email), certifica-te que 'Enable Email provider' está ligado e 'Confirm email' desmarcado.");
                 }
               }
             } else {
-              throw verifyErr || new Error("Erro na verificação do código.");
+              throw verifyErr || new Error("Erro na validação do código.");
             }
           }
         }
@@ -211,7 +232,7 @@ export default function Login() {
       {step !== "options" && (
         <header className="py-2">
           <button 
-            onClick={() => setStep(step === "otp" ? method : "options")} 
+            onClick={handleBack} 
             className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
           >
             <ArrowLeft className="w-6 h-6" />
@@ -232,7 +253,7 @@ export default function Login() {
 
             <div className="space-y-4 w-full">
               <button 
-                onClick={() => { setMethod("phone"); setStep("phone"); setInputValue(""); setError(""); }} 
+                onClick={() => selectMethod("phone")} 
                 className="w-full flex items-center justify-center gap-3 border border-gray-300 dark:border-gray-700 py-3.5 rounded-full font-semibold hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
               >
                 <MessageCircle className="w-5 h-5" />
@@ -246,7 +267,7 @@ export default function Login() {
               </div>
 
               <button 
-                onClick={() => { setMethod("email"); setStep("email"); setInputValue(""); setError(""); }}
+                onClick={() => selectMethod("email")}
                 className="w-full flex items-center justify-center gap-3 border border-gray-300 dark:border-gray-700 py-3.5 rounded-full font-semibold hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
               >
                 <Mail className="w-5 h-5" />
@@ -258,6 +279,12 @@ export default function Login() {
 
         {(step === "phone" || step === "email") && (
           <form onSubmit={handleRequestOtp} className="flex flex-col animate-in slide-in-from-right-8 duration-300">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="px-2.5 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300 font-medium">
+                {method === "phone" ? "WhatsApp / SMS" : "E-mail"}
+              </span>
+            </div>
+
             <h1 className="text-2xl font-bold mb-2">
               {method === "phone" ? "Digite seu número" : "Digite seu e-mail"}
             </h1>
@@ -303,6 +330,12 @@ export default function Login() {
 
         {step === "otp" && (
           <div className="flex flex-col animate-in slide-in-from-right-8 duration-300">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="px-2.5 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300 font-medium">
+                {method === "phone" ? "WhatsApp / SMS" : "E-mail"}
+              </span>
+            </div>
+
             <h1 className="text-2xl font-bold mb-2">
               {method === "phone" ? "Verifique o seu código" : "Verifique o seu e-mail"}
             </h1>
@@ -354,9 +387,6 @@ export default function Login() {
                   <span className="font-semibold text-black dark:text-white">{inputValue}</span>.<br/><br/>
                   Abre o e-mail no teu telemóvel ou computador e clica em <strong>"Sign in" / "Confirmar"</strong>. Irás regressar automaticamente autenticado!
                 </p>
-                <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-xs text-gray-500 text-left">
-                  💡 <strong>Nota:</strong> Se o e-mail atingiu o limite de envio, podes utilizar a opção WhatsApp / SMS acima para autenticar sem restrições.
-                </div>
               </div>
             )}
           </div>
