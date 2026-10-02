@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { ArrowLeft, BookOpen, MessageCircle, Mail } from "lucide-react";
 
 export default function Login() {
@@ -146,7 +146,7 @@ export default function Login() {
               {otp.map((digit, index) => (
                 <input
                   key={index}
-                  ref={(el) => (inputRefs.current[index] = el)}
+                  ref={(el) => { inputRefs.current[index] = el; }}
                   type="text"
                   maxLength={1}
                   value={digit}

@@ -1,5 +1,4 @@
-import { Search, BookHeart, Users, Compass, User, MoreHorizontal, Bell } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Search, BookHeart, Users, MoreHorizontal, Bell } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 
 export default function Home() {

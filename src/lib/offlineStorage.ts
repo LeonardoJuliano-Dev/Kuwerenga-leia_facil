@@ -120,7 +120,7 @@ export async function getUnsyncedProgress(): Promise<ReadingProgress[]> {
   const db = await openDB();
   const tx = db.transaction('reading_progress', 'readonly');
   const index = tx.objectStore('reading_progress').index('synced');
-  const request = index.getAll(false);
+  const request = index.getAll(IDBKeyRange.only(0));
 
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result || []);
@@ -169,7 +169,7 @@ export async function getUnsyncedAnnotations(): Promise<OfflineAnnotation[]> {
   const db = await openDB();
   const tx = db.transaction('annotations', 'readonly');
   const index = tx.objectStore('annotations').index('synced');
-  const request = index.getAll(false);
+  const request = index.getAll(IDBKeyRange.only(0));
 
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result || []);
