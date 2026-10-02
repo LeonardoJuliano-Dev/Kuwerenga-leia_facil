@@ -13,7 +13,7 @@ export default function Login() {
   const navigate = useNavigate();
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // 1. Pedir o Código OTP
+  // 1. Pedir o Código OTP ou Magic Link
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue) return;
@@ -23,7 +23,6 @@ export default function Login() {
 
     try {
       if (method === "phone") {
-        // Assume Moçambique prefix for now
         const fullPhone = `+258${inputValue}`;
         const { error } = await supabase.auth.signInWithOtp({
           phone: fullPhone,
@@ -32,6 +31,9 @@ export default function Login() {
       } else {
         const { error } = await supabase.auth.signInWithOtp({
           email: inputValue,
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+          },
         });
         if (error) throw error;
       }
@@ -39,13 +41,17 @@ export default function Login() {
       setStep("otp");
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Erro ao pedir o código.");
+      if (err?.message?.toLowerCase().includes("rate limit") || err?.status === 429) {
+        setError("Limite temporário de envio de e-mails atingido no Supabase. Aguarda alguns minutos ou usa o número de teste do WhatsApp / SMS.");
+      } else {
+        setError(err.message || "Erro ao processar o pedido.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // 2. Verificar o Código OTP
+  // 2. Verificar o Código OTP (quando por telefone)
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = otp.join("");
@@ -55,29 +61,44 @@ export default function Login() {
     setError("");
 
     try {
-      let authError;
+      let authData;
       
       if (method === "phone") {
         const fullPhone = `+258${inputValue}`;
-        const { error } = await supabase.auth.verifyOtp({
+        const { data, error } = await supabase.auth.verifyOtp({
           phone: fullPhone,
           token: token,
           type: 'sms'
         });
-        authError = error;
+        if (error) throw error;
+        authData = data;
       } else {
-        const { error } = await supabase.auth.verifyOtp({
+        const { data, error } = await supabase.auth.verifyOtp({
           email: inputValue,
           token: token,
           type: 'email'
         });
-        authError = error;
+        if (error) throw error;
+        authData = data;
       }
 
-      if (authError) throw authError;
+      // Check if user has full_name filled
+      const userId = authData.user?.id;
+      if (userId) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", userId)
+          .maybeSingle();
+
+        if (!profile?.full_name || profile.full_name.trim() === "") {
+          navigate("/setup-profile", { replace: true });
+          return;
+        }
+      }
 
       // Sucesso!
-      navigate("/home");
+      navigate("/home", { replace: true });
     } catch (err: any) {
       console.error(err);
       setError("Código inválido ou expirado.");
@@ -135,7 +156,6 @@ export default function Login() {
             </p>
 
             <div className="space-y-4 w-full">
-              {/* O Google Auth requer configuração extra no Supabase, ignoramos por agora */}
               <button 
                 onClick={() => { setMethod("phone"); setStep("phone"); setInputValue(""); setError(""); }} 
                 className="w-full flex items-center justify-center gap-3 border border-gray-300 dark:border-gray-700 py-3.5 rounded-full font-semibold hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
@@ -167,10 +187,16 @@ export default function Login() {
               {method === "phone" ? "Digite seu número" : "Digite seu e-mail"}
             </h1>
             <p className="text-gray-500 dark:text-gray-400 mb-8 text-sm leading-relaxed">
-              Vamos enviar um código de verificação<br/>para o seu {method === "phone" ? "WhatsApp" : "E-mail"}.
+              {method === "phone" 
+                ? "Vamos enviar um código de verificação para o seu WhatsApp / SMS." 
+                : "Vamos enviar um link de verificação seguro para o seu e-mail."}
             </p>
 
-            {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+            {error && (
+              <p className="text-red-500 text-sm mb-4 bg-red-50 dark:bg-red-950/40 p-3 rounded-xl border border-red-200 dark:border-red-900">
+                {error}
+              </p>
+            )}
 
             <div className="flex gap-3 mb-6">
               {method === "phone" && (
@@ -193,17 +219,21 @@ export default function Login() {
               disabled={loading || inputValue.length < 5}
               className="w-full bg-black dark:bg-white text-white dark:text-black font-semibold py-4 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
             >
-              {loading ? "A enviar..." : "Pedir código"}
+              {loading 
+                ? "A processar..." 
+                : (method === "email" ? "Verificar" : "Pedir código")}
             </button>
           </form>
         )}
 
         {step === "otp" && (
-          <form onSubmit={handleVerifyOtp} className="flex flex-col animate-in slide-in-from-right-8 duration-300">
-            <h1 className="text-2xl font-bold mb-2">Verifique o seu {method === "phone" ? "WhatsApp" : "E-mail"}</h1>
+          <div className="flex flex-col animate-in slide-in-from-right-8 duration-300">
+            <h1 className="text-2xl font-bold mb-2">
+              {method === "phone" ? "Verifique o seu código" : "Verifique o seu e-mail"}
+            </h1>
             
             {method === "phone" ? (
-              <>
+              <form onSubmit={handleVerifyOtp} className="flex flex-col">
                 <p className="text-gray-500 dark:text-gray-400 mb-8 text-sm leading-relaxed">
                   Enviamos um código de 6 dígitos<br/>para <span className="font-semibold text-black dark:text-white">+258 {inputValue}</span>.
                 </p>
@@ -233,22 +263,24 @@ export default function Login() {
                 >
                   {loading ? "A verificar..." : "Confirmar"}
                 </button>
-              </>
+              </form>
             ) : (
               <div className="text-center mt-4">
-                <Mail className="w-16 h-16 mx-auto mb-6 text-gray-400" />
-                <p className="text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
-                  Enviamos um link mágico para <span className="font-semibold text-black dark:text-white">{inputValue}</span>.<br/><br/>
-                  Vai ao teu e-mail e clica no link para entrar automaticamente! Não precisas de código.
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Mail className="w-8 h-8 text-black dark:text-white" />
+                </div>
+                <h2 className="text-lg font-bold mb-2">Link de acesso enviado!</h2>
+                <p className="text-gray-500 dark:text-gray-400 mb-8 leading-relaxed text-sm">
+                  Enviamos um link de autenticação direta para <br/>
+                  <span className="font-semibold text-black dark:text-white">{inputValue}</span>.<br/><br/>
+                  Abre o e-mail no teu telemóvel ou computador e clica em <strong>"Sign in" / "Confirmar"</strong>. Irás regressar automaticamente autenticado!
                 </p>
-                <div className="animate-pulse flex space-x-2 justify-center mt-4">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-xs text-gray-500 text-left">
+                  💡 <strong>Nota:</strong> Se demorar ou der limite excedido, verifica o lixo eletrónico (Spam) ou aguarda um instante.
                 </div>
               </div>
             )}
-          </form>
+          </div>
         )}
       </main>
     </div>
