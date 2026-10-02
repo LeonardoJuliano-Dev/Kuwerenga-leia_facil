@@ -158,8 +158,8 @@ export default function Login() {
       // Sucesso total!
       navigate("/home", { replace: true });
     } catch (err: any) {
-      console.error(err);
-      setError("Código inválido ou erro de verificação.");
+      console.error("Erro na verificação:", err);
+      setError(err?.message || "Erro na verificação. Confirma se o e-mail/número está correto.");
     } finally {
       setLoading(false);
     }
