@@ -95,6 +95,12 @@ export default function Reader() {
               setPdfSourceBlob(blob);
               const buffer = await blob.arrayBuffer();
               pdfData = new Uint8Array(buffer);
+
+              // Guarda em cache no IndexedDB para carregamentos instantâneos subsequentes
+              saveBookOffline(bookId, blob, {
+                title: bookRecord.title,
+                file_type: "pdf"
+              }).then(() => setIsOfflineSaved(true)).catch(() => {});
             }
           }
 

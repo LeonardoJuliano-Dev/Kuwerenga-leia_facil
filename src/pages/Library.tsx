@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Plus, BookOpen, Trash2 } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
+import { getCached, setCached } from "../lib/cache";
 
 interface UserBookItem {
   id: string;
@@ -21,14 +22,13 @@ interface UserBookItem {
 }
 
 export default function Library() {
-  const [items, setItems] = useState<UserBookItem[]>([]);
+  const [items, setItems] = useState<UserBookItem[]>(() => getCached<UserBookItem[]>("library_items") || []);
   const [activeTab, setActiveTab] = useState<"reading" | "saved" | "finished" | "all">("all");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !getCached<UserBookItem[]>("library_items"));
   const navigate = useNavigate();
 
   useEffect(() => {
     async function loadLibrary() {
-      setLoading(true);
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
@@ -68,6 +68,7 @@ export default function Library() {
             }));
 
           setItems(validItems);
+          setCached("library_items", validItems);
         }
       } catch (err) {
         console.error("Erro ao carregar biblioteca:", err);

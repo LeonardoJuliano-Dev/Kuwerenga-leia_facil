@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Search, BookHeart, Users, MoreHorizontal, Bell, BookOpen, Plus } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
+import { getCached, setCached } from "../lib/cache";
 
 interface Book {
   id: string;
@@ -24,15 +25,15 @@ interface CurrentReading {
 }
 
 export default function Home() {
-  const [currentReading, setCurrentReading] = useState<CurrentReading | null>(null);
-  const [featuredBooks, setFeaturedBooks] = useState<Book[]>([]);
+  const [currentReading, setCurrentReading] = useState<CurrentReading | null>(() => getCached<CurrentReading>("home_current_reading"));
+  const [featuredBooks, setFeaturedBooks] = useState<Book[]>(() => getCached<Book[]>("home_featured_books") || []);
   const [searchQuery, setSearchQuery] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !getCached<Book[]>("home_featured_books"));
   const navigate = useNavigate();
 
   useEffect(() => {
     async function loadHomeData() {
-      setLoading(true);
+      // Se não temos cache, mostra loading, senão atualiza em background silenciosamente
       try {
         const { data: { user } } = await supabase.auth.getUser();
 
@@ -58,7 +59,7 @@ export default function Home() {
 
           if (userBook?.book) {
             const b: any = userBook.book;
-            setCurrentReading({
+            const readingData: CurrentReading = {
               bookId: b.id,
               title: b.title,
               author: b.author,
@@ -66,7 +67,12 @@ export default function Home() {
               currentPage: userBook.current_page || 1,
               totalPages: b.total_pages || 1,
               progress: userBook.progress || 0
-            });
+            };
+            setCurrentReading(readingData);
+            setCached("home_current_reading", readingData);
+          } else {
+            setCurrentReading(null);
+            setCached("home_current_reading", null);
           }
         }
 
@@ -79,6 +85,7 @@ export default function Home() {
 
         if (books) {
           setFeaturedBooks(books as Book[]);
+          setCached("home_featured_books", books);
         }
       } catch (err) {
         console.error("Erro ao carregar dados da Home:", err);

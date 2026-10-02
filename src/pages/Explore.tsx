@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Search, BookOpen, Plus } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
+import { getCached, setCached } from "../lib/cache";
 
 interface Book {
   id: string;
@@ -25,31 +26,34 @@ interface Category {
 }
 
 export default function Explore() {
-  const [books, setBooks] = useState<Book[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [books, setBooks] = useState<Book[]>(() => getCached<Book[]>("explore_books") || []);
+  const [categories, setCategories] = useState<Category[]>(() => getCached<Category[]>("explore_categories") || []);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [fileTypeFilter, setFileTypeFilter] = useState<"all" | "pdf" | "epub">("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !getCached<Book[]>("explore_books"));
   const navigate = useNavigate();
 
-  // Carregar dados reais do Supabase
+  // Carregar dados reais do Supabase (com cache em background)
   useEffect(() => {
     async function loadData() {
-      setLoading(true);
       try {
         // 1. Categorias reais
         const { data: cats } = await supabase.from("categories").select("id, name").order("name");
-        if (cats) setCategories(cats);
+        if (cats) {
+          setCategories(cats);
+          setCached("explore_categories", cats);
+        }
 
-        // 2. Livros reais aprovados
+        // 2. Livros reais aprovados (busca rápida)
         const { data: bookList, error } = await supabase
           .from("books")
-          .select("*")
+          .select("id, title, author, description, cover_url, file_url, file_type, total_pages, category_id, avg_rating, total_ratings, created_at")
           .order("created_at", { ascending: false });
 
         if (!error && bookList) {
           setBooks(bookList);
+          setCached("explore_books", bookList);
         }
       } catch (err) {
         console.error("Erro ao carregar catálogo:", err);
