@@ -201,35 +201,53 @@ export default function Login() {
         {step === "otp" && (
           <form onSubmit={handleVerifyOtp} className="flex flex-col animate-in slide-in-from-right-8 duration-300">
             <h1 className="text-2xl font-bold mb-2">Verifique o seu {method === "phone" ? "WhatsApp" : "E-mail"}</h1>
-            <p className="text-gray-500 dark:text-gray-400 mb-8 text-sm leading-relaxed">
-              Enviamos um código de 6 dígitos<br/>para <span className="font-semibold text-black dark:text-white">{method === "phone" ? `+258 ${inputValue}` : inputValue}</span>.
-            </p>
+            
+            {method === "phone" ? (
+              <>
+                <p className="text-gray-500 dark:text-gray-400 mb-8 text-sm leading-relaxed">
+                  Enviamos um código de 6 dígitos<br/>para <span className="font-semibold text-black dark:text-white">+258 {inputValue}</span>.
+                </p>
 
-            {error && <p className="text-red-500 text-sm mb-4 text-center">{error}</p>}
+                {error && <p className="text-red-500 text-sm mb-4 text-center">{error}</p>}
 
-            <div className="flex justify-between gap-2 mb-8">
-              {otp.map((digit, index) => (
-                <input
-                  key={index}
-                  ref={(el) => { inputRefs.current[index] = el; }}
-                  type="text"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handleOtpChange(index, e.target.value)}
-                  onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                  className="w-12 h-14 text-center text-xl font-bold bg-white dark:bg-black border-2 border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:border-black dark:focus:border-white transition-colors"
-                  autoFocus={index === 0}
-                />
-              ))}
-            </div>
+                <div className="flex justify-between gap-2 mb-8">
+                  {otp.map((digit, index) => (
+                    <input
+                      key={index}
+                      ref={(el) => { inputRefs.current[index] = el; }}
+                      type="text"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleOtpChange(index, e.target.value)}
+                      onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                      className="w-12 h-14 text-center text-xl font-bold bg-white dark:bg-black border-2 border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:border-black dark:focus:border-white transition-colors"
+                      autoFocus={index === 0}
+                    />
+                  ))}
+                </div>
 
-            <button
-              type="submit"
-              disabled={loading || !isOtpComplete}
-              className="w-full bg-black dark:bg-white text-white dark:text-black font-semibold py-4 rounded-xl active:scale-95 transition-transform disabled:opacity-50 mb-4"
-            >
-              {loading ? "A verificar..." : "Confirmar"}
-            </button>
+                <button
+                  type="submit"
+                  disabled={loading || !isOtpComplete}
+                  className="w-full bg-black dark:bg-white text-white dark:text-black font-semibold py-4 rounded-xl active:scale-95 transition-transform disabled:opacity-50 mb-4"
+                >
+                  {loading ? "A verificar..." : "Confirmar"}
+                </button>
+              </>
+            ) : (
+              <div className="text-center mt-4">
+                <Mail className="w-16 h-16 mx-auto mb-6 text-gray-400" />
+                <p className="text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
+                  Enviamos um link mágico para <span className="font-semibold text-black dark:text-white">{inputValue}</span>.<br/><br/>
+                  Vai ao teu e-mail e clica no link para entrar automaticamente! Não precisas de código.
+                </p>
+                <div className="animate-pulse flex space-x-2 justify-center mt-4">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                </div>
+              </div>
+            )}
           </form>
         )}
       </main>
