@@ -112,10 +112,16 @@ export default function Home() {
       {/* Header */}
       <header className="px-4 sm:px-6 pt-safe sticky top-0 z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
         <div className="app-container pt-6 sm:pt-8 pb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Início</h1>
-        <button className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300 touch-target">
-          <Bell className="w-5 h-5" />
-        </button>
+          <div className="flex items-center gap-2.5">
+            <img src="/favicon.svg" alt="KUWERENGA" className="w-8 h-8 rounded-xl shadow-xs" />
+            <div>
+              <h1 className="text-xl font-bold leading-none tracking-tight">KUWERENGA</h1>
+              <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold block mt-0.5">Leia Fácil</span>
+            </div>
+          </div>
+          <button className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300 touch-target">
+            <Bell className="w-5 h-5" />
+          </button>
         </div>
       </header>
 

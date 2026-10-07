@@ -243,11 +243,11 @@ export default function Login() {
       {/* Conteúdo Principal */}
       <main className={`flex-1 flex flex-col app-container px-6 sm:px-8 mx-auto w-full ${step === "options" ? "justify-center" : "mt-8"}`}>
         
-        {step === "options" && (
           <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
-            <BookOpen className="w-16 h-16 mb-6" />
-            <h1 className="text-3xl font-bold mb-2">Leitura+</h1>
-            <p className="text-gray-500 dark:text-gray-400 mb-10 text-center">
+            <img src="/favicon.svg" alt="KUWERENGA" className="w-20 h-20 mb-4 rounded-3xl shadow-sm" />
+            <h1 className="text-3xl font-bold mb-1 tracking-tight">KUWERENGA</h1>
+            <p className="text-xs uppercase tracking-widest text-gray-400 font-semibold mb-2">Leia Fácil</p>
+            <p className="text-gray-500 dark:text-gray-400 mb-10 text-center text-sm">
               Entre para continuar
             </p>
 

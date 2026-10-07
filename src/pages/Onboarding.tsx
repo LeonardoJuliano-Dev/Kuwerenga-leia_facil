@@ -20,9 +20,10 @@ export default function Onboarding() {
       <div className="flex-1 flex flex-col items-center justify-center text-center mt-12">
         {step === 0 && (
           <div className="flex flex-col items-center animate-in fade-in zoom-in duration-500">
-            <BookOpen className="w-24 h-24 mb-6" />
-            <h1 className="text-3xl font-bold mb-2">Leitura+</h1>
-            <p className="text-gray-500 dark:text-gray-400">Mais do que livros,<br/>boas ideias.</p>
+            <img src="/favicon.svg" alt="KUWERENGA" className="w-24 h-24 mb-5 rounded-3xl shadow-sm" />
+            <h1 className="text-3xl font-bold mb-1 tracking-tight">KUWERENGA</h1>
+            <p className="text-xs uppercase tracking-widest text-gray-400 font-semibold mb-2">Leia Fácil</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Mais do que livros,<br/>o seu universo de leitura offline.</p>
           </div>
         )}
         

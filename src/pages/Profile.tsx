@@ -63,7 +63,7 @@ export default function Profile() {
         </div>
         <div>
           <h1 className="text-xl font-bold">{loading ? "A carregar..." : userName}</h1>
-          <p className="text-xs text-gray-500 mt-0.5">{userEmail || "Leitor Leitura+"}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{userEmail || "Leitor Kuwerenga"}</p>
         </div>
         </div>
       </header>
