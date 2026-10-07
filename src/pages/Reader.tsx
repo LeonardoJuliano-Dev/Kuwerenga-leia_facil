@@ -31,22 +31,32 @@ import {
 } from "../lib/offlineStorage";
 import { supabase } from "../lib/supabase";
 
-// Configura o worker do PDF.js a partir de CDN compatível
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 // PDF de demonstração público de domínio aberto para testes imediatos
 const SAMPLE_PDF_URL = "https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf";
 
 /**
- * Detecta se um Blob é um ficheiro EPUB.
- * EPUB files are ZIP archives; the first bytes are "PK\x03\x04".
- * We also check the blob type.
+ * Detecta e valida o formato real do ficheiro a partir dos bytes de cabeçalho
  */
-async function isEpubBlob(blob: Blob): Promise<boolean> {
-  if (blob.type === "application/epub+zip") return true;
-  // Check ZIP magic bytes (EPUBs are ZIP files)
-  const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
-  return header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04;
+async function detectBookFormat(blob: Blob): Promise<"pdf" | "epub" | "invalid"> {
+  if (blob.type === "application/pdf") return "pdf";
+  if (blob.type === "application/epub+zip") return "epub";
+
+  try {
+    const header = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
+    // PDF começa com %PDF (0x25 0x50 0x44 0x46)
+    if (header[0] === 0x25 && header[1] === 0x50 && header[2] === 0x44 && header[3] === 0x46) {
+      return "pdf";
+    }
+    // EPUB é um arquivo ZIP que começa com PK\x03\x04 (0x50 0x4B 0x03 0x04)
+    if (header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04) {
+      return "epub";
+    }
+  } catch {}
+
+  return "invalid";
 }
 
 export default function Reader() {
@@ -82,6 +92,11 @@ export default function Reader() {
   const [noteContent, setNoteContent] = useState("");
   const [annotations, setAnnotations] = useState<OfflineAnnotation[]>([]);
 
+  const [windowDimensions, setWindowDimensions] = useState({
+    w: typeof window !== "undefined" ? window.innerWidth : 1024,
+    h: typeof window !== "undefined" ? window.innerHeight : 768
+  });
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderTaskRef = useRef<any>(null);
   const epubContainerRef = useRef<HTMLDivElement | null>(null);
@@ -91,61 +106,72 @@ export default function Reader() {
 
   /** Inicializa um livro EPUB a partir de Blob */
   const initEpub = useCallback(async (blob: Blob, title: string) => {
-    // Cria ObjectURL a partir do blob — muito mais fiável e rápido no epub.js do que carregar ArrayBuffer bruto
-    const objectUrl = URL.createObjectURL(blob);
-    const book = ePub(objectUrl);
-    setEpubBook(book);
-    setFileType("epub");
-    setBookTitle(title);
-    setPdfSourceBlob(blob);
-
     try {
-      await book.ready;
-    } catch (e) {
-      console.warn("Metadados EPUB carregados com avisos:", e);
-    }
+      const buffer = await blob.arrayBuffer();
+      const book = ePub(buffer);
+      setEpubBook(book);
+      setFileType("epub");
+      setBookTitle(title);
+      setPdfSourceBlob(blob);
 
-    // Carrega anotações do livro
-    getAnnotationsForBook(bookId).then(setAnnotations).catch(() => {});
+      // Timeout preventivo de 7s para os metadados
+      await Promise.race([
+        book.ready,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout ao processar metadados do EPUB")), 7000))
+      ]);
 
-    // Recupera progresso de leitura guardado
-    getReadingProgress(bookId).then((savedProgress) => {
-      if (savedProgress) {
-        setCurrentPage(savedProgress.currentPage || 1);
-        setEpubProgress(savedProgress.progress || 0);
-      }
-    }).catch(() => {});
+      // Carrega anotações do livro
+      getAnnotationsForBook(bookId).then(setAnnotations).catch(() => {});
 
-    // Gera posições em segundo plano sem bloquear a apresentação inicial
-    book.ready.then(() => {
+      // Recupera progresso de leitura guardado
+      getReadingProgress(bookId).then((savedProgress) => {
+        if (savedProgress) {
+          setCurrentPage(savedProgress.currentPage || 1);
+          setEpubProgress(savedProgress.progress || 0);
+        }
+      }).catch(() => {});
+
+      // Gera posições em segundo plano sem bloquear o leitor
       book.locations.generate(1000).then(() => {
         const count = book.locations.length();
         if (count > 0) setTotalPages(count);
-      }).catch((e) => console.warn("Aviso ao gerar locais EPUB:", e));
-    });
+      }).catch(() => {});
+    } catch (err: any) {
+      console.error("Erro ao inicializar EPUB:", err);
+      throw new Error(err?.message || "Não foi possível ler o ficheiro EPUB.");
+    }
   }, [bookId]);
 
-  /** Inicializa um documento PDF a partir de Uint8Array */
-  const initPdf = useCallback(async (pdfData: Uint8Array, blob: Blob, title: string) => {
-    setFileType("pdf");
-    setBookTitle(title);
-    setPdfSourceBlob(blob);
+  /** Inicializa um documento PDF a partir de Blob */
+  const initPdf = useCallback(async (blob: Blob, title: string) => {
+    try {
+      const buffer = await blob.arrayBuffer();
+      const loadingTask = pdfjsLib.getDocument({
+        data: new Uint8Array(buffer),
+        cMapPacked: true,
+      });
+      const doc = await loadingTask.promise;
 
-    const loadingTask = pdfjsLib.getDocument({ data: pdfData });
-    const doc = await loadingTask.promise;
+      setPdfDoc(doc);
+      setFileType("pdf");
+      setBookTitle(title);
+      setPdfSourceBlob(blob);
+      setTotalPages(doc.numPages);
+      setCurrentPage(1);
 
-    setPdfDoc(doc);
-    setTotalPages(doc.numPages);
+      // Recupera progresso de leitura
+      const savedProgress = await getReadingProgress(bookId);
+      if (savedProgress && savedProgress.currentPage <= doc.numPages) {
+        setCurrentPage(savedProgress.currentPage);
+      }
 
-    // Recupera progresso de leitura
-    const savedProgress = await getReadingProgress(bookId);
-    if (savedProgress && savedProgress.currentPage <= doc.numPages) {
-      setCurrentPage(savedProgress.currentPage);
+      // Carrega anotações do livro
+      const existingNotes = await getAnnotationsForBook(bookId);
+      setAnnotations(existingNotes);
+    } catch (err: any) {
+      console.error("Erro ao inicializar PDF:", err);
+      throw new Error(err?.message || "Não foi possível renderizar o PDF.");
     }
-
-    // Carrega anotações do livro
-    const existingNotes = await getAnnotationsForBook(bookId);
-    setAnnotations(existingNotes);
   }, [bookId]);
 
   // ─── 1. Carregar o livro ──────────────────────────────────────
@@ -163,24 +189,26 @@ export default function Reader() {
 
         if (offlineBlob) {
           setIsOfflineSaved(true);
-          const isEpub = await isEpubBlob(offlineBlob);
+          const format = await detectBookFormat(offlineBlob);
 
           if (!isMounted) return;
 
-          if (isEpub) {
+          if (format === "epub") {
             await initEpub(offlineBlob, bookTitle);
+          } else if (format === "pdf") {
+            await initPdf(offlineBlob, bookTitle);
           } else {
-            const buffer = await offlineBlob.arrayBuffer();
-            await initPdf(new Uint8Array(buffer), offlineBlob, bookTitle);
+            throw new Error("O ficheiro guardado localmente está corrompido.");
           }
         } else if (bookId !== "demo-book") {
           // Busca do Supabase
-          const { data: bookRecord } = await supabase
+          const { data: bookRecord, error: fetchRecordErr } = await supabase
             .from("books")
             .select("title, file_url, file_type")
             .eq("id", bookId)
             .maybeSingle();
 
+          if (fetchRecordErr) throw fetchRecordErr;
           if (!isMounted) return;
 
           if (bookRecord?.file_url) {
@@ -191,49 +219,57 @@ export default function Reader() {
             try {
               const response = await fetch(bookRecord.file_url);
               if (response.ok) {
-                blob = await response.blob();
+                const fetchedBlob = await response.blob();
+                if (fetchedBlob.type !== "application/json") {
+                  blob = fetchedBlob;
+                }
               }
             } catch (fetchErr) {
               console.warn("Fetch direto falhou, a tentar via Supabase Storage:", fetchErr);
             }
 
-            // 2. Fallback: Se fetch falhou, descarrega via Supabase Storage
+            // 2. Fallback: Descarrega via Supabase Storage API
             if (!blob && bookRecord.file_url) {
               const urlParts = bookRecord.file_url.split("/books/");
               const storagePath = urlParts.length > 1 ? urlParts[1] : bookRecord.file_url.split("/").pop();
               if (storagePath) {
                 const { data: downloadedBlob, error: dlErr } = await supabase.storage.from("books").download(storagePath);
-                if (!dlErr && downloadedBlob) {
+                if (!dlErr && downloadedBlob && downloadedBlob.type !== "application/json") {
                   blob = downloadedBlob;
                 }
               }
             }
 
             if (!blob) {
-              throw new Error("Não foi possível transferir o ficheiro do livro. Verifica a ligação à internet.");
+              throw new Error("O ficheiro deste livro não se encontra no armazenamento (Storage) do Supabase. Executa o script 'supabase/create_storage_buckets.sql' no Supabase SQL Editor para criar o bucket 'books'.");
             }
 
-            // Detecta tipo — primeiro pelo campo file_type, depois pelo blob
-            const isEpub = bookRecord.file_type === "epub" || await isEpubBlob(blob);
+            // Valida cabeçalho real do ficheiro para evitar analisar respostas de erro JSON
+            const format = await detectBookFormat(blob);
+            if (format === "invalid") {
+              const errorText = await blob.slice(0, 160).text();
+              if (errorText.includes("NoSuchBucket") || errorText.includes("Bucket not found")) {
+                throw new Error("O bucket 'books' ainda não existe no Supabase Storage. Executa o ficheiro 'supabase/create_storage_buckets.sql' no Dashboard do Supabase para ativar o armazenamento.");
+              }
+              throw new Error("O formato do ficheiro transferido não é um PDF ou EPUB válido.");
+            }
 
             if (!isMounted) return;
 
-            if (isEpub) {
+            if (format === "epub") {
               await initEpub(blob, title);
               saveBookOffline(bookId, blob, {
                 title,
                 file_type: "epub"
               }).then(() => setIsOfflineSaved(true)).catch(() => {});
             } else {
-              const buffer = await blob.arrayBuffer();
-              await initPdf(new Uint8Array(buffer), blob, title);
+              await initPdf(blob, title);
               saveBookOffline(bookId, blob, {
                 title,
                 file_type: "pdf"
               }).then(() => setIsOfflineSaved(true)).catch(() => {});
             }
           } else {
-            // Livro sem ficheiro — mostra erro
             if (isMounted) setError("Este livro não tem ficheiro associado.");
           }
         } else {
@@ -241,14 +277,13 @@ export default function Reader() {
           setBookTitle("Documento de Demonstração");
           const res = await fetch(SAMPLE_PDF_URL);
           const blob = await res.blob();
-          const buffer = await blob.arrayBuffer();
 
           if (!isMounted) return;
-          await initPdf(new Uint8Array(buffer), blob, "Documento de Demonstração");
+          await initPdf(blob, "Documento de Demonstração");
         }
       } catch (err: any) {
         console.error("Erro ao carregar livro:", err);
-        if (isMounted) setError("Não foi possível carregar o livro. Verifica a tua conexão ou formato.");
+        if (isMounted) setError(err?.message || "Não foi possível carregar o livro.");
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -277,15 +312,21 @@ export default function Reader() {
         const canvas = canvasRef.current!;
         const context = canvas.getContext("2d");
         if (!context) return;
-        const containerWidth = Math.min(window.innerWidth - (window.innerWidth < 640 ? 16 : 48), 720);
+        const availW = windowDimensions.w;
+        const availH = windowDimensions.h;
+        const containerWidth = Math.min(availW - (availW < 640 ? 16 : 48), 960);
+        const maxHeight = availH - (availW < 640 ? 140 : 180);
         const unscaledViewport = page.getViewport({ scale: 1 });
-        const autoScale = (containerWidth / unscaledViewport.width) * scale;
+        const widthScale = (containerWidth / unscaledViewport.width) * scale;
+        const heightScale = (maxHeight / unscaledViewport.height) * scale;
+        const autoScale = Math.min(widthScale, heightScale > 0 ? heightScale : widthScale);
+
         const viewport = page.getViewport({ scale: autoScale });
         const pixelRatio = window.devicePixelRatio || 1;
-        canvas.width = viewport.width * pixelRatio;
-        canvas.height = viewport.height * pixelRatio;
-        canvas.style.width = `${viewport.width}px`;
-        canvas.style.height = `${viewport.height}px`;
+        canvas.width = Math.floor(viewport.width * pixelRatio);
+        canvas.height = Math.floor(viewport.height * pixelRatio);
+        canvas.style.width = `${Math.floor(viewport.width)}px`;
+        canvas.style.height = `${Math.floor(viewport.height)}px`;
         context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
         const renderContext = { canvasContext: context, viewport };
         const task = page.render(renderContext as any);
@@ -308,7 +349,7 @@ export default function Reader() {
     }
     renderPdfPage();
     return () => { isRendering = false; };
-  }, [pdfDoc, fileType, currentPage, scale]);
+  }, [pdfDoc, fileType, currentPage, scale, windowDimensions]);
 
   // ─── 2b. Montar Rendition EPUB ────────────────────────────────
 
@@ -483,17 +524,25 @@ export default function Reader() {
 
   // Redimensionamento de ecrã (responsividade desktop e mobile)
   useEffect(() => {
+    let timer: any;
     const handleResize = () => {
-      if (fileType === "epub" && epubRenditionRef.current && epubContainerRef.current) {
-        const w = epubContainerRef.current.clientWidth;
-        const h = epubContainerRef.current.clientHeight;
-        if (w > 0 && h > 0) {
-          epubRenditionRef.current.resize(w, h);
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        setWindowDimensions({ w: window.innerWidth, h: window.innerHeight });
+        if (fileType === "epub" && epubRenditionRef.current && epubContainerRef.current) {
+          const w = epubContainerRef.current.clientWidth;
+          const h = epubContainerRef.current.clientHeight;
+          if (w > 0 && h > 0) {
+            epubRenditionRef.current.resize(w, h);
+          }
         }
-      }
+      }, 150);
     };
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", handleResize);
+    };
   }, [fileType]);
 
   // ─── Navegação ────────────────────────────────────────────────
@@ -552,9 +601,9 @@ export default function Reader() {
 
     try {
       const title = file.name.replace(/\.[^/.]+$/, "");
-      const isEpub = file.name.toLowerCase().endsWith(".epub") || await isEpubBlob(file);
+      const format = await detectBookFormat(file);
 
-      if (isEpub) {
+      if (format === "epub" || file.name.toLowerCase().endsWith(".epub")) {
         await initEpub(file, title);
 
         // Guarda automaticamente no IndexedDB
@@ -565,28 +614,23 @@ export default function Reader() {
           file_type: "epub"
         });
         setIsOfflineSaved(true);
-      } else {
-        const buffer = await file.arrayBuffer();
-        const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
-        setFileType("pdf");
-        setBookTitle(title);
-        setPdfSourceBlob(file);
-        setPdfDoc(doc);
-        setTotalPages(doc.numPages);
-        setCurrentPage(1);
+      } else if (format === "pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+        await initPdf(file, title);
 
         const localId = `local-${Date.now()}`;
         await saveBookOffline(localId, file, {
           title,
           author: "Ficheiro Local",
-          totalPages: doc.numPages,
+          totalPages: totalPages || 1,
           file_type: "pdf"
         });
         setIsOfflineSaved(true);
+      } else {
+        throw new Error("Formato não suportado. Por favor, seleciona um ficheiro PDF ou EPUB válido.");
       }
     } catch (err: any) {
       console.error("Erro ao ler ficheiro local:", err);
-      setError("Ficheiro inválido ou não suportado.");
+      setError(err?.message || "Ficheiro inválido ou não suportado.");
     } finally {
       setLoading(false);
     }
@@ -691,83 +735,84 @@ export default function Reader() {
     <div className={`flex flex-col min-h-screen ${themeClasses[themeMode]} transition-colors duration-200 select-none`}>
       
       {/* Barra de Navegação Superior */}
-      <header className="px-4 py-3 flex items-center justify-between sticky top-0 backdrop-blur-md bg-opacity-90 border-b border-gray-200 dark:border-gray-800 z-20">
-        <div className="flex items-center gap-3">
+      <header className="px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between sticky top-0 backdrop-blur-md bg-opacity-90 border-b border-gray-200 dark:border-gray-800 z-20">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
           <Link
             to="/home"
-            className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="p-1.5 sm:p-2 -ml-1 sm:-ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div className="max-w-[180px] sm:max-w-xs truncate">
-            <h1 className="font-semibold text-sm truncate">{bookTitle}</h1>
-            <span className="text-[11px] text-gray-500 block truncate">
+          <div className="min-w-0 flex-1">
+            <h1 className="font-semibold text-xs sm:text-sm truncate">{bookTitle}</h1>
+            <span className="text-[10px] sm:text-[11px] text-gray-500 block truncate">
               {pageLabel}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* Botão de Guardar Offline */}
           <button
             onClick={handleDownloadOffline}
             disabled={isOfflineSaved}
-            className={`p-2 rounded-full transition-colors ${
+            className={`p-1.5 sm:p-2 rounded-full transition-colors ${
               isOfflineSaved
                 ? "text-emerald-500 cursor-default"
                 : "text-gray-500 hover:text-black dark:hover:text-white"
             }`}
             title={isOfflineSaved ? "Livro guardado para ler sem internet" : "Guardar offline"}
           >
-            {isOfflineSaved ? <CheckCircle className="w-5 h-5" /> : <Download className="w-5 h-5" />}
+            {isOfflineSaved ? <CheckCircle className="w-4.5 h-4.5 sm:w-5 sm:h-5" /> : <Download className="w-4.5 h-4.5 sm:w-5 sm:h-5" />}
           </button>
 
           {/* Marcador de Página */}
           <button
             onClick={toggleBookmark}
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             title="Marcar página"
           >
             {isCurrentPageBookmarked ? (
-              <BookmarkCheck className="w-5 h-5 text-black dark:text-white fill-current" />
+              <BookmarkCheck className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-black dark:text-white fill-current" />
             ) : (
-              <Bookmark className="w-5 h-5 text-gray-500" />
+              <Bookmark className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-gray-500" />
             )}
           </button>
 
-          {/* Botão de Anotações */}
+          {/* Botão de Anotações (visível a partir de ecrãs de ~380px) */}
           <button
             onClick={() => setShowAddNoteModal(true)}
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-black dark:hover:text-white"
+            className="hidden min-[400px]:flex p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-black dark:hover:text-white"
             title="Adicionar nota"
           >
-            <MessageSquarePlus className="w-5 h-5" />
+            <MessageSquarePlus className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
           </button>
 
           {/* Lista de Anotações / Marcadores */}
           <button
             onClick={() => setShowAnnotationsDrawer(true)}
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-black dark:hover:text-white"
+            className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-black dark:hover:text-white"
             title="Ver anotações"
           >
-            <List className="w-5 h-5" />
+            <List className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
           </button>
 
           {/* Preferências / Configurações */}
           <button
             onClick={() => setShowSettings(!showSettings)}
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-black dark:hover:text-white"
+            className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-black dark:hover:text-white"
+            title="Definições"
           >
-            <Settings2 className="w-5 h-5" />
+            <Settings2 className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
           </button>
 
-          {/* Fullscreen Toggle */}
+          {/* Fullscreen Toggle (desktop e tablets) */}
           <button
             onClick={toggleFullscreen}
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-black dark:hover:text-white"
+            className="hidden sm:flex p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-black dark:hover:text-white"
             title={isFullscreen ? "Sair do modo tela cheia" : "Entrar no modo tela cheia"}
           >
-            {isFullscreen ? <X className="w-5 h-5" /> : <BookOpen className="w-5 h-5" />}
+            {isFullscreen ? <X className="w-4.5 h-4.5 sm:w-5 sm:h-5" /> : <BookOpen className="w-4.5 h-4.5 sm:w-5 sm:h-5" />}
           </button>
         </div>
       </header>
@@ -844,7 +889,7 @@ export default function Reader() {
       )}
 
       {/* Área Central de Leitura */}
-      <main className="flex-1 flex flex-col items-center justify-center p-2 sm:p-6 relative min-h-[70vh]">
+      <main className="flex-1 w-full flex flex-col items-center justify-center p-1 sm:p-4 relative min-h-[60vh]">
         {loading && (
           <div className="flex flex-col items-center gap-3 my-20">
             <div className="w-8 h-8 border-2 border-black dark:border-white border-t-transparent dark:border-t-transparent rounded-full animate-spin"></div>
@@ -895,8 +940,8 @@ export default function Reader() {
         {fileType === "epub" && (
           <div
             ref={epubContainerRef}
-            className={`w-full max-w-4xl mx-auto rounded-xl overflow-hidden relative shadow-sm ${loading ? "opacity-0" : "opacity-100"} transition-opacity duration-300`}
-            style={{ height: "calc(100vh - 150px)", minHeight: "440px" }}
+            className={`w-full max-w-4xl mx-auto rounded-lg sm:rounded-xl overflow-hidden relative shadow-sm ${loading ? "opacity-0" : "opacity-100"} transition-opacity duration-300`}
+            style={{ height: "calc(100vh - 130px)", minHeight: "360px" }}
           />
         )}
 
