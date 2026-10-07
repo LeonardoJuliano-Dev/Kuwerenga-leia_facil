@@ -14,7 +14,11 @@ import {
   Settings2,
   List,
   X,
-  Trash2
+  Trash2,
+  BookA,
+  Copy,
+  Check,
+  Search
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import ePub from "epubjs";
@@ -30,6 +34,7 @@ import {
   type OfflineAnnotation
 } from "../lib/offlineStorage";
 import { supabase } from "../lib/supabase";
+import { getTermDefinition, type DefinitionResult } from "../lib/dictionaryService";
 
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -96,6 +101,19 @@ export default function Reader() {
     w: typeof window !== "undefined" ? window.innerWidth : 1024,
     h: typeof window !== "undefined" ? window.innerHeight : 768
   });
+
+  // Estados de Seleção de Texto e Menu Flutuante
+  const [selectedText, setSelectedText] = useState("");
+  const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
+  const [showFloatingMenu, setShowFloatingMenu] = useState(false);
+  const [copiedFeedback, setCopiedFeedback] = useState(false);
+
+  // Estados do Dicionário
+  const [showDictionaryModal, setShowDictionaryModal] = useState(false);
+  const [dictionaryQuery, setDictionaryQuery] = useState("");
+  const [dictionaryLoading, setDictionaryLoading] = useState(false);
+  const [dictionaryResult, setDictionaryResult] = useState<DefinitionResult | null>(null);
+  const [dictionaryError, setDictionaryError] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderTaskRef = useRef<any>(null);
@@ -432,11 +450,42 @@ export default function Reader() {
         if (target?.tagName === "A" || window.getSelection()?.toString()) return;
         const width = contents.window.innerWidth;
         if (e.clientX < width * 0.25) {
+          setShowFloatingMenu(false);
           rendition.prev();
         } else if (e.clientX > width * 0.75) {
+          setShowFloatingMenu(false);
           rendition.next();
         }
       });
+
+      // Captura de seleção de texto dentro do EPUB para o Dicionário
+      const triggerEpubSelection = () => {
+        setTimeout(() => {
+          const sel = contents.window.getSelection();
+          const text = sel?.toString()?.trim();
+          if (text && text.length > 0) {
+            try {
+              const range = sel.getRangeAt(0);
+              const rect = range.getBoundingClientRect();
+              const iframe = container.querySelector("iframe");
+              const iframeRect = iframe?.getBoundingClientRect() || container.getBoundingClientRect();
+              setSelectedText(text);
+              const centerX = iframeRect.left + rect.left + rect.width / 2;
+              const topY = iframeRect.top + rect.top;
+              setSelectionPosition({
+                x: Math.min(window.innerWidth - 120, Math.max(120, centerX)),
+                y: Math.max(70, topY)
+              });
+              setShowFloatingMenu(true);
+            } catch {}
+          } else {
+            setShowFloatingMenu(false);
+          }
+        }, 100);
+      };
+
+      contents.document?.addEventListener("mouseup", triggerEpubSelection);
+      contents.document?.addEventListener("touchend", triggerEpubSelection);
     });
 
     epubRenditionRef.current = rendition;
@@ -706,6 +755,103 @@ export default function Reader() {
     }
   };
 
+  // ─── Dicionário e Seleção de Texto ───────────────────────────
+
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      setTimeout(() => {
+        const selection = window.getSelection();
+        const text = selection?.toString()?.trim();
+        if (selection && selection.rangeCount > 0 && text && text.length > 0) {
+          try {
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            setSelectedText(text);
+            const posX = rect.left + rect.width / 2;
+            const posY = rect.top;
+            setSelectionPosition({
+              x: Math.min(window.innerWidth - 120, Math.max(120, posX)),
+              y: Math.max(70, posY)
+            });
+            setShowFloatingMenu(true);
+          } catch {}
+        }
+      }, 100);
+    };
+
+    window.addEventListener("mouseup", handleGlobalMouseUp);
+    return () => window.removeEventListener("mouseup", handleGlobalMouseUp);
+  }, []);
+
+  const handleLookupDefinition = async (textToSearch?: string) => {
+    const raw = textToSearch || selectedText;
+    const term = raw.trim();
+    if (!term) return;
+
+    setShowFloatingMenu(false);
+    setShowDictionaryModal(true);
+    setDictionaryQuery(term);
+    setDictionaryLoading(true);
+    setDictionaryError(null);
+    setDictionaryResult(null);
+
+    try {
+      const res = await getTermDefinition(term);
+      setDictionaryResult(res);
+    } catch (err: any) {
+      setDictionaryError(err?.message || "Não foi possível encontrar uma definição para este termo.");
+    } finally {
+      setDictionaryLoading(false);
+    }
+  };
+
+  const handleCopySelectedText = async () => {
+    if (!selectedText) return;
+    try {
+      await navigator.clipboard.writeText(selectedText);
+      setCopiedFeedback(true);
+      setTimeout(() => {
+        setCopiedFeedback(false);
+        setShowFloatingMenu(false);
+      }, 1200);
+    } catch {
+      setShowFloatingMenu(false);
+    }
+  };
+
+  const handleCreateNoteFromSelection = () => {
+    setShowFloatingMenu(false);
+    setNoteContent(`"${selectedText}"\n\n`);
+    setShowAddNoteModal(true);
+  };
+
+  const handleSaveDefinitionAsNote = async () => {
+    if (!dictionaryResult) return;
+
+    const mainDef = dictionaryResult.definitions[0] || "";
+    const noteText = `[Dicionário] ${dictionaryResult.term}${
+      dictionaryResult.grammaticalClass ? ` (${dictionaryResult.grammaticalClass})` : ""
+    }: ${mainDef}`;
+
+    const newNote: OfflineAnnotation = {
+      id: `dict-note-${Date.now()}`,
+      bookId,
+      type: "note",
+      content: noteText,
+      selectedText: dictionaryResult.term,
+      pageNumber: currentPage,
+      chapter: fileType === "epub"
+        ? (epubChapterTitle || `Posição ${currentPage}`)
+        : `Página ${currentPage}`,
+      synced: false,
+      createdAt: new Date().toISOString()
+    };
+
+    await saveAnnotationOffline(newNote);
+    setAnnotations((prev) => [...prev, newNote]);
+    setShowDictionaryModal(false);
+  };
+
   // ─── Cleanup EPUB on unmount ──────────────────────────────────
 
   useEffect(() => {
@@ -795,6 +941,20 @@ export default function Reader() {
             title="Ver anotações"
           >
             <List className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
+          </button>
+
+          {/* Dicionário de Língua Portuguesa */}
+          <button
+            onClick={() => {
+              setShowDictionaryModal(true);
+              if (selectedText.trim()) {
+                handleLookupDefinition(selectedText);
+              }
+            }}
+            className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-black dark:hover:text-white"
+            title="Dicionário e Definições"
+          >
+            <BookA className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
           </button>
 
           {/* Preferências / Configurações */}
@@ -1110,6 +1270,198 @@ export default function Reader() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Menu Flutuante Contextual de Seleção ─── */}
+      {showFloatingMenu && selectionPosition && (
+        <div
+          style={{
+            left: `${selectionPosition.x}px`,
+            top: `${selectionPosition.y - 48}px`,
+          }}
+          className="fixed -translate-x-1/2 z-40 bg-black/90 dark:bg-white/95 text-white dark:text-black backdrop-blur-md rounded-2xl p-1 shadow-2xl flex items-center gap-0.5 border border-white/20 dark:border-black/20 animate-in zoom-in-95 duration-150 select-none"
+        >
+          <button
+            onClick={() => handleLookupDefinition()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-white/20 dark:hover:bg-black/10 text-xs font-semibold active:scale-95 transition-all"
+            title="Ver significado no dicionário"
+          >
+            <BookA className="w-3.5 h-3.5 stroke-[2.2]" />
+            <span>Definir</span>
+          </button>
+
+          <button
+            onClick={handleCreateNoteFromSelection}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-white/20 dark:hover:bg-black/10 text-xs font-semibold active:scale-95 transition-all"
+            title="Criar nota a partir deste trecho"
+          >
+            <MessageSquarePlus className="w-3.5 h-3.5" />
+            <span>Nota</span>
+          </button>
+
+          <button
+            onClick={handleCopySelectedText}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl hover:bg-white/20 dark:hover:bg-black/10 text-xs font-semibold active:scale-95 transition-all"
+            title="Copiar texto"
+          >
+            {copiedFeedback ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+          </button>
+
+          <button
+            onClick={() => setShowFloatingMenu(false)}
+            className="p-1.5 rounded-xl hover:bg-white/20 dark:hover:bg-black/10 text-white/60 dark:text-black/60 hover:text-white dark:hover:text-black"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
+      {/* ─── Modal / Gaveta do Dicionário de Língua Portuguesa ─── */}
+      {showDictionaryModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 border-t sm:border border-gray-200 dark:border-gray-800 rounded-t-3xl sm:rounded-3xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 text-black dark:text-white overflow-hidden">
+            
+            {/* Header do Dicionário */}
+            <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs">
+                  <BookA className="w-5 h-5 stroke-[2.2]" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm tracking-tight leading-none">Dicionário de Português</h3>
+                  <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold block mt-0.5">
+                    Kuwerenga+ Léxico
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowDictionaryModal(false)}
+                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 hover:text-black dark:hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Barra de Pesquisa Manual no Dicionário */}
+            <div className="px-4 sm:px-5 pt-3 pb-2">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (dictionaryQuery.trim()) {
+                    handleLookupDefinition(dictionaryQuery);
+                  }
+                }}
+                className="relative"
+              >
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={dictionaryQuery}
+                  onChange={(e) => setDictionaryQuery(e.target.value)}
+                  placeholder="Pesquisar palavra ou expressão..."
+                  className="w-full pl-10 pr-20 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
+                />
+                <button
+                  type="submit"
+                  disabled={!dictionaryQuery.trim() || dictionaryLoading}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1 bg-black dark:bg-white text-white dark:text-black rounded-lg text-xs font-semibold disabled:opacity-40"
+                >
+                  Buscar
+                </button>
+              </form>
+            </div>
+
+            {/* Conteúdo da Definição */}
+            <div className="p-4 sm:p-5 flex-1 overflow-y-auto space-y-4">
+              {dictionaryLoading ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-3">
+                  <div className="w-8 h-8 border-2 border-black dark:border-white border-t-transparent dark:border-t-transparent rounded-full animate-spin"></div>
+                  <p className="text-xs text-gray-500 font-medium">A consultar o dicionário...</p>
+                </div>
+              ) : dictionaryError ? (
+                <div className="py-8 text-center px-4">
+                  <p className="text-sm font-semibold text-red-500 mb-1">Definição não encontrada</p>
+                  <p className="text-xs text-gray-500 mb-4">{dictionaryError}</p>
+                </div>
+              ) : dictionaryResult ? (
+                <div>
+                  {/* Cabeçalho do Termo */}
+                  <div className="flex items-baseline gap-2.5 mb-2 flex-wrap">
+                    <h2 className="text-xl font-bold tracking-tight capitalize">{dictionaryResult.term}</h2>
+                    {dictionaryResult.grammaticalClass && (
+                      <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[11px] font-semibold">
+                        {dictionaryResult.grammaticalClass}
+                      </span>
+                    )}
+                    {dictionaryResult.type === "phrase" && (
+                      <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[11px] font-semibold">
+                        Expressão
+                      </span>
+                    )}
+                  </div>
+
+                  {dictionaryResult.etymology && (
+                    <p className="text-xs italic text-gray-400 mb-4">
+                      {dictionaryResult.etymology}
+                    </p>
+                  )}
+
+                  {/* Definições Numeradas */}
+                  <div className="mt-3 space-y-3">
+                    <h4 className="text-[11px] uppercase tracking-wider font-bold text-gray-400">
+                      Significados
+                    </h4>
+                    <ol className="space-y-2.5">
+                      {dictionaryResult.definitions.map((def, idx) => (
+                        <li key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm leading-relaxed">
+                          <span className="w-5 h-5 rounded-full bg-gray-100 dark:bg-gray-800 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5 text-gray-600 dark:text-gray-300">
+                            {idx + 1}
+                          </span>
+                          <span className="flex-1">{def}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+
+                  {/* Fonte */}
+                  <div className="mt-5 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[10px] text-gray-400">
+                    <span>
+                      Fonte: {dictionaryResult.source === "dicionario" ? "Dicionário Aberto da Língua Portuguesa" : dictionaryResult.source === "wikipedia" ? "Wikipédia Lusófona" : "Memória de Vocabulário"}
+                    </span>
+                    {dictionaryResult.source === "local" && (
+                      <span className="text-emerald-500 font-medium">Disponível Offline</span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="py-10 text-center text-gray-400 text-xs">
+                  Seleciona uma palavra no livro ou pesquisa acima para ver a definição.
+                </div>
+              )}
+            </div>
+
+            {/* Ações do Rodapé do Modal */}
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3">
+              {dictionaryResult ? (
+                <button
+                  onClick={handleSaveDefinitionAsNote}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold shadow-xs hover:opacity-90 active:scale-95 transition-all"
+                >
+                  <MessageSquarePlus className="w-3.5 h-3.5" />
+                  <span>Guardar como Nota</span>
+                </button>
+              ) : <div />}
+
+              <button
+                onClick={() => setShowDictionaryModal(false)}
+                className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>
