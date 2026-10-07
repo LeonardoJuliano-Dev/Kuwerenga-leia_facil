@@ -110,18 +110,20 @@ export default function Home() {
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-20">
       
       {/* Header */}
-      <header className="px-6 pt-12 pb-4 bg-white dark:bg-black sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 dark:border-gray-900">
+      <header className="px-4 sm:px-6 pt-safe sticky top-0 z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
+        <div className="app-container pt-6 sm:pt-8 pb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Início</h1>
-        <button className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300">
+        <button className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300 touch-target">
           <Bell className="w-5 h-5" />
         </button>
+        </div>
       </header>
 
       {/* Main Content */}
       <main className="flex-1">
         
         {/* Barra de Pesquisa */}
-        <form onSubmit={handleSearchSubmit} className="px-6 my-6">
+        <form onSubmit={handleSearchSubmit} className="px-4 sm:px-6 my-4 sm:my-6 app-container">
           <div className="relative">
             <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -135,7 +137,7 @@ export default function Home() {
         </form>
 
         {/* Continuar a ler (Real) */}
-        <section className="px-6 mb-8">
+        <section className="px-4 sm:px-6 mb-8 app-container">
           <h2 className="text-lg font-bold mb-4">Continuar a ler</h2>
           {currentReading ? (
             <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-xs border border-gray-100 dark:border-gray-800">
@@ -209,7 +211,7 @@ export default function Home() {
         </section>
 
         {/* Quick Actions (Round Buttons) */}
-        <section className="px-6 mb-10 flex justify-between">
+        <section className="px-4 sm:px-6 mb-10 app-container flex justify-between sm:justify-start sm:gap-8">
           <Link to="/explore" className="flex flex-col items-center gap-2 cursor-pointer group">
             <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
               <Search className="w-6 h-6" />
@@ -237,7 +239,7 @@ export default function Home() {
         </section>
 
         {/* Em Destaque (Real) */}
-        <section className="px-6 mb-8">
+        <section className="px-4 sm:px-6 mb-8 app-container">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold">Em destaque</h2>
             <Link to="/explore" className="text-xs text-gray-500 font-medium hover:underline">
@@ -261,14 +263,14 @@ export default function Home() {
               </Link>
             </div>
           ) : (
-            <div className="flex gap-4 overflow-x-auto pb-4 snap-x no-scrollbar">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
               {featuredBooks.map((book) => (
                 <Link
                   key={book.id}
                   to={`/book/${book.id}`}
-                  className="w-28 flex-shrink-0 snap-start group"
+                  className="group"
                 >
-                  <div className="w-full h-40 bg-gray-100 dark:bg-gray-800 rounded-xl mb-2 overflow-hidden flex flex-col items-center justify-center border border-gray-200 dark:border-gray-700 shadow-xs relative">
+                  <div className="w-full aspect-[2/3] bg-gray-100 dark:bg-gray-800 rounded-xl mb-2 overflow-hidden flex flex-col items-center justify-center border border-gray-200 dark:border-gray-700 shadow-xs relative">
                     {book.cover_url ? (
                       <img
                         src={book.cover_url}

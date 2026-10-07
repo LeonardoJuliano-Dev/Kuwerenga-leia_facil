@@ -195,7 +195,8 @@ export default function DonateBook() {
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-16">
       
       {/* Header */}
-      <header className="px-6 pt-12 pb-4 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900 sticky top-0 z-10 flex items-center justify-between">
+      <header className="px-4 sm:px-6 pt-safe bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900 sticky top-0 z-10">
+        <div className="app-container pt-6 sm:pt-8 pb-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
             to="/home"
@@ -205,10 +206,11 @@ export default function DonateBook() {
           </Link>
           <h1 className="text-xl font-bold">Doar um Livro</h1>
         </div>
+        </div>
       </header>
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 max-w-lg mx-auto w-full p-6">
+      <main className="flex-1 app-container w-full p-4 sm:p-6">
         
         {success ? (
           <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 text-center shadow-sm animate-in zoom-in-95 duration-300 my-10">

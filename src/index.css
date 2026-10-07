@@ -30,7 +30,67 @@
     }
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-[var(--background)] text-[var(--foreground)] antialiased selection:bg-black selection:text-white dark:selection:bg-white dark:selection:text-black;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior-y: contain;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar but keep scrollable */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Safe area padding for notched phones */
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+  .pt-safe {
+    padding-top: max(0rem, env(safe-area-inset-top));
+  }
+
+  /* Desktop content container */
+  .app-container {
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  @media (min-width: 768px) {
+    .app-container {
+      max-width: 720px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .app-container {
+      max-width: 960px;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .app-container {
+      max-width: 1120px;
+    }
+  }
+
+  /* Touch-friendly tap areas */
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
   }
 }

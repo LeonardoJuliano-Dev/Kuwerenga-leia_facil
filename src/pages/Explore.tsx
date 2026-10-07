@@ -86,7 +86,8 @@ export default function Explore() {
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24">
       {/* Header */}
-      <header className="px-6 pt-12 pb-4 bg-white dark:bg-black sticky top-0 z-10 border-b border-gray-100 dark:border-gray-900">
+      <header className="px-4 sm:px-6 pt-safe sticky top-0 z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
+        <div className="app-container pt-6 sm:pt-8 pb-4">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">Explorar</h1>
           <Link
@@ -109,11 +110,12 @@ export default function Explore() {
             className="w-full pl-12 pr-4 py-3 bg-gray-100 dark:bg-gray-900 rounded-2xl focus:outline-none text-sm font-medium transition-all"
           />
         </div>
+        </div>
       </header>
 
       <main className="flex-1">
         {/* Filtros de Tipo de Ficheiro */}
-        <div className="px-6 py-4 flex gap-2 overflow-x-auto no-scrollbar">
+        <div className="px-4 sm:px-6 py-4 app-container flex gap-2 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setFileTypeFilter("all")}
             className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
@@ -148,7 +150,7 @@ export default function Explore() {
 
         {/* Categorias Reais */}
         {categories.length > 0 && (
-          <section className="px-6 mb-6">
+          <section className="px-4 sm:px-6 mb-6 app-container">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">Categorias</h2>
               {selectedCategory !== "all" && (
@@ -189,7 +191,7 @@ export default function Explore() {
         )}
 
         {/* Lista de Livros Reais */}
-        <section className="px-6">
+        <section className="px-4 sm:px-6 pb-6 app-container">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold">
               Catálogo Disponível ({filteredBooks.length})
@@ -221,7 +223,7 @@ export default function Explore() {
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredBooks.map((book) => (
                 <div
                   key={book.id}

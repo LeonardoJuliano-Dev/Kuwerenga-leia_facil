@@ -270,7 +270,8 @@ export default function BookDetails() {
     <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white pb-16">
       
       {/* Top Header */}
-      <header className="px-6 pt-12 pb-4 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-black/90 backdrop-blur-md z-10 border-b border-gray-100 dark:border-gray-900">
+      <header className="px-4 sm:px-6 pt-safe flex items-center justify-between sticky top-0 bg-white/90 dark:bg-black/90 backdrop-blur-md z-10 border-b border-gray-100 dark:border-gray-900">
+        <div className="app-container pt-6 sm:pt-8 pb-4 flex items-center justify-between w-full">
         <button
           onClick={() => navigate(-1)}
           className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -291,10 +292,11 @@ export default function BookDetails() {
             {isInLibrary ? <BookmarkCheck className="w-5 h-5 fill-current" /> : <Bookmark className="w-5 h-5" />}
           </button>
         </div>
+        </div>
       </header>
 
       {/* Livro Hero */}
-      <main className="flex-1 max-w-lg mx-auto w-full px-6 pt-6">
+      <main className="flex-1 app-container px-4 sm:px-6 pt-6 pb-6">
         
         {/* Capa e Título */}
         <div className="flex flex-col items-center text-center mb-8">

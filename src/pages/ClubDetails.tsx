@@ -642,7 +642,8 @@ export default function ClubDetails() {
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-black text-black dark:text-white overflow-hidden">
       
       {/* Top Header */}
-      <header className="px-6 pt-12 pb-3 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900 flex-shrink-0 z-10">
+      <header className="px-4 sm:px-6 pt-safe bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900 flex-shrink-0 z-10">
+        <div className="app-container pt-6 sm:pt-8 pb-3">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <button
@@ -705,6 +706,7 @@ export default function ClubDetails() {
           >
             Fórum do Clube ({forumDiscussions.length})
           </button>
+        </div>
         </div>
       </header>
 

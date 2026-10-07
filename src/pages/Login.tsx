@@ -226,14 +226,14 @@ export default function Login() {
   const isOtpComplete = otp.every(digit => digit !== "");
 
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white p-6">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white pt-safe">
       
       {/* Header com botão Voltar */}
       {step !== "options" && (
         <header className="py-2">
           <button 
             onClick={handleBack} 
-            className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+            className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors touch-target"
           >
             <ArrowLeft className="w-6 h-6" />
           </button>
@@ -241,7 +241,7 @@ export default function Login() {
       )}
 
       {/* Conteúdo Principal */}
-      <main className={`flex-1 flex flex-col max-w-sm mx-auto w-full ${step === "options" ? "justify-center" : "mt-8"}`}>
+      <main className={`flex-1 flex flex-col app-container px-6 sm:px-8 mx-auto w-full ${step === "options" ? "justify-center" : "mt-8"}`}>
         
         {step === "options" && (
           <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">

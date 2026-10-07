@@ -291,7 +291,8 @@ export default function Community() {
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24">
       {/* Header */}
-      <header className="px-6 pt-12 pb-2 bg-white dark:bg-black sticky top-0 z-10 border-b border-gray-100 dark:border-gray-900">
+      <header className="px-4 sm:px-6 pt-safe sticky top-0 z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
+        <div className="app-container pt-6 sm:pt-8 pb-2">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">Comunidade</h1>
           <button
@@ -336,10 +337,11 @@ export default function Community() {
             Discussões
           </button>
         </div>
+        </div>
       </header>
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 p-6">
+      <main className="flex-1 p-4 sm:p-6 app-container">
         {/* Banner do Chat Geral da Comunidade */}
         <div
           onClick={() => navigate("/club/geral")}
@@ -366,7 +368,7 @@ export default function Community() {
 
         {/* ABA 1: Todos os Clubes */}
         {activeTab === "clubs" && (
-          <section className="space-y-4">
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {loading && clubs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <div className="w-8 h-8 border-2 border-black dark:border-white border-t-transparent rounded-full animate-spin"></div>
@@ -460,7 +462,7 @@ export default function Community() {
 
         {/* ABA 2: Os Meus Clubes */}
         {activeTab === "my_clubs" && (
-          <section className="space-y-4">
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {myClubs.length === 0 ? (
               <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 text-center my-6">
                 <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-2xl flex items-center justify-center mx-auto mb-4">

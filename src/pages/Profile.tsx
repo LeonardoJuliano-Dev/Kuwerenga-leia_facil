@@ -56,7 +56,8 @@ export default function Profile() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24">
-      <header className="px-6 pt-12 pb-6 bg-white dark:bg-black flex items-center gap-4">
+      <header className="px-4 sm:px-6 pt-safe bg-white dark:bg-black">
+        <div className="app-container pt-6 sm:pt-8 pb-6 flex items-center gap-4">
         <div className="w-16 h-16 bg-gray-200 dark:bg-gray-800 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden">
           <UserIcon className="w-10 h-10 text-gray-400 mt-2" />
         </div>
@@ -64,11 +65,13 @@ export default function Profile() {
           <h1 className="text-xl font-bold">{loading ? "A carregar..." : userName}</h1>
           <p className="text-xs text-gray-500 mt-0.5">{userEmail || "Leitor Leitura+"}</p>
         </div>
+        </div>
       </header>
 
       <main className="flex-1">
         {/* Stats Row */}
-        <div className="px-6 py-6 bg-white dark:bg-black mb-2 flex justify-between border-t border-gray-100 dark:border-gray-900">
+        <div className="px-4 sm:px-6 py-6 bg-white dark:bg-black mb-2 border-t border-gray-100 dark:border-gray-900">
+          <div className="app-container flex justify-between sm:justify-start sm:gap-16">
           <div className="flex flex-col items-center">
             <span className="text-2xl font-bold">0</span>
             <span className="text-xs text-gray-500 mt-1">Livros</span>
@@ -81,10 +84,11 @@ export default function Profile() {
             <span className="text-2xl font-bold">0h</span>
             <span className="text-xs text-gray-500 mt-1">De leitura</span>
           </div>
+          </div>
         </div>
 
         {/* Menu List */}
-        <div className="bg-white dark:bg-black">
+        <div className="bg-white dark:bg-black app-container">
           {menuItems.map((item, i) => (
             <button key={i} className="w-full px-6 py-4 flex items-center justify-between border-b border-gray-100 dark:border-gray-900 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
               <div className="flex items-center gap-4">

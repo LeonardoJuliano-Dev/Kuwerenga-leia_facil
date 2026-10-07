@@ -113,7 +113,8 @@ export default function Library() {
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white pb-24 relative">
       {/* Header com Abas Reais */}
-      <header className="px-6 pt-12 pb-2 bg-white dark:bg-black sticky top-0 z-10 border-b border-gray-100 dark:border-gray-900">
+      <header className="px-4 sm:px-6 pt-safe sticky top-0 z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
+        <div className="app-container pt-6 sm:pt-8 pb-2">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">Minha Biblioteca</h1>
           <Link
@@ -171,10 +172,11 @@ export default function Library() {
             {activeTab === "finished" && <div className="w-6 h-0.5 bg-black dark:bg-white mt-1.5 rounded-full" />}
           </button>
         </div>
+        </div>
       </header>
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 px-6 pt-6 space-y-4">
+      <main className="flex-1 px-4 sm:px-6 pt-6 app-container space-y-4">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <div className="w-8 h-8 border-2 border-black dark:border-white border-t-transparent dark:border-t-transparent rounded-full animate-spin"></div>
@@ -208,7 +210,7 @@ export default function Library() {
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {filteredItems.map(({ id, book, current_page, progress }) => (
               <div
                 key={id}
