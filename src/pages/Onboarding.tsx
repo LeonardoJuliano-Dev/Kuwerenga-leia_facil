@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpen, MonitorSmartphone, Users } from "lucide-react";
+import { MonitorSmartphone, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function Onboarding() {

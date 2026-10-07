@@ -68,7 +68,6 @@ export default function Reader() {
 
   // Estados do EPUB
   const [epubBook, setEpubBook] = useState<Book | null>(null);
-  const [epubRendition, setEpubRendition] = useState<Rendition | null>(null);
   const [epubCurrentCfi, setEpubCurrentCfi] = useState<string>("");
   const [epubProgress, setEpubProgress] = useState(0);
   const [epubChapterTitle, setEpubChapterTitle] = useState("");
@@ -318,7 +317,6 @@ export default function Reader() {
     rendition.themes.fontSize(`${Math.round(scale * 100)}%`);
 
     epubRenditionRef.current = rendition;
-    setEpubRendition(rendition);
 
     // Navegar para localização guardada
     const savedProgress = getReadingProgress(bookId);

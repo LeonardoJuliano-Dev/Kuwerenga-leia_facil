@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, BookOpen, MessageCircle, Mail } from "lucide-react";
+import { ArrowLeft, MessageCircle, Mail } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 export default function Login() {
@@ -243,6 +243,7 @@ export default function Login() {
       {/* Conteúdo Principal */}
       <main className={`flex-1 flex flex-col app-container px-6 sm:px-8 mx-auto w-full ${step === "options" ? "justify-center" : "mt-8"}`}>
         
+        {step === "options" && (
           <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
             <img src="/favicon.svg" alt="KUWERENGA" className="w-20 h-20 mb-4 rounded-3xl shadow-sm" />
             <h1 className="text-3xl font-bold mb-1 tracking-tight">KUWERENGA</h1>
