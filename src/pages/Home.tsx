@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, BookHeart, Users, MoreHorizontal, Bell, BookOpen, Plus } from "lucide-react";
+import { Search, Compass, Users, Library, Bell, BookOpen, Plus } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
 import { getCached, setCached } from "../lib/cache";
@@ -115,7 +115,7 @@ export default function Home() {
           <div className="flex items-center gap-2.5">
             <img src="/favicon.svg" alt="KUWERENGA" className="w-8 h-8 rounded-xl shadow-xs" />
             <div>
-              <h1 className="text-xl font-bold leading-none tracking-tight">KUWERENGA</h1>
+              <h1 className="text-xl font-bold leading-none tracking-tight">KUWERENGA+</h1>
               <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold block mt-0.5">Leia Fácil</span>
             </div>
           </div>
@@ -219,29 +219,29 @@ export default function Home() {
         {/* Quick Actions (Round Buttons) */}
         <section className="px-4 sm:px-6 mb-10 app-container flex justify-between sm:justify-start sm:gap-8">
           <Link to="/explore" className="flex flex-col items-center gap-2 cursor-pointer group">
-            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
-              <Search className="w-6 h-6" />
+            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-200/60 dark:border-gray-800/80 rounded-2xl flex items-center justify-center shadow-xs group-hover:scale-105 active:scale-95 transition-all">
+              <Compass className="w-6 h-6 stroke-[1.8] group-hover:stroke-[2.2] transition-all text-black dark:text-white" />
             </div>
-            <span className="text-xs font-medium">Pesquisar</span>
+            <span className="text-xs font-medium">Explorar</span>
           </Link>
           <Link to="/donate-book" className="flex flex-col items-center gap-2 cursor-pointer group">
-            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
-              <BookHeart className="w-6 h-6" />
+            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-200/60 dark:border-gray-800/80 rounded-2xl flex items-center justify-center shadow-xs group-hover:scale-105 active:scale-95 transition-all">
+              <Plus className="w-6 h-6 stroke-[2] group-hover:stroke-[2.4] transition-all text-black dark:text-white" />
             </div>
-            <span className="text-xs font-medium">Doar livro</span>
+            <span className="text-xs font-medium">Doar Livro</span>
           </Link>
           <Link to="/community" className="flex flex-col items-center gap-2 cursor-pointer group">
-            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
-              <Users className="w-6 h-6" />
+            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-200/60 dark:border-gray-800/80 rounded-2xl flex items-center justify-center shadow-xs group-hover:scale-105 active:scale-95 transition-all">
+              <Users className="w-6 h-6 stroke-[1.8] group-hover:stroke-[2.2] transition-all text-black dark:text-white" />
             </div>
             <span className="text-xs font-medium">Clubes</span>
           </Link>
-          <div className="flex flex-col items-center gap-2 cursor-pointer group opacity-60">
-            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full flex items-center justify-center shadow-xs">
-              <MoreHorizontal className="w-6 h-6" />
+          <Link to="/library" className="flex flex-col items-center gap-2 cursor-pointer group">
+            <div className="w-14 h-14 bg-white dark:bg-gray-900 border border-gray-200/60 dark:border-gray-800/80 rounded-2xl flex items-center justify-center shadow-xs group-hover:scale-105 active:scale-95 transition-all">
+              <Library className="w-6 h-6 stroke-[1.8] group-hover:stroke-[2.2] transition-all text-black dark:text-white" />
             </div>
-            <span className="text-xs font-medium">Mais</span>
-          </div>
+            <span className="text-xs font-medium">Biblioteca</span>
+          </Link>
         </section>
 
         {/* Em Destaque (Real) */}
