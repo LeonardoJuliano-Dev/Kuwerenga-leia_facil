@@ -111,9 +111,9 @@ export default function Library() {
   const countSaved = items.filter((i) => i.status === "saved").length;
 
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white pb-24 relative">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white pb-24 md:pb-12 md:pt-16 relative">
       {/* Header com Abas Reais */}
-      <header className="px-4 sm:px-6 pt-safe sticky top-0 z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
+      <header className="px-4 sm:px-6 pt-safe sticky top-0 md:static z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
         <div className="app-container pt-6 sm:pt-8 pb-2">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">Minha Biblioteca</h1>
@@ -210,7 +210,7 @@ export default function Library() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredItems.map(({ id, book, current_page, progress }) => (
               <div
                 key={id}

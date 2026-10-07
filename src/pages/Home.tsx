@@ -107,10 +107,10 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-20">
+    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-20 md:pb-12 md:pt-16">
       
-      {/* Header */}
-      <header className="px-4 sm:px-6 pt-safe sticky top-0 z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
+      {/* Header Mobile (oculto em desktop pois o BottomNav já tem o Top Navbar) */}
+      <header className="md:hidden px-4 sm:px-6 pt-safe sticky top-0 z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
         <div className="app-container pt-6 sm:pt-8 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <img src="/favicon.svg" alt="KUWERENGA" className="w-8 h-8 rounded-xl shadow-xs" />

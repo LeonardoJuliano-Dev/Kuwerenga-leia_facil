@@ -55,7 +55,7 @@ export default function Profile() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24">
+    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24 md:pb-12 md:pt-16">
       <header className="px-4 sm:px-6 pt-safe bg-white dark:bg-black">
         <div className="app-container pt-6 sm:pt-8 pb-6 flex items-center gap-4">
         <div className="w-16 h-16 bg-gray-200 dark:bg-gray-800 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden">

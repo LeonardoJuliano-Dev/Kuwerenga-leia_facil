@@ -84,12 +84,12 @@ export default function Explore() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24">
+    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24 md:pb-12 md:pt-16">
       {/* Header */}
-      <header className="px-4 sm:px-6 pt-safe sticky top-0 z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
+      <header className="px-4 sm:px-6 pt-safe sticky top-0 md:static z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
         <div className="app-container pt-6 sm:pt-8 pb-4">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold">Explorar</h1>
+          <h1 className="text-2xl font-bold">Explorar Catálogo</h1>
           <Link
             to="/donate-book"
             className="flex items-center gap-1.5 px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-semibold active:scale-95 transition-transform"

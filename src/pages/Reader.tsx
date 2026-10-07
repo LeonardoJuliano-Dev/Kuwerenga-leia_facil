@@ -89,30 +89,40 @@ export default function Reader() {
 
   // ─── Helpers ───────────────────────────────────────────────────
 
-  /** Inicializa um livro EPUB a partir de um ArrayBuffer */
-  const initEpub = useCallback(async (buffer: ArrayBuffer, blob: Blob, title: string) => {
-    const book = ePub(buffer);
+  /** Inicializa um livro EPUB a partir de Blob */
+  const initEpub = useCallback(async (blob: Blob, title: string) => {
+    // Cria ObjectURL a partir do blob — muito mais fiável e rápido no epub.js do que carregar ArrayBuffer bruto
+    const objectUrl = URL.createObjectURL(blob);
+    const book = ePub(objectUrl);
     setEpubBook(book);
     setFileType("epub");
     setBookTitle(title);
     setPdfSourceBlob(blob);
 
-    // Espera os metadados carregarem
-    await book.ready;
-
-    // Gera localizações para calcular progresso (cada ~1000 caracteres)
-    await book.locations.generate(1000);
-    setTotalPages(book.locations.length());
-
-    // Recupera progresso de leitura
-    const savedProgress = await getReadingProgress(bookId);
-    if (savedProgress) {
-      setCurrentPage(savedProgress.currentPage);
+    try {
+      await book.ready;
+    } catch (e) {
+      console.warn("Metadados EPUB carregados com avisos:", e);
     }
 
     // Carrega anotações do livro
-    const existingNotes = await getAnnotationsForBook(bookId);
-    setAnnotations(existingNotes);
+    getAnnotationsForBook(bookId).then(setAnnotations).catch(() => {});
+
+    // Recupera progresso de leitura guardado
+    getReadingProgress(bookId).then((savedProgress) => {
+      if (savedProgress) {
+        setCurrentPage(savedProgress.currentPage || 1);
+        setEpubProgress(savedProgress.progress || 0);
+      }
+    }).catch(() => {});
+
+    // Gera posições em segundo plano sem bloquear a apresentação inicial
+    book.ready.then(() => {
+      book.locations.generate(1000).then(() => {
+        const count = book.locations.length();
+        if (count > 0) setTotalPages(count);
+      }).catch((e) => console.warn("Aviso ao gerar locais EPUB:", e));
+    });
   }, [bookId]);
 
   /** Inicializa um documento PDF a partir de Uint8Array */
@@ -153,16 +163,14 @@ export default function Reader() {
 
         if (offlineBlob) {
           setIsOfflineSaved(true);
-          const buffer = await offlineBlob.arrayBuffer();
-
-          // Detecta se é EPUB ou PDF
           const isEpub = await isEpubBlob(offlineBlob);
 
           if (!isMounted) return;
 
           if (isEpub) {
-            await initEpub(buffer, offlineBlob, bookTitle);
+            await initEpub(offlineBlob, bookTitle);
           } else {
+            const buffer = await offlineBlob.arrayBuffer();
             await initPdf(new Uint8Array(buffer), offlineBlob, bookTitle);
           }
         } else if (bookId !== "demo-book") {
@@ -176,10 +184,34 @@ export default function Reader() {
           if (!isMounted) return;
 
           if (bookRecord?.file_url) {
-            const response = await fetch(bookRecord.file_url);
-            const blob = await response.blob();
-            const buffer = await blob.arrayBuffer();
             const title = bookRecord.title || "Livro";
+            let blob: Blob | null = null;
+
+            // 1. Tenta fetch direto da URL
+            try {
+              const response = await fetch(bookRecord.file_url);
+              if (response.ok) {
+                blob = await response.blob();
+              }
+            } catch (fetchErr) {
+              console.warn("Fetch direto falhou, a tentar via Supabase Storage:", fetchErr);
+            }
+
+            // 2. Fallback: Se fetch falhou, descarrega via Supabase Storage
+            if (!blob && bookRecord.file_url) {
+              const urlParts = bookRecord.file_url.split("/books/");
+              const storagePath = urlParts.length > 1 ? urlParts[1] : bookRecord.file_url.split("/").pop();
+              if (storagePath) {
+                const { data: downloadedBlob, error: dlErr } = await supabase.storage.from("books").download(storagePath);
+                if (!dlErr && downloadedBlob) {
+                  blob = downloadedBlob;
+                }
+              }
+            }
+
+            if (!blob) {
+              throw new Error("Não foi possível transferir o ficheiro do livro. Verifica a ligação à internet.");
+            }
 
             // Detecta tipo — primeiro pelo campo file_type, depois pelo blob
             const isEpub = bookRecord.file_type === "epub" || await isEpubBlob(blob);
@@ -187,15 +219,14 @@ export default function Reader() {
             if (!isMounted) return;
 
             if (isEpub) {
-              await initEpub(buffer, blob, title);
-              // Cache no IndexedDB
+              await initEpub(blob, title);
               saveBookOffline(bookId, blob, {
                 title,
                 file_type: "epub"
               }).then(() => setIsOfflineSaved(true)).catch(() => {});
             } else {
+              const buffer = await blob.arrayBuffer();
               await initPdf(new Uint8Array(buffer), blob, title);
-              // Cache no IndexedDB
               saveBookOffline(bookId, blob, {
                 title,
                 file_type: "pdf"
@@ -290,15 +321,7 @@ export default function Reader() {
     }
 
     const container = epubContainerRef.current;
-    // Limpa o container
     container.innerHTML = "";
-
-    // Temas de cor para o EPUB
-    const themes: Record<string, Record<string, string>> = {
-      dark: { body: { color: "#fff !important", background: "#000 !important" } },
-      light: { body: { color: "#000 !important", background: "#fff !important" } },
-      sepia: { body: { color: "#433422 !important", background: "#fbf0d9 !important" } },
-    } as any;
 
     const rendition = epubBook.renderTo(container, {
       width: "100%",
@@ -307,18 +330,77 @@ export default function Reader() {
       spread: "none",
     });
 
-    // Registar temas
-    Object.entries(themes).forEach(([name, styles]) => {
-      rendition.themes.register(name, styles as any);
+    // Registar temas de cor
+    rendition.themes.register("dark", {
+      body: { "background-color": "#000000 !important", "color": "#ffffff !important" }
+    });
+    rendition.themes.register("light", {
+      body: { "background-color": "#ffffff !important", "color": "#000000 !important" }
+    });
+    rendition.themes.register("sepia", {
+      body: { "background-color": "#fbf0d9 !important", "color": "#433422 !important" }
     });
     rendition.themes.select(themeMode);
-
-    // Aplicar tamanho da fonte baseado no scale
     rendition.themes.fontSize(`${Math.round(scale * 100)}%`);
+
+    // Injetar regras de estilo que garantem visibilidade perfeita de qualquer EPUB
+    rendition.hooks.content.register((contents: any) => {
+      const isDark = themeMode === "dark";
+      const isSepia = themeMode === "sepia";
+      const textColor = isDark ? "#ffffff" : isSepia ? "#433422" : "#000000";
+      const bgColor = isDark ? "#000000" : isSepia ? "#fbf0d9" : "#ffffff";
+
+      contents.addStylesheetRules({
+        "body": {
+          "color": `${textColor} !important`,
+          "background-color": `${bgColor} !important`,
+          "padding": "16px 20px !important",
+          "font-family": "Inter, system-ui, -apple-system, sans-serif !important",
+          "line-height": "1.75 !important",
+        },
+        "p, div, span, li": {
+          "color": "inherit !important",
+          "line-height": "1.75 !important",
+        },
+        "h1, h2, h3, h4, h5, h6": {
+          "color": "inherit !important",
+          "margin-bottom": "0.75em !important",
+        },
+        "img, svg": {
+          "max-width": "100% !important",
+          "height": "auto !important",
+          "display": "block !important",
+          "margin": "1rem auto !important",
+        }
+      });
+
+      // Captura de teclado dentro do iframe
+      contents.document?.addEventListener("keydown", (e: KeyboardEvent) => {
+        if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") {
+          e.preventDefault();
+          rendition.next();
+        } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
+          e.preventDefault();
+          rendition.prev();
+        }
+      });
+
+      // Toque / clique nas margens para avançar ou recuar
+      contents.document?.addEventListener("click", (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target?.tagName === "A" || window.getSelection()?.toString()) return;
+        const width = contents.window.innerWidth;
+        if (e.clientX < width * 0.25) {
+          rendition.prev();
+        } else if (e.clientX > width * 0.75) {
+          rendition.next();
+        }
+      });
+    });
 
     epubRenditionRef.current = rendition;
 
-    // Navegar para localização guardada
+    // Navegar para localização guardada ou início
     const savedProgress = getReadingProgress(bookId);
     savedProgress.then((progress) => {
       if (progress && epubCurrentCfi) {
@@ -337,23 +419,25 @@ export default function Reader() {
       const cfi = location.start.cfi;
       setEpubCurrentCfi(cfi);
 
-      // Calcular progresso
-      const progress = epubBook.locations.percentageFromCfi(cfi);
-      const pct = Math.round((progress || 0) * 100);
+      let pct = 0;
+      if (epubBook.locations && epubBook.locations.length() > 0) {
+        const progress = epubBook.locations.percentageFromCfi(cfi);
+        pct = Math.round((progress || 0) * 100);
+      }
       setEpubProgress(pct);
 
-      // Página virtual baseada na localização
-      const loc = epubBook.locations.locationFromCfi(cfi);
-      const locNum = typeof loc === "number" ? loc + 1 : 1;
+      let locNum = 1;
+      if (epubBook.locations && epubBook.locations.length() > 0) {
+        const loc = epubBook.locations.locationFromCfi(cfi);
+        locNum = typeof loc === "number" ? loc + 1 : 1;
+      }
       setCurrentPage(locNum);
 
-      // Nome do capítulo
       const tocItem = epubBook.navigation?.toc?.find((t: any) => {
         return t.href && cfi.includes?.(t.href);
       });
       setEpubChapterTitle(tocItem?.label || "");
 
-      // Guardar progresso
       saveReadingProgress({
         bookId,
         currentPage: locNum,
@@ -368,7 +452,7 @@ export default function Reader() {
       try { rendition.destroy(); } catch {}
       epubRenditionRef.current = null;
     };
-  }, [epubBook, fileType, themeMode]);
+  }, [epubBook, fileType]);
 
   // Actualizar tamanho da fonte do EPUB quando scale muda
   useEffect(() => {
@@ -383,6 +467,34 @@ export default function Reader() {
       epubRenditionRef.current.themes.select(themeMode);
     }
   }, [themeMode, fileType]);
+
+  // Navegação por teclado global
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight" || e.key === "PageDown") {
+        goToNextPage();
+      } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
+        goToPrevPage();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [fileType, currentPage, totalPages]);
+
+  // Redimensionamento de ecrã (responsividade desktop e mobile)
+  useEffect(() => {
+    const handleResize = () => {
+      if (fileType === "epub" && epubRenditionRef.current && epubContainerRef.current) {
+        const w = epubContainerRef.current.clientWidth;
+        const h = epubContainerRef.current.clientHeight;
+        if (w > 0 && h > 0) {
+          epubRenditionRef.current.resize(w, h);
+        }
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [fileType]);
 
   // ─── Navegação ────────────────────────────────────────────────
 
@@ -440,11 +552,10 @@ export default function Reader() {
 
     try {
       const title = file.name.replace(/\.[^/.]+$/, "");
-      const buffer = await file.arrayBuffer();
       const isEpub = file.name.toLowerCase().endsWith(".epub") || await isEpubBlob(file);
 
       if (isEpub) {
-        await initEpub(buffer, file, title);
+        await initEpub(file, title);
 
         // Guarda automaticamente no IndexedDB
         const localId = `local-${Date.now()}`;
@@ -455,7 +566,7 @@ export default function Reader() {
         });
         setIsOfflineSaved(true);
       } else {
-        // PDF
+        const buffer = await file.arrayBuffer();
         const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
         setFileType("pdf");
         setBookTitle(title);
@@ -464,7 +575,6 @@ export default function Reader() {
         setTotalPages(doc.numPages);
         setCurrentPage(1);
 
-        // Guarda automaticamente no IndexedDB
         const localId = `local-${Date.now()}`;
         await saveBookOffline(localId, file, {
           title,
@@ -755,6 +865,25 @@ export default function Reader() {
           </div>
         )}
 
+        {/* Botões Flutuantes Laterais de Navegação (Desktop) */}
+        <button
+          onClick={goToPrevPage}
+          disabled={fileType === "pdf" && currentPage <= 1}
+          className="hidden md:flex absolute left-4 lg:left-8 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/80 dark:bg-gray-900/80 hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black backdrop-blur-md items-center justify-center shadow-lg border border-gray-200 dark:border-gray-800 disabled:opacity-20 disabled:pointer-events-none transition-all z-20 group"
+          title="Página Anterior (Seta Esquerda ou clique à esquerda)"
+        >
+          <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
+        </button>
+
+        <button
+          onClick={goToNextPage}
+          disabled={fileType === "pdf" && currentPage >= totalPages}
+          className="hidden md:flex absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/80 dark:bg-gray-900/80 hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black backdrop-blur-md items-center justify-center shadow-lg border border-gray-200 dark:border-gray-800 disabled:opacity-20 disabled:pointer-events-none transition-all z-20 group"
+          title="Página Seguinte (Seta Direita ou clique à direita)"
+        >
+          <ChevronRight className="w-6 h-6 group-hover:translate-x-0.5 transition-transform" />
+        </button>
+
         {/* PDF: Canvas de Renderização */}
         {fileType === "pdf" && (
           <div className={`relative max-w-full overflow-auto shadow-2xl rounded-sm ${loading ? "opacity-0" : "opacity-100"} transition-opacity duration-300`}>
@@ -766,8 +895,8 @@ export default function Reader() {
         {fileType === "epub" && (
           <div
             ref={epubContainerRef}
-            className={`w-full max-w-3xl mx-auto rounded-lg overflow-hidden ${loading ? "opacity-0" : "opacity-100"} transition-opacity duration-300`}
-            style={{ height: "calc(100vh - 180px)", minHeight: "400px" }}
+            className={`w-full max-w-4xl mx-auto rounded-xl overflow-hidden relative shadow-sm ${loading ? "opacity-0" : "opacity-100"} transition-opacity duration-300`}
+            style={{ height: "calc(100vh - 150px)", minHeight: "440px" }}
           />
         )}
 

@@ -289,9 +289,9 @@ export default function Community() {
   const myClubs = clubs.filter((c) => myClubIds.includes(c.id));
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24">
+    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24 md:pb-12 md:pt-16">
       {/* Header */}
-      <header className="px-4 sm:px-6 pt-safe sticky top-0 z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
+      <header className="px-4 sm:px-6 pt-safe sticky top-0 md:static z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
         <div className="app-container pt-6 sm:pt-8 pb-2">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">Comunidade</h1>
@@ -368,7 +368,7 @@ export default function Community() {
 
         {/* ABA 1: Todos os Clubes */}
         {activeTab === "clubs" && (
-          <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {loading && clubs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <div className="w-8 h-8 border-2 border-black dark:border-white border-t-transparent rounded-full animate-spin"></div>
