@@ -65,6 +65,25 @@ async function detectBookFormat(blob: Blob): Promise<"pdf" | "epub" | "invalid">
   return "invalid";
 }
 
+/**
+ * Determina o tema inicial de leitura:
+ * Quando o sistema/aplicação se encontra em modo claro, abre por defeito no tema 'sepia' (conforto visual).
+ * Caso esteja em modo escuro, abre em 'dark'.
+ */
+function getInitialReaderTheme(): "light" | "sepia" | "dark" {
+  if (typeof window === "undefined") return "sepia";
+  try {
+    const isDark =
+      document.documentElement.classList.contains("dark") ||
+      document.body.classList.contains("dark") ||
+      (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+    return isDark ? "dark" : "sepia";
+  } catch {
+    return "sepia";
+  }
+}
+
 export default function Reader() {
   const [searchParams] = useSearchParams();
   const bookId = searchParams.get("bookId") || "demo-book";
@@ -90,7 +109,7 @@ export default function Reader() {
 
   // Estados de UI e Leitura
   const [scale, setScale] = useState(1.1);
-  const [themeMode, setThemeMode] = useState<"light" | "sepia" | "dark">("dark");
+  const [themeMode, setThemeMode] = useState<"light" | "sepia" | "dark">(getInitialReaderTheme);
   const [showSettings, setShowSettings] = useState(false);
   const [showAnnotationsDrawer, setShowAnnotationsDrawer] = useState(false);
   const [showAddNoteModal, setShowAddNoteModal] = useState(false);
@@ -639,6 +658,20 @@ export default function Reader() {
   useEffect(() => {
     if (fileType === "epub" && epubRenditionRef.current) {
       epubRenditionRef.current.themes.select(themeMode);
+      try {
+        const isDark = themeMode === "dark";
+        const isSepia = themeMode === "sepia";
+        const textColor = isDark ? "#ffffff" : isSepia ? "#433422" : "#000000";
+        const bgColor = isDark ? "#000000" : isSepia ? "#fbf0d9" : "#ffffff";
+        const iframes = epubContainerRef.current?.querySelectorAll("iframe");
+        iframes?.forEach((iframe) => {
+          const doc = iframe.contentDocument;
+          if (doc && doc.body) {
+            doc.body.style.backgroundColor = bgColor;
+            doc.body.style.color = textColor;
+          }
+        });
+      } catch {}
     }
   }, [themeMode, fileType]);
 
@@ -1003,17 +1036,25 @@ export default function Reader() {
     <div className={`flex flex-col min-h-screen ${themeClasses[themeMode]} transition-colors duration-200 select-none`}>
       
       {/* Barra de Navegação Superior */}
-      <header className="px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between sticky top-0 backdrop-blur-md bg-opacity-90 border-b border-gray-200 dark:border-gray-800 z-20">
+      <header className={`px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between sticky top-0 backdrop-blur-md z-20 transition-colors ${
+        themeMode === "sepia"
+          ? "border-b border-[#dfceaa] bg-[#fbf0d9]/95 text-[#433422]"
+          : "border-b border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-black/90"
+      }`}>
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
           <Link
             to="/home"
-            className="p-1.5 sm:p-2 -ml-1 sm:-ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
+            className={`p-1.5 sm:p-2 -ml-1 sm:-ml-2 rounded-full transition-colors shrink-0 ${
+              themeMode === "sepia"
+                ? "hover:bg-[#433422]/10 text-[#433422]"
+                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-inherit"
+            }`}
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="min-w-0 flex-1">
             <h1 className="font-semibold text-xs sm:text-sm truncate">{bookTitle}</h1>
-            <span className="text-[10px] sm:text-[11px] text-gray-500 block truncate">
+            <span className={`text-[10px] sm:text-[11px] block truncate ${themeMode === "sepia" ? "text-[#7a6449]" : "text-gray-500"}`}>
               {pageLabel}
             </span>
           </div>
@@ -1027,7 +1068,9 @@ export default function Reader() {
             className={`p-1.5 sm:p-2 rounded-full transition-colors ${
               isOfflineSaved
                 ? "text-emerald-500 cursor-default"
-                : "text-gray-500 hover:text-black dark:hover:text-white"
+                : themeMode === "sepia"
+                ? "text-[#7a6449] hover:bg-[#433422]/10 hover:text-[#433422]"
+                : "text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800"
             }`}
             title={isOfflineSaved ? "Livro guardado para ler sem internet" : "Guardar offline"}
           >
@@ -1037,20 +1080,28 @@ export default function Reader() {
           {/* Marcador de Página */}
           <button
             onClick={toggleBookmark}
-            className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className={`p-1.5 sm:p-2 rounded-full transition-colors ${
+              themeMode === "sepia"
+                ? "hover:bg-[#433422]/10"
+                : "hover:bg-gray-100 dark:hover:bg-gray-800"
+            }`}
             title="Marcar página"
           >
             {isCurrentPageBookmarked ? (
-              <BookmarkCheck className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-black dark:text-white fill-current" />
+              <BookmarkCheck className={`w-4.5 h-4.5 sm:w-5 sm:h-5 fill-current ${themeMode === "sepia" ? "text-[#433422]" : "text-black dark:text-white"}`} />
             ) : (
-              <Bookmark className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-gray-500" />
+              <Bookmark className={`w-4.5 h-4.5 sm:w-5 sm:h-5 ${themeMode === "sepia" ? "text-[#7a6449]" : "text-gray-500"}`} />
             )}
           </button>
 
           {/* Botão de Anotações (visível a partir de ecrãs de ~380px) */}
           <button
             onClick={() => setShowAddNoteModal(true)}
-            className="hidden min-[400px]:flex p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-black dark:hover:text-white"
+            className={`hidden min-[400px]:flex p-1.5 sm:p-2 rounded-full transition-colors ${
+              themeMode === "sepia"
+                ? "hover:bg-[#433422]/10 text-[#7a6449] hover:text-[#433422]"
+                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-black dark:hover:text-white"
+            }`}
             title="Adicionar nota"
           >
             <MessageSquarePlus className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
@@ -1059,7 +1110,11 @@ export default function Reader() {
           {/* Lista de Anotações / Marcadores */}
           <button
             onClick={() => setShowAnnotationsDrawer(true)}
-            className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-black dark:hover:text-white"
+            className={`p-1.5 sm:p-2 rounded-full transition-colors ${
+              themeMode === "sepia"
+                ? "hover:bg-[#433422]/10 text-[#7a6449] hover:text-[#433422]"
+                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-black dark:hover:text-white"
+            }`}
             title="Ver anotações"
           >
             <List className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
@@ -1073,7 +1128,11 @@ export default function Reader() {
                 handleLookupDefinition(selectedText);
               }
             }}
-            className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-black dark:hover:text-white"
+            className={`p-1.5 sm:p-2 rounded-full transition-colors ${
+              themeMode === "sepia"
+                ? "hover:bg-[#433422]/10 text-[#7a6449] hover:text-[#433422]"
+                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-black dark:hover:text-white"
+            }`}
             title="Dicionário e Definições"
           >
             <BookA className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
@@ -1082,7 +1141,11 @@ export default function Reader() {
           {/* Preferências / Configurações */}
           <button
             onClick={() => setShowSettings(!showSettings)}
-            className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500 hover:text-black dark:hover:text-white"
+            className={`p-1.5 sm:p-2 rounded-full transition-colors ${
+              themeMode === "sepia"
+                ? "hover:bg-[#433422]/10 text-[#7a6449] hover:text-[#433422]"
+                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-black dark:hover:text-white"
+            }`}
             title="Definições"
           >
             <Settings2 className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
@@ -1171,7 +1234,7 @@ export default function Reader() {
       )}
 
       {/* Área Central de Leitura */}
-      <main className="flex-1 w-full flex flex-col items-center justify-center p-1 sm:p-4 relative min-h-[60vh]">
+      <main className="flex-1 w-full flex flex-col items-center justify-center p-1 sm:p-4 pb-16 sm:pb-20 relative min-h-[60vh]">
         {loading && (
           <div className="flex flex-col items-center gap-3 my-20">
             <div className="w-8 h-8 border-2 border-black dark:border-white border-t-transparent dark:border-t-transparent rounded-full animate-spin"></div>
@@ -1214,7 +1277,15 @@ export default function Reader() {
         {/* PDF: Canvas de Renderização */}
         {fileType === "pdf" && (
           <div className={`relative max-w-full overflow-auto shadow-2xl rounded-sm ${loading ? "opacity-0" : "opacity-100"} transition-opacity duration-300`}>
-            <canvas ref={canvasRef} className="block max-w-full h-auto mx-auto" />
+            <canvas
+              ref={canvasRef}
+              className="block max-w-full h-auto mx-auto transition-all"
+              style={
+                themeMode === "sepia"
+                  ? { filter: "sepia(0.25) contrast(0.96)" }
+                  : undefined
+              }
+            />
           </div>
         )}
 
@@ -1223,7 +1294,7 @@ export default function Reader() {
           <div
             ref={epubContainerRef}
             className={`w-full max-w-4xl mx-auto rounded-lg sm:rounded-xl overflow-hidden relative shadow-sm ${loading ? "opacity-0" : "opacity-100"} transition-opacity duration-300`}
-            style={{ height: "calc(100vh - 130px)", minHeight: "360px" }}
+            style={{ height: "calc(100vh - 120px)", minHeight: "360px" }}
           />
         )}
 
@@ -1242,62 +1313,49 @@ export default function Reader() {
         )}
       </main>
 
-      {/* Barra Inferior com Progresso e Botões de Página */}
-      <footer className="sticky bottom-0 w-full backdrop-blur-md bg-opacity-95 bg-white dark:bg-black border-t border-gray-200 dark:border-gray-800 px-6 py-3.5">
-        <div className="max-w-md mx-auto">
-          <div className="flex items-center justify-between mb-2">
-            <button
-              onClick={goToPrevPage}
-              disabled={fileType === "pdf" && currentPage <= 1}
-              className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span>Anterior</span>
-            </button>
+      {/* Rodapé Flutuante Compacto para Mudança de Página */}
+      <footer className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
+        <div
+          className={`flex items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-full backdrop-blur-md shadow-xl border transition-all select-none ${
+            themeMode === "sepia"
+              ? "bg-[#f5e7c8]/95 text-[#433422] border-[#dfceaa] shadow-[#433422]/10"
+              : "bg-white/90 dark:bg-gray-900/90 text-black dark:text-white border-gray-200/80 dark:border-gray-800/80 shadow-black/10 dark:shadow-white/5"
+          }`}
+        >
+          <button
+            onClick={goToPrevPage}
+            disabled={fileType === "pdf" && currentPage <= 1}
+            className={`w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none active:scale-95 transition-all ${
+              themeMode === "sepia"
+                ? "hover:bg-[#433422]/10"
+                : "hover:bg-black/10 dark:hover:bg-white/10"
+            }`}
+            title="Página Anterior"
+            aria-label="Página Anterior"
+          >
+            <ChevronLeft className="w-5 h-5 stroke-[2.2]" />
+          </button>
 
-            <span className="text-xs font-bold">
-              {fileType === "epub"
-                ? `${epubProgress}%`
-                : `${currentPage} / ${totalPages || 1}`
-              }
-            </span>
+          <span className="text-xs font-bold tracking-tight px-2 min-w-[56px] text-center whitespace-nowrap">
+            {fileType === "epub"
+              ? `${epubProgress}%`
+              : `${currentPage} / ${totalPages || 1}`
+            }
+          </span>
 
-            <button
-              onClick={goToNextPage}
-              disabled={fileType === "pdf" && currentPage >= totalPages}
-              className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-            >
-              <span>Seguinte</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Barra Deslizante de Progresso */}
-          <div className="flex items-center gap-3">
-            <input
-              type="range"
-              min={fileType === "epub" ? 0 : 1}
-              max={fileType === "epub" ? 100 : (totalPages || 1)}
-              value={fileType === "epub" ? epubProgress : currentPage}
-              onChange={(e) => {
-                const val = Number(e.target.value);
-                if (fileType === "epub" && epubBook && epubRenditionRef.current) {
-                  // Navega para a percentagem
-                  const cfi = epubBook.locations.cfiFromPercentage(val / 100);
-                  if (cfi) epubRenditionRef.current.display(cfi);
-                } else {
-                  setCurrentPage(val);
-                }
-              }}
-              className="flex-1 accent-black dark:accent-white h-1.5 bg-gray-200 dark:bg-gray-800 rounded-lg cursor-pointer"
-            />
-            <span className="text-[11px] text-gray-500 font-medium w-8 text-right">
-              {fileType === "epub"
-                ? `${epubProgress}%`
-                : `${Math.round((currentPage / (totalPages || 1)) * 100)}%`
-              }
-            </span>
-          </div>
+          <button
+            onClick={goToNextPage}
+            disabled={fileType === "pdf" && currentPage >= totalPages}
+            className={`w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none active:scale-95 transition-all ${
+              themeMode === "sepia"
+                ? "hover:bg-[#433422]/10"
+                : "hover:bg-black/10 dark:hover:bg-white/10"
+            }`}
+            title="Página Seguinte"
+            aria-label="Página Seguinte"
+          >
+            <ChevronRight className="w-5 h-5 stroke-[2.2]" />
+          </button>
         </div>
       </footer>
 
