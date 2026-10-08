@@ -159,25 +159,50 @@ export default function Reader() {
     if (pageHighlights.length === 0) return;
 
     const bgMap: Record<string, string> = {
-      yellow: "rgba(254, 240, 138, 0.7)",
-      green: "rgba(187, 247, 208, 0.7)",
-      blue: "rgba(191, 219, 254, 0.7)",
-      pink: "rgba(251, 207, 232, 0.7)",
+      yellow: "rgba(254, 240, 138, 0.65)",
+      green: "rgba(187, 247, 208, 0.65)",
+      blue: "rgba(191, 219, 254, 0.65)",
+      pink: "rgba(251, 207, 232, 0.65)",
     };
 
     const spans = Array.from(container.querySelectorAll("span"));
     if (spans.length === 0) return;
 
     for (const hl of pageHighlights) {
-      const hlText = hl.content.trim().toLowerCase();
-      if (!hlText) continue;
+      const hlText = hl.content.trim();
+      if (!hlText || hlText.length < 2) continue;
       const bg = bgMap[hl.color || "yellow"] || bgMap.yellow;
+      const cleanHl = hlText.replace(/\s+/g, " ").toLowerCase();
 
+      // 1. Correspondência exata quando o texto está contido num único span (palavra)
+      let found = false;
       for (const span of spans) {
-        const text = span.textContent?.trim().toLowerCase();
-        if (text && text.length > 1 && (hlText.includes(text) || text.includes(hlText))) {
+        const sText = (span.textContent || "").trim();
+        if (sText && sText.toLowerCase() === cleanHl) {
           span.style.backgroundColor = bg;
           span.style.borderRadius = "2px";
+          found = true;
+        }
+      }
+
+      // 2. Correspondência em sequência contígua para expressões ou frases compostas
+      if (!found) {
+        for (let i = 0; i < spans.length; i++) {
+          let accum = "";
+          const matchedSpans: HTMLSpanElement[] = [];
+          for (let j = i; j < Math.min(i + 35, spans.length); j++) {
+            accum = (accum + " " + (spans[j].textContent || "")).trim().replace(/\s+/g, " ").toLowerCase();
+            matchedSpans.push(spans[j]);
+            if (accum.includes(cleanHl)) {
+              matchedSpans.forEach((s) => {
+                s.style.backgroundColor = bg;
+                s.style.borderRadius = "2px";
+              });
+              found = true;
+              break;
+            }
+          }
+          if (found) break;
         }
       }
     }
@@ -397,8 +422,11 @@ export default function Reader() {
         const context = canvas.getContext("2d");
         if (!context) return;
 
-        // Limpa o canvas antes de renderizar
+        // Limpa o canvas e a camada de texto imediatamente ao iniciar renderização
         context.clearRect(0, 0, canvas.width, canvas.height);
+        if (textLayerRef.current) {
+          textLayerRef.current.innerHTML = "";
+        }
 
         const availW = windowDimensions.w;
         const availH = windowDimensions.h;
@@ -431,18 +459,13 @@ export default function Reader() {
         renderTaskRef.current = task;
         await task.promise;
 
-        // Renderizar camada de texto (TextLayer) para permitir seleção, dicionário e anotações
+        // Renderizar camada de texto (TextLayer) perfeitamente alinhada para permitir seleção, dicionário e anotações
         if (textLayerRef.current) {
           const textLayerDiv = textLayerRef.current;
           textLayerDiv.innerHTML = "";
           textLayerDiv.style.width = `${cssW}px`;
           textLayerDiv.style.height = `${cssH}px`;
-
-          try {
-            pdfjsLib.setLayerDimensions(textLayerDiv, viewport);
-          } catch {
-            // Continua caso setLayerDimensions seja opcional
-          }
+          textLayerDiv.style.setProperty("--scale-factor", `${viewport.scale}`);
 
           const textContent = await page.getTextContent();
           if (!isRendering) return;
@@ -996,6 +1019,12 @@ export default function Reader() {
 
   // ─── Dicionário e Seleção de Texto (PDF e Documento) ─────────
 
+  // Fecha o menu de ações ao mudar de página
+  useEffect(() => {
+    setShowFloatingMenu(false);
+    setShowColorPicker(false);
+  }, [currentPage]);
+
   useEffect(() => {
     const handleSelection = (e?: Event) => {
       const target = e?.target as HTMLElement | null;
@@ -1029,10 +1058,14 @@ export default function Reader() {
               setSelectedCfiRange(""); // Reset para PDF
               setShowColorPicker(false);
               const posX = rect.left + rect.width / 2;
-              const posY = rect.top;
+              
+              // Se a seleção estiver no topo sob a barra fixa, posiciona logo abaixo
+              const isNearTop = rect.top < 110;
+              const posY = isNearTop ? rect.bottom + 10 : rect.top - 48;
+
               setSelectionPosition({
-                x: Math.min(window.innerWidth - 120, Math.max(120, posX)),
-                y: Math.max(70, posY)
+                x: Math.min(window.innerWidth - 130, Math.max(130, posX)),
+                y: Math.max(65, Math.min(window.innerHeight - 70, posY))
               });
               setShowFloatingMenu(true);
             }
@@ -1056,6 +1089,35 @@ export default function Reader() {
       window.removeEventListener("keyup", handleSelection);
     };
   }, []);
+
+  // Mantém o menu flutuante suavemente colado ao texto enquanto o utilizador faz scroll
+  useEffect(() => {
+    if (!showFloatingMenu) return;
+
+    const handleScroll = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0 || !selection.toString().trim()) {
+        setShowFloatingMenu(false);
+        return;
+      }
+      try {
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        if (rect.width > 0 || rect.height > 0) {
+          const posX = rect.left + rect.width / 2;
+          const isNearTop = rect.top < 110;
+          const posY = isNearTop ? rect.bottom + 10 : rect.top - 48;
+          setSelectionPosition({
+            x: Math.min(window.innerWidth - 130, Math.max(130, posX)),
+            y: Math.max(65, Math.min(window.innerHeight - 70, posY))
+          });
+        }
+      } catch {}
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [showFloatingMenu]);
 
   const handleLookupDefinition = async (textToSearch?: string) => {
     const raw = textToSearch || selectedText;
@@ -1867,7 +1929,7 @@ export default function Reader() {
               onMouseDown={(e) => e.stopPropagation()}
               style={{
                 left: `${selectionPosition.x}px`,
-                top: `${selectionPosition.y - 48}px`,
+                top: `${selectionPosition.y}px`,
               }}
               className="hidden sm:flex fixed -translate-x-1/2 z-40 bg-black/90 dark:bg-white/95 text-white dark:text-black backdrop-blur-md rounded-2xl p-1 shadow-2xl items-center gap-0.5 border border-white/20 dark:border-black/20 animate-in zoom-in-95 duration-150 select-none"
             >
