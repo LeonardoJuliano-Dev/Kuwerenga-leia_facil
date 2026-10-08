@@ -138,6 +138,8 @@ export interface OfflineAnnotation {
   selectedText: string;
   pageNumber: number;
   chapter: string;
+  cfiRange?: string;
+  color?: 'yellow' | 'green' | 'blue' | 'pink' | string;
   synced: boolean;
   createdAt: string;
 }

@@ -18,7 +18,8 @@ import {
   BookA,
   Copy,
   Check,
-  Search
+  Search,
+  Highlighter
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import ePub from "epubjs";
@@ -104,6 +105,8 @@ export default function Reader() {
 
   // Estados de Seleção de Texto e Menu Flutuante
   const [selectedText, setSelectedText] = useState("");
+  const [selectedCfiRange, setSelectedCfiRange] = useState("");
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
   const [showFloatingMenu, setShowFloatingMenu] = useState(false);
   const [copiedFeedback, setCopiedFeedback] = useState(false);
@@ -430,6 +433,30 @@ export default function Reader() {
           "height": "auto !important",
           "display": "block !important",
           "margin": "1rem auto !important",
+        },
+        ".highlight-yellow": {
+          "background-color": "rgba(254, 240, 138, 0.7) !important",
+          "color": "inherit !important",
+          "border-radius": "3px !important",
+          "padding": "0 2px !important"
+        },
+        ".highlight-green": {
+          "background-color": "rgba(187, 247, 208, 0.7) !important",
+          "color": "inherit !important",
+          "border-radius": "3px !important",
+          "padding": "0 2px !important"
+        },
+        ".highlight-blue": {
+          "background-color": "rgba(191, 219, 254, 0.7) !important",
+          "color": "inherit !important",
+          "border-radius": "3px !important",
+          "padding": "0 2px !important"
+        },
+        ".highlight-pink": {
+          "background-color": "rgba(251, 207, 232, 0.7) !important",
+          "color": "inherit !important",
+          "border-radius": "3px !important",
+          "padding": "0 2px !important"
         }
       });
 
@@ -444,21 +471,41 @@ export default function Reader() {
         }
       });
 
-      // Toque / clique nas margens para avançar ou recuar
-      contents.document?.addEventListener("click", (e: MouseEvent) => {
-        const target = e.target as HTMLElement;
-        if (target?.tagName === "A" || window.getSelection()?.toString()) return;
-        const width = contents.window.innerWidth;
-        if (e.clientX < width * 0.25) {
-          setShowFloatingMenu(false);
-          rendition.prev();
-        } else if (e.clientX > width * 0.75) {
-          setShowFloatingMenu(false);
-          rendition.next();
-        }
-      });
+      // Gesto natural de Swipe horizontal para virar página (sem interferir em toques/seleção)
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchStartTime = 0;
 
-      // Captura de seleção de texto dentro do EPUB para o Dicionário
+      contents.document?.addEventListener("touchstart", (e: TouchEvent) => {
+        const touch = e.changedTouches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+        touchStartTime = Date.now();
+      }, { passive: true });
+
+      contents.document?.addEventListener("touchend", (e: TouchEvent) => {
+        const touch = e.changedTouches[0];
+        const deltaX = touch.clientX - touchStartX;
+        const deltaY = touch.clientY - touchStartY;
+        const deltaTime = Date.now() - touchStartTime;
+
+        // Se houver texto selecionado, não vira a página
+        const sel = contents.window.getSelection();
+        if (sel && sel.toString().trim().length > 0) return;
+
+        // Swipe horizontal intencional (> 65px de arrasto e < 500ms)
+        if (Math.abs(deltaX) > 65 && Math.abs(deltaY) < 45 && deltaTime < 500) {
+          if (deltaX < 0) {
+            setShowFloatingMenu(false);
+            rendition.next();
+          } else {
+            setShowFloatingMenu(false);
+            rendition.prev();
+          }
+        }
+      }, { passive: true });
+
+      // Captura de seleção de texto dentro do EPUB para Dicionário e Pintura
       const triggerEpubSelection = () => {
         setTimeout(() => {
           const sel = contents.window.getSelection();
@@ -470,6 +517,7 @@ export default function Reader() {
               const iframe = container.querySelector("iframe");
               const iframeRect = iframe?.getBoundingClientRect() || container.getBoundingClientRect();
               setSelectedText(text);
+              setShowColorPicker(false);
               const centerX = iframeRect.left + rect.left + rect.width / 2;
               const topY = iframeRect.top + rect.top;
               setSelectionPosition({
@@ -480,6 +528,7 @@ export default function Reader() {
             } catch {}
           } else {
             setShowFloatingMenu(false);
+            setShowColorPicker(false);
           }
         }, 100);
       };
@@ -545,6 +594,32 @@ export default function Reader() {
         lastReadAt: new Date().toISOString(),
         synced: false,
       });
+
+      // Reaplicar highlights guardados após mudança de página
+      annotations.filter(a => a.type === "highlight" && a.cfiRange).forEach((hl) => {
+        try {
+          rendition.annotations.highlight(
+            hl.cfiRange!,
+            {},
+            () => {},
+            `highlight-${hl.color || "yellow"}`
+          );
+        } catch {}
+      });
+    });
+
+    // Captura nativa de seleção do epubjs com cfiRange para realces e dicionário
+    rendition.on("selected", (cfiRange: string, contents: any) => {
+      setSelectedCfiRange(cfiRange);
+      try {
+        const range = rendition.getRange(cfiRange);
+        const text = range?.toString()?.trim() || contents?.window?.getSelection()?.toString()?.trim() || "";
+        if (text) {
+          setSelectedText(text);
+          setShowColorPicker(false);
+          setShowFloatingMenu(true);
+        }
+      } catch {}
     });
 
     return () => {
@@ -832,6 +907,44 @@ export default function Reader() {
     setShowFloatingMenu(false);
     setNoteContent(`"${selectedText}"\n\n`);
     setShowAddNoteModal(true);
+  };
+
+  const handleHighlightSelection = async (color: "yellow" | "green" | "blue" | "pink") => {
+    if (!selectedText.trim()) return;
+
+    if (fileType === "epub" && epubRenditionRef.current && selectedCfiRange) {
+      try {
+        epubRenditionRef.current.annotations.highlight(
+          selectedCfiRange,
+          {},
+          () => {},
+          `highlight-${color}`
+        );
+      } catch (err) {
+        console.warn("Erro ao destacar no EPUB:", err);
+      }
+    }
+
+    const newHighlight: OfflineAnnotation = {
+      id: `hl-${Date.now()}`,
+      bookId,
+      type: "highlight",
+      content: selectedText.trim(),
+      selectedText: selectedText.trim(),
+      pageNumber: currentPage,
+      chapter: fileType === "epub"
+        ? (epubChapterTitle || `Posição ${currentPage}`)
+        : `Página ${currentPage}`,
+      cfiRange: selectedCfiRange,
+      color,
+      synced: false,
+      createdAt: new Date().toISOString()
+    };
+
+    await saveAnnotationOffline(newHighlight);
+    setAnnotations((prev) => [...prev, newHighlight]);
+    setShowFloatingMenu(false);
+    setShowColorPicker(false);
   };
 
   const handleSaveDefinitionAsNote = async () => {
@@ -1260,8 +1373,27 @@ export default function Reader() {
                     className="p-3 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 hover:border-black dark:hover:border-white transition-colors cursor-pointer group"
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                        {a.type === "bookmark" ? "Marcador" : "Nota"} • {a.chapter || `Pág. ${a.pageNumber}`}
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+                        {a.type === "highlight" ? (
+                          <>
+                            <span
+                              className={`w-2 h-2 rounded-full inline-block ${
+                                a.color === "green"
+                                  ? "bg-emerald-400"
+                                  : a.color === "blue"
+                                  ? "bg-blue-400"
+                                  : a.color === "pink"
+                                  ? "bg-pink-400"
+                                  : "bg-yellow-400"
+                              }`}
+                            />
+                            <span>Destaque</span>
+                          </>
+                        ) : a.type === "bookmark" ? (
+                          "Marcador"
+                        ) : (
+                          "Nota"
+                        )} • {a.chapter || `Pág. ${a.pageNumber}`}
                       </span>
                       <button
                         onClick={(e) => {
@@ -1273,7 +1405,17 @@ export default function Reader() {
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <p className="text-xs leading-relaxed line-clamp-3 text-gray-700 dark:text-gray-300">
+                    <p className={`text-xs leading-relaxed line-clamp-3 ${
+                      a.type === "highlight"
+                        ? a.color === "green"
+                          ? "bg-emerald-100/60 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 px-1.5 py-0.5 rounded"
+                          : a.color === "blue"
+                          ? "bg-blue-100/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 px-1.5 py-0.5 rounded"
+                          : a.color === "pink"
+                          ? "bg-pink-100/60 dark:bg-pink-950/40 text-pink-900 dark:text-pink-200 px-1.5 py-0.5 rounded"
+                          : "bg-yellow-100/60 dark:bg-yellow-950/40 text-yellow-900 dark:text-yellow-200 px-1.5 py-0.5 rounded"
+                        : "text-gray-700 dark:text-gray-300"
+                    }`}>
                       {a.content}
                     </p>
                   </div>
@@ -1299,16 +1441,56 @@ export default function Reader() {
               <button
                 onClick={() => handleLookupDefinition()}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-bold active:scale-95 transition-all shadow-xs"
-                title="Ver significado"
+                title="Ver significado no dicionário"
               >
                 <BookA className="w-3.5 h-3.5 stroke-[2.2]" />
                 <span>Definir</span>
               </button>
 
+              {/* Botão Pintar / Cores Mobile */}
+              <div className="relative flex items-center">
+                <button
+                  onClick={() => setShowColorPicker(!showColorPicker)}
+                  className={`p-1.5 rounded-xl transition-colors ${
+                    showColorPicker
+                      ? "bg-black/10 dark:bg-white/20 text-black dark:text-white"
+                      : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+                  }`}
+                  title="Pintar / Realçar texto"
+                >
+                  <Highlighter className="w-4 h-4 stroke-[2]" />
+                </button>
+
+                {showColorPicker && (
+                  <div className="absolute bottom-full mb-3 right-0 bg-white dark:bg-gray-800 p-2 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 flex items-center gap-2 animate-in zoom-in-95 duration-150 z-50">
+                    <button
+                      onClick={() => handleHighlightSelection("yellow")}
+                      className="w-5 h-5 rounded-full bg-yellow-300 ring-2 ring-yellow-400 hover:scale-110 active:scale-95 transition-transform"
+                      title="Amarelo"
+                    />
+                    <button
+                      onClick={() => handleHighlightSelection("green")}
+                      className="w-5 h-5 rounded-full bg-emerald-300 ring-2 ring-emerald-400 hover:scale-110 active:scale-95 transition-transform"
+                      title="Verde"
+                    />
+                    <button
+                      onClick={() => handleHighlightSelection("blue")}
+                      className="w-5 h-5 rounded-full bg-blue-300 ring-2 ring-blue-400 hover:scale-110 active:scale-95 transition-transform"
+                      title="Azul"
+                    />
+                    <button
+                      onClick={() => handleHighlightSelection("pink")}
+                      className="w-5 h-5 rounded-full bg-pink-300 ring-2 ring-pink-400 hover:scale-110 active:scale-95 transition-transform"
+                      title="Rosa"
+                    />
+                  </div>
+                )}
+              </div>
+
               <button
                 onClick={handleCreateNoteFromSelection}
                 className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition-colors"
-                title="Criar nota"
+                title="Criar nota a partir deste trecho"
               >
                 <MessageSquarePlus className="w-4 h-4" />
               </button>
@@ -1322,7 +1504,10 @@ export default function Reader() {
               </button>
 
               <button
-                onClick={() => setShowFloatingMenu(false)}
+                onClick={() => {
+                  setShowFloatingMenu(false);
+                  setShowColorPicker(false);
+                }}
                 className="p-1 rounded-xl text-gray-400 hover:text-black dark:hover:text-white"
               >
                 <X className="w-4 h-4" />
@@ -1348,6 +1533,47 @@ export default function Reader() {
                 <span>Definir</span>
               </button>
 
+              {/* Botão Pintar / Cores Desktop */}
+              <div className="relative flex items-center">
+                <button
+                  onClick={() => setShowColorPicker(!showColorPicker)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all ${
+                    showColorPicker
+                      ? "bg-white/30 dark:bg-black/20 font-bold"
+                      : "hover:bg-white/20 dark:hover:bg-black/10 text-xs font-semibold"
+                  }`}
+                  title="Pintar / Realçar texto"
+                >
+                  <Highlighter className="w-3.5 h-3.5 stroke-[2.2]" />
+                  <span>Pintar</span>
+                </button>
+
+                {showColorPicker && (
+                  <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-white dark:bg-gray-800 p-1.5 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex items-center gap-1.5 animate-in zoom-in-95 duration-150 z-50">
+                    <button
+                      onClick={() => handleHighlightSelection("yellow")}
+                      className="w-5 h-5 rounded-full bg-yellow-300 ring-2 ring-yellow-400 hover:scale-110 active:scale-95 transition-transform"
+                      title="Amarelo"
+                    />
+                    <button
+                      onClick={() => handleHighlightSelection("green")}
+                      className="w-5 h-5 rounded-full bg-emerald-300 ring-2 ring-emerald-400 hover:scale-110 active:scale-95 transition-transform"
+                      title="Verde"
+                    />
+                    <button
+                      onClick={() => handleHighlightSelection("blue")}
+                      className="w-5 h-5 rounded-full bg-blue-300 ring-2 ring-blue-400 hover:scale-110 active:scale-95 transition-transform"
+                      title="Azul"
+                    />
+                    <button
+                      onClick={() => handleHighlightSelection("pink")}
+                      className="w-5 h-5 rounded-full bg-pink-300 ring-2 ring-pink-400 hover:scale-110 active:scale-95 transition-transform"
+                      title="Rosa"
+                    />
+                  </div>
+                )}
+              </div>
+
               <button
                 onClick={handleCreateNoteFromSelection}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-white/20 dark:hover:bg-black/10 text-xs font-semibold active:scale-95 transition-all"
@@ -1366,7 +1592,10 @@ export default function Reader() {
               </button>
 
               <button
-                onClick={() => setShowFloatingMenu(false)}
+                onClick={() => {
+                  setShowFloatingMenu(false);
+                  setShowColorPicker(false);
+                }}
                 className="p-1.5 rounded-xl hover:bg-white/20 dark:hover:bg-black/10 text-white/60 dark:text-black/60 hover:text-white dark:hover:text-black"
               >
                 <X className="w-3 h-3" />
