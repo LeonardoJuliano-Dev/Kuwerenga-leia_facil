@@ -226,30 +226,35 @@ export default function Login() {
   const isOtpComplete = otp.every(digit => digit !== "");
 
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white pt-safe">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white p-6 sm:p-8 justify-between">
       
       {/* Header com botão Voltar */}
-      {step !== "options" && (
-        <header className="py-2">
+      <header className="w-full max-w-sm sm:max-w-md mx-auto h-12 flex items-center">
+        {step !== "options" && (
           <button 
             onClick={handleBack} 
             className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors touch-target"
+            title="Voltar"
           >
             <ArrowLeft className="w-6 h-6" />
           </button>
-        </header>
-      )}
+        )}
+      </header>
 
-      {/* Conteúdo Principal */}
-      <main className={`flex-1 flex flex-col app-container px-6 sm:px-8 mx-auto w-full ${step === "options" ? "justify-center" : "mt-8"}`}>
+      {/* Conteúdo Principal Centralizado */}
+      <main className="flex-1 flex flex-col justify-center items-center max-w-sm sm:max-w-md mx-auto w-full my-auto py-6">
         
         {step === "options" && (
-          <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
-            <img src="/favicon.svg" alt="KUWERENGA" className="w-20 h-20 mb-4 rounded-3xl shadow-sm" />
-            <h1 className="text-3xl font-bold mb-1 tracking-tight">KUWERENGA</h1>
+          <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-300 w-full">
+            <div className="w-20 h-20 mb-4 rounded-3xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-lg p-3">
+              <img src="/favicon.svg" alt="KUWERENGA+" className="w-14 h-14 object-contain" />
+            </div>
+            <h1 className="text-3xl font-extrabold mb-1 tracking-tight">
+              KUWERENGA<span className="text-emerald-500">+</span>
+            </h1>
             <p className="text-xs uppercase tracking-widest text-gray-400 font-semibold mb-2">Leia Fácil</p>
-            <p className="text-gray-500 dark:text-gray-400 mb-10 text-center text-sm">
-              Entre para continuar
+            <p className="text-gray-500 dark:text-gray-400 mb-8 text-center text-sm">
+              Inicia sessão para aceder à tua biblioteca
             </p>
 
             <div className="space-y-4 w-full">
@@ -279,7 +284,7 @@ export default function Login() {
         )}
 
         {(step === "phone" || step === "email") && (
-          <form onSubmit={handleRequestOtp} className="flex flex-col animate-in slide-in-from-right-8 duration-300">
+          <form onSubmit={handleRequestOtp} className="flex flex-col w-full animate-in slide-in-from-right-8 duration-300">
             <div className="flex items-center gap-2 mb-2">
               <span className="px-2.5 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300 font-medium">
                 {method === "phone" ? "WhatsApp / SMS" : "E-mail"}
@@ -330,7 +335,7 @@ export default function Login() {
         )}
 
         {step === "otp" && (
-          <div className="flex flex-col animate-in slide-in-from-right-8 duration-300">
+          <div className="flex flex-col w-full animate-in slide-in-from-right-8 duration-300">
             <div className="flex items-center gap-2 mb-2">
               <span className="px-2.5 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300 font-medium">
                 {method === "phone" ? "WhatsApp / SMS" : "E-mail"}

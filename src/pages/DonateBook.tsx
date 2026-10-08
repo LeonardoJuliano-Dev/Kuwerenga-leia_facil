@@ -209,8 +209,8 @@ export default function DonateBook() {
         </div>
       </header>
 
-      {/* Conteúdo Principal */}
-      <main className="flex-1 app-container w-full p-4 sm:p-6">
+      {/* Conteúdo Principal Centralizado */}
+      <main className="flex-1 w-full max-w-xl mx-auto p-4 sm:p-6 pb-24">
         
         {success ? (
           <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 text-center shadow-sm animate-in zoom-in-95 duration-300 my-10">
