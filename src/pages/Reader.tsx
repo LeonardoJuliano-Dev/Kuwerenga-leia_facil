@@ -23,6 +23,7 @@ import {
   Highlighter
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
+import "pdfjs-dist/web/pdf_viewer.css";
 import ePub from "epubjs";
 import type Book from "epubjs/types/book";
 import type Rendition from "epubjs/types/rendition";
@@ -143,9 +144,44 @@ export default function Reader() {
   const [jumpInputValue, setJumpInputValue] = useState("");
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const textLayerRef = useRef<HTMLDivElement | null>(null);
+  const pdfContainerRef = useRef<HTMLDivElement | null>(null);
+  const [pdfDimensions, setPdfDimensions] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
   const renderTaskRef = useRef<any>(null);
   const epubContainerRef = useRef<HTMLDivElement | null>(null);
   const epubRenditionRef = useRef<Rendition | null>(null);
+
+  /** Aplica visualmente os realces guardados nos spans da camada de texto do PDF */
+  const applyPdfHighlights = useCallback((container: HTMLDivElement, pageNum: number, currentAnnotations: OfflineAnnotation[]) => {
+    const pageHighlights = currentAnnotations.filter(
+      (a) => a.type === "highlight" && a.pageNumber === pageNum && a.content
+    );
+    if (pageHighlights.length === 0) return;
+
+    const bgMap: Record<string, string> = {
+      yellow: "rgba(254, 240, 138, 0.7)",
+      green: "rgba(187, 247, 208, 0.7)",
+      blue: "rgba(191, 219, 254, 0.7)",
+      pink: "rgba(251, 207, 232, 0.7)",
+    };
+
+    const spans = Array.from(container.querySelectorAll("span"));
+    if (spans.length === 0) return;
+
+    for (const hl of pageHighlights) {
+      const hlText = hl.content.trim().toLowerCase();
+      if (!hlText) continue;
+      const bg = bgMap[hl.color || "yellow"] || bgMap.yellow;
+
+      for (const span of spans) {
+        const text = span.textContent?.trim().toLowerCase();
+        if (text && text.length > 1 && (hlText.includes(text) || text.includes(hlText))) {
+          span.style.backgroundColor = bg;
+          span.style.borderRadius = "2px";
+        }
+      }
+    }
+  }, []);
 
   // ─── Helpers ───────────────────────────────────────────────────
 
@@ -376,11 +412,15 @@ export default function Reader() {
 
         const pixelRatio = window.devicePixelRatio || 1;
         const viewport = page.getViewport({ scale: autoScale });
+        const cssW = Math.floor(viewport.width);
+        const cssH = Math.floor(viewport.height);
+
+        setPdfDimensions({ w: cssW, h: cssH });
 
         canvas.width = Math.floor(viewport.width * pixelRatio);
         canvas.height = Math.floor(viewport.height * pixelRatio);
-        canvas.style.width = `${Math.floor(viewport.width)}px`;
-        canvas.style.height = `${Math.floor(viewport.height)}px`;
+        canvas.style.width = `${cssW}px`;
+        canvas.style.height = `${cssH}px`;
 
         const renderContext = {
           canvasContext: context,
@@ -390,6 +430,36 @@ export default function Reader() {
         const task = page.render(renderContext as any);
         renderTaskRef.current = task;
         await task.promise;
+
+        // Renderizar camada de texto (TextLayer) para permitir seleção, dicionário e anotações
+        if (textLayerRef.current) {
+          const textLayerDiv = textLayerRef.current;
+          textLayerDiv.innerHTML = "";
+          textLayerDiv.style.width = `${cssW}px`;
+          textLayerDiv.style.height = `${cssH}px`;
+
+          try {
+            pdfjsLib.setLayerDimensions(textLayerDiv, viewport);
+          } catch {
+            // Continua caso setLayerDimensions seja opcional
+          }
+
+          const textContent = await page.getTextContent();
+          if (!isRendering) return;
+
+          const textLayer = new pdfjsLib.TextLayer({
+            textContentSource: textContent,
+            container: textLayerDiv,
+            viewport,
+          });
+
+          await textLayer.render();
+          if (!isRendering) return;
+
+          // Reaplicar visualmente os destaques guardados nesta página
+          applyPdfHighlights(textLayerDiv, currentPage, annotations);
+        }
+
         const progressPercent = Math.round((currentPage / (pdfDoc?.numPages || 1)) * 100);
         saveReadingProgress({
           bookId,
@@ -407,7 +477,7 @@ export default function Reader() {
     }
     renderPdfPage();
     return () => { isRendering = false; };
-  }, [pdfDoc, fileType, currentPage, scale, windowDimensions]);
+  }, [pdfDoc, fileType, currentPage, scale, windowDimensions, annotations, applyPdfHighlights]);
 
   // ─── 2b. Montar Rendition EPUB ────────────────────────────────
 
@@ -924,32 +994,67 @@ export default function Reader() {
     }
   };
 
-  // ─── Dicionário e Seleção de Texto ───────────────────────────
+  // ─── Dicionário e Seleção de Texto (PDF e Documento) ─────────
 
   useEffect(() => {
-    const handleGlobalMouseUp = () => {
+    const handleSelection = (e?: Event) => {
+      const target = e?.target as HTMLElement | null;
+      if (
+        target?.closest?.("[data-floating-menu]") ||
+        target?.closest?.("[role='dialog']") ||
+        target?.closest?.("button") ||
+        target?.closest?.("input") ||
+        target?.closest?.("textarea")
+      ) {
+        return;
+      }
+
       setTimeout(() => {
         const selection = window.getSelection();
         const text = selection?.toString()?.trim();
+
         if (selection && selection.rangeCount > 0 && text && text.length > 0) {
+          if (
+            document.activeElement?.tagName === "INPUT" ||
+            document.activeElement?.tagName === "TEXTAREA"
+          ) {
+            return;
+          }
+
           try {
             const range = selection.getRangeAt(0);
             const rect = range.getBoundingClientRect();
-            setSelectedText(text);
-            const posX = rect.left + rect.width / 2;
-            const posY = rect.top;
-            setSelectionPosition({
-              x: Math.min(window.innerWidth - 120, Math.max(120, posX)),
-              y: Math.max(70, posY)
-            });
-            setShowFloatingMenu(true);
+            if (rect.width > 0 || rect.height > 0) {
+              setSelectedText(text);
+              setSelectedCfiRange(""); // Reset para PDF
+              setShowColorPicker(false);
+              const posX = rect.left + rect.width / 2;
+              const posY = rect.top;
+              setSelectionPosition({
+                x: Math.min(window.innerWidth - 120, Math.max(120, posX)),
+                y: Math.max(70, posY)
+              });
+              setShowFloatingMenu(true);
+            }
           } catch {}
+        } else {
+          setShowFloatingMenu(false);
+          setShowColorPicker(false);
         }
-      }, 100);
+      }, 80);
     };
 
-    window.addEventListener("mouseup", handleGlobalMouseUp);
-    return () => window.removeEventListener("mouseup", handleGlobalMouseUp);
+    window.addEventListener("mouseup", handleSelection);
+    window.addEventListener("touchend", handleSelection);
+    window.addEventListener("dblclick", handleSelection);
+    window.addEventListener("keyup", handleSelection);
+
+    return () => {
+      window.removeEventListener("mouseup", handleSelection);
+      window.removeEventListener("touchend", handleSelection);
+      window.removeEventListener("dblclick", handleSelection);
+      window.removeEventListener("keyup", handleSelection);
+    };
   }, []);
 
   const handleLookupDefinition = async (textToSearch?: string) => {
@@ -1007,6 +1112,28 @@ export default function Reader() {
         );
       } catch (err) {
         console.warn("Erro ao destacar no EPUB:", err);
+      }
+    } else if (fileType === "pdf" && textLayerRef.current) {
+      // Destacar visualmente no textLayer do PDF
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        try {
+          const range = sel.getRangeAt(0);
+          const spans = textLayerRef.current.querySelectorAll("span");
+          const bgMap: Record<string, string> = {
+            yellow: "rgba(254, 240, 138, 0.7)",
+            green: "rgba(187, 247, 208, 0.7)",
+            blue: "rgba(191, 219, 254, 0.7)",
+            pink: "rgba(251, 207, 232, 0.7)",
+          };
+          const bg = bgMap[color] || bgMap.yellow;
+          spans.forEach((span) => {
+            if (range.intersectsNode(span)) {
+              span.style.backgroundColor = bg;
+              span.style.borderRadius = "2px";
+            }
+          });
+        } catch {}
       }
     }
 
@@ -1326,17 +1453,35 @@ export default function Reader() {
           <ChevronRight className="w-6 h-6 group-hover:translate-x-0.5 transition-transform" />
         </button>
 
-        {/* PDF: Canvas de Renderização */}
+        {/* PDF: Canvas de Renderização e TextLayer sobreposta para seleção de texto */}
         {fileType === "pdf" && (
-          <div className={`relative max-w-full overflow-auto shadow-2xl rounded-sm ${loading ? "opacity-0" : "opacity-100"} transition-opacity duration-300`}>
+          <div
+            ref={pdfContainerRef}
+            className={`relative max-w-full overflow-auto shadow-2xl rounded-sm select-text ${loading ? "opacity-0" : "opacity-100"} transition-opacity duration-300`}
+            style={{
+              width: pdfDimensions.w ? `${pdfDimensions.w}px` : undefined,
+              height: pdfDimensions.h ? `${pdfDimensions.h}px` : undefined,
+            }}
+          >
             <canvas
               ref={canvasRef}
-              className="block max-w-full h-auto mx-auto transition-all"
-              style={
-                themeMode === "sepia"
-                  ? { filter: "sepia(0.25) contrast(0.96)" }
-                  : undefined
-              }
+              className="block pointer-events-none transition-all"
+              style={{
+                width: pdfDimensions.w ? `${pdfDimensions.w}px` : undefined,
+                height: pdfDimensions.h ? `${pdfDimensions.h}px` : undefined,
+                filter:
+                  themeMode === "sepia"
+                    ? "sepia(0.25) contrast(0.96)"
+                    : undefined,
+              }}
+            />
+            <div
+              ref={textLayerRef}
+              className="textLayer absolute inset-0 select-text pointer-events-auto"
+              style={{
+                width: pdfDimensions.w ? `${pdfDimensions.w}px` : undefined,
+                height: pdfDimensions.h ? `${pdfDimensions.h}px` : undefined,
+              }}
             />
           </div>
         )}
@@ -1625,7 +1770,12 @@ export default function Reader() {
       {showFloatingMenu && (
         <>
           {/* Versão Mobile (Dock inferior confortável, evitando sobreposição com o menu do sistema operativo) */}
-          <div className="sm:hidden fixed bottom-20 left-3 right-3 max-w-sm mx-auto z-40 bg-white/95 dark:bg-gray-900/95 text-black dark:text-white backdrop-blur-xl rounded-2xl p-2 shadow-2xl flex items-center justify-between border border-gray-200 dark:border-gray-800 animate-in slide-in-from-bottom-4 duration-200 select-none">
+          <div
+            data-floating-menu
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            className="sm:hidden fixed bottom-20 left-3 right-3 max-w-sm mx-auto z-40 bg-white/95 dark:bg-gray-900/95 text-black dark:text-white backdrop-blur-xl rounded-2xl p-2 shadow-2xl flex items-center justify-between border border-gray-200 dark:border-gray-800 animate-in slide-in-from-bottom-4 duration-200 select-none"
+          >
             <div className="min-w-0 flex-1 mr-2 pl-1">
               <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 truncate block">
                 "{selectedText.slice(0, 16)}{selectedText.length > 16 ? "..." : ""}"
@@ -1713,6 +1863,8 @@ export default function Reader() {
           {/* Versão Desktop (Tooltip posicionado sobre o texto) */}
           {selectionPosition && (
             <div
+              data-floating-menu
+              onMouseDown={(e) => e.stopPropagation()}
               style={{
                 left: `${selectionPosition.x}px`,
                 top: `${selectionPosition.y - 48}px`,
