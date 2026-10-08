@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
+  ArrowRight,
   ChevronLeft,
   ChevronRight,
   Bookmark,
@@ -136,6 +137,10 @@ export default function Reader() {
   const [dictionaryLoading, setDictionaryLoading] = useState(false);
   const [dictionaryResult, setDictionaryResult] = useState<DefinitionResult | null>(null);
   const [dictionaryError, setDictionaryError] = useState<string | null>(null);
+
+  // Estados para Saltar de Página
+  const [showJumpPopover, setShowJumpPopover] = useState(false);
+  const [jumpInputValue, setJumpInputValue] = useState("");
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderTaskRef = useRef<any>(null);
@@ -731,6 +736,40 @@ export default function Reader() {
     }
   };
 
+  /** Salta diretamente para uma página / posição específica */
+  const handleJumpSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const val = parseInt(jumpInputValue.trim(), 10);
+    if (isNaN(val)) {
+      setShowJumpPopover(false);
+      return;
+    }
+
+    if (fileType === "pdf") {
+      const target = Math.max(1, Math.min(totalPages || 1, val));
+      setCurrentPage(target);
+      setShowJumpPopover(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else if (fileType === "epub" && epubBook && epubRenditionRef.current) {
+      if (totalPages > 0 && epubBook.locations && epubBook.locations.length() > 0) {
+        const targetLoc = Math.max(1, Math.min(totalPages, val));
+        const cfi = epubBook.locations.cfiFromLocation(targetLoc - 1);
+        if (cfi) {
+          epubRenditionRef.current.display(cfi);
+          setShowJumpPopover(false);
+          return;
+        }
+      }
+      // Fallback por percentagem (0 a 100%)
+      const targetPct = Math.max(0, Math.min(100, val));
+      const cfi = epubBook.locations.cfiFromPercentage(targetPct / 100);
+      if (cfi) {
+        epubRenditionRef.current.display(cfi);
+      }
+      setShowJumpPopover(false);
+    }
+  };
+
   // ─── Descarregar para leitura Offline ─────────────────────────
 
   const handleDownloadOffline = async () => {
@@ -1315,6 +1354,72 @@ export default function Reader() {
 
       {/* Rodapé Flutuante Compacto para Mudança de Página */}
       <footer className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
+        {/* Balão Flutuante para Saltar de Página */}
+        {showJumpPopover && (
+          <>
+            <div
+              className="fixed inset-0 z-20"
+              onClick={() => setShowJumpPopover(false)}
+            />
+            <div
+              className={`absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-30 p-3 rounded-2xl shadow-2xl backdrop-blur-xl border animate-in zoom-in-95 duration-150 min-w-[210px] sm:min-w-[230px] ${
+                themeMode === "sepia"
+                  ? "bg-[#fbf0d9] text-[#433422] border-[#dfceaa] shadow-[#433422]/15"
+                  : "bg-white/95 dark:bg-gray-900/95 text-black dark:text-white border-gray-200 dark:border-gray-800 shadow-xl"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold tracking-tight uppercase opacity-75">
+                  {fileType === "epub" && totalPages === 0 ? "Ir para o Progresso" : "Saltar para Página"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowJumpPopover(false)}
+                  className="p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 opacity-60 hover:opacity-100 transition-opacity"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleJumpSubmit} className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min={1}
+                  max={fileType === "pdf" ? (totalPages || 1) : (totalPages > 0 ? totalPages : 100)}
+                  value={jumpInputValue}
+                  onChange={(e) => setJumpInputValue(e.target.value)}
+                  placeholder={fileType === "epub" && totalPages === 0 ? "0 - 100" : `1 - ${totalPages || 1}`}
+                  autoFocus
+                  className={`flex-1 min-w-0 px-2.5 py-1.5 text-xs font-semibold rounded-xl border focus:outline-none focus:ring-2 text-center transition-all ${
+                    themeMode === "sepia"
+                      ? "bg-[#f5e7c8] border-[#dfceaa] text-[#433422] focus:ring-[#433422]"
+                      : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-black dark:text-white focus:ring-black dark:focus:ring-white"
+                  }`}
+                />
+                <button
+                  type="submit"
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold active:scale-95 transition-transform flex items-center gap-1 shrink-0 ${
+                    themeMode === "sepia"
+                      ? "bg-[#433422] text-[#fbf0d9]"
+                      : "bg-black dark:bg-white text-white dark:text-black"
+                  }`}
+                >
+                  <span>Ir</span>
+                  <ArrowRight className="w-3 h-3 stroke-[2.5]" />
+                </button>
+              </form>
+
+              <div className="mt-1.5 text-[10px] opacity-60 text-center font-medium">
+                {fileType === "pdf"
+                  ? `Total: ${totalPages || 1} páginas`
+                  : totalPages > 0
+                  ? `Posição 1 de ${totalPages}`
+                  : "Insira de 0% a 100%"}
+              </div>
+            </div>
+          </>
+        )}
+
         <div
           className={`flex items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-full backdrop-blur-md shadow-xl border transition-all select-none ${
             themeMode === "sepia"
@@ -1336,12 +1441,31 @@ export default function Reader() {
             <ChevronLeft className="w-5 h-5 stroke-[2.2]" />
           </button>
 
-          <span className="text-xs font-bold tracking-tight px-2 min-w-[56px] text-center whitespace-nowrap">
+          {/* Botão de Contagem Centralizada Clicável */}
+          <button
+            onClick={() => {
+              setJumpInputValue(
+                fileType === "pdf"
+                  ? String(currentPage)
+                  : totalPages > 0
+                  ? String(currentPage)
+                  : String(epubProgress)
+              );
+              setShowJumpPopover(!showJumpPopover);
+            }}
+            className={`text-xs font-bold tracking-tight px-2.5 py-1 rounded-full min-w-[56px] text-center whitespace-nowrap transition-all active:scale-95 ${
+              themeMode === "sepia"
+                ? "hover:bg-[#433422]/10 text-[#433422]"
+                : "hover:bg-black/10 dark:hover:bg-white/10"
+            } ${showJumpPopover ? "ring-2 ring-current" : ""}`}
+            title="Tocar para saltar para uma página específica"
+            aria-label="Saltar para uma página específica"
+          >
             {fileType === "epub"
               ? `${epubProgress}%`
               : `${currentPage} / ${totalPages || 1}`
             }
-          </span>
+          </button>
 
           <button
             onClick={goToNextPage}
