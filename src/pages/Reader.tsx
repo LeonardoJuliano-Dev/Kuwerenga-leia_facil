@@ -193,7 +193,10 @@ export default function Reader() {
       const buffer = await blob.arrayBuffer();
       const loadingTask = pdfjsLib.getDocument({
         data: new Uint8Array(buffer),
+        cMapUrl: "/pdfjs/cmaps/",
         cMapPacked: true,
+        standardFontDataUrl: "/pdfjs/standard_fonts/",
+        useSystemFonts: true,
       });
       const doc = await loadingTask.promise;
 
@@ -357,23 +360,33 @@ export default function Reader() {
         const canvas = canvasRef.current!;
         const context = canvas.getContext("2d");
         if (!context) return;
+
+        // Limpa o canvas antes de renderizar
+        context.clearRect(0, 0, canvas.width, canvas.height);
+
         const availW = windowDimensions.w;
         const availH = windowDimensions.h;
         const containerWidth = Math.min(availW - (availW < 640 ? 16 : 48), 960);
-        const maxHeight = availH - (availW < 640 ? 140 : 180);
+        const maxHeight = availH - (availW < 640 ? 120 : 160);
         const unscaledViewport = page.getViewport({ scale: 1 });
         const widthScale = (containerWidth / unscaledViewport.width) * scale;
-        const heightScale = (maxHeight / unscaledViewport.height) * scale;
-        const autoScale = Math.min(widthScale, heightScale > 0 ? heightScale : widthScale);
+        const heightScale = maxHeight > 0 ? (maxHeight / unscaledViewport.height) * scale : widthScale;
+        // No telemóvel escala pela largura para manter as letras grandes e nítidas
+        const autoScale = availW < 640 ? widthScale : Math.min(widthScale, heightScale);
 
-        const viewport = page.getViewport({ scale: autoScale });
         const pixelRatio = window.devicePixelRatio || 1;
+        const viewport = page.getViewport({ scale: autoScale });
+
         canvas.width = Math.floor(viewport.width * pixelRatio);
         canvas.height = Math.floor(viewport.height * pixelRatio);
         canvas.style.width = `${Math.floor(viewport.width)}px`;
         canvas.style.height = `${Math.floor(viewport.height)}px`;
-        context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-        const renderContext = { canvasContext: context, viewport };
+
+        const renderContext = {
+          canvasContext: context,
+          viewport,
+          transform: pixelRatio !== 1 ? [pixelRatio, 0, 0, pixelRatio, 0, 0] : null,
+        };
         const task = page.render(renderContext as any);
         renderTaskRef.current = task;
         await task.promise;
