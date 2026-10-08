@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
   Library,
-  Sparkles,
   Highlighter,
   BookA,
   BookmarkCheck,
@@ -73,17 +72,15 @@ export default function Onboarding() {
         {/* SLIDE 0: BOAS-VINDAS */}
         {step === 0 && (
           <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-400 w-full">
-            <div className="relative mb-6">
-              <div className="w-24 h-24 rounded-3xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xl p-4">
-                <img src="/favicon.svg" alt="KUWERENGA+" className="w-16 h-16 object-contain" />
-              </div>
-              <div className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm">
-                <Sparkles className="w-3.5 h-3.5" />
-              </div>
+            <div className="w-24 h-24 mb-6 rounded-3xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xl">
+              <svg viewBox="0 0 100 100" className="w-14 h-14" fill="none">
+                <line x1="30" y1="24" x2="30" y2="76" stroke="currentColor" strokeWidth="7.5" strokeLinecap="round" />
+                <path d="M70 25 L42 50 L70 75" stroke="currentColor" strokeWidth="7.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </div>
 
             <h1 className="text-3xl sm:text-4xl font-extrabold mb-1 tracking-tight">
-              KUWERENGA<span className="text-emerald-500">+</span>
+              KUWERENGA+
             </h1>
             <p className="text-[11px] uppercase tracking-widest text-gray-400 font-bold mb-3">
               Leia Fácil
@@ -167,10 +164,10 @@ export default function Onboarding() {
                     <BookOpen className="w-4 h-4" />
                   </div>
                   <div className="text-left font-bold text-sm leading-tight">
-                    Dom Casmurro
+                    Terra Sonâmbula
                   </div>
                   <div className="text-left text-[11px] text-gray-400 mt-0.5">
-                    Machado de Assis
+                    Mia Couto
                   </div>
                 </div>
 

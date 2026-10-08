@@ -246,11 +246,14 @@ export default function Login() {
         
         {step === "options" && (
           <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-300 w-full">
-            <div className="w-20 h-20 mb-4 rounded-3xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-lg p-3">
-              <img src="/favicon.svg" alt="KUWERENGA+" className="w-14 h-14 object-contain" />
+            <div className="w-20 h-20 mb-4 rounded-3xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-lg">
+              <svg viewBox="0 0 100 100" className="w-12 h-12" fill="none">
+                <line x1="30" y1="24" x2="30" y2="76" stroke="currentColor" strokeWidth="7.5" strokeLinecap="round" />
+                <path d="M70 25 L42 50 L70 75" stroke="currentColor" strokeWidth="7.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </div>
             <h1 className="text-3xl font-extrabold mb-1 tracking-tight">
-              KUWERENGA<span className="text-emerald-500">+</span>
+              KUWERENGA+
             </h1>
             <p className="text-xs uppercase tracking-widest text-gray-400 font-semibold mb-2">Leia Fácil</p>
             <p className="text-gray-500 dark:text-gray-400 mb-8 text-center text-sm">
