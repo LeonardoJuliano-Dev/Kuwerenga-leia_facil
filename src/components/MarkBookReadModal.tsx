@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Search, Check, Star, BookOpen, Sparkles, Plus, CheckCircle2 } from "lucide-react";
+import { X, Search, Check, Star, BookOpen, Smartphone, CheckCircle2, Plus } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { addCustomBookToShelf, markBookAsFinished } from "../lib/bookshelfService";
 
@@ -78,7 +78,7 @@ export default function MarkBookReadModal({
         setFeedbackSuccess(false);
         onBookAdded();
         onClose();
-      }, 700);
+      }, 600);
     } catch (err) {
       console.error(err);
     } finally {
@@ -113,7 +113,7 @@ export default function MarkBookReadModal({
         setCustomPages("");
         onBookAdded();
         onClose();
-      }, 700);
+      }, 600);
     } catch (err) {
       console.error(err);
     } finally {
@@ -124,18 +124,18 @@ export default function MarkBookReadModal({
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
       <div 
-        className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200 text-black dark:text-white relative overflow-hidden"
+        className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200 text-black dark:text-white relative overflow-hidden"
         role="dialog"
       >
         {/* Cabeçalho */}
         <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-800">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-              <Sparkles className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 text-black dark:text-white flex items-center justify-center">
+              <Check className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-base leading-tight">Marcar Livro como Lido</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Adiciona à tua prateleira de honra</p>
+              <h3 className="font-bold text-base leading-tight">Marcar Livro Lido</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Adicionar à lista de obras lidas</p>
             </div>
           </div>
           <button
@@ -146,39 +146,41 @@ export default function MarkBookReadModal({
           </button>
         </div>
 
-        {/* Abas: Catálogo Kuwerenga vs Livro Físico/Externo */}
-        <div className="flex gap-2 my-4 p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl text-xs font-semibold">
+        {/* Abas */}
+        <div className="flex gap-2 my-4 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl text-xs font-semibold">
           <button
             type="button"
             onClick={() => setActiveTab("search")}
-            className={`flex-1 py-2 px-3 rounded-xl transition-all text-center ${
+            className={`flex-1 py-2 px-3 rounded-lg transition-all text-center flex items-center justify-center gap-1.5 ${
               activeTab === "search"
                 ? "bg-white dark:bg-black text-black dark:text-white shadow-xs font-bold"
                 : "text-gray-500 hover:text-black dark:hover:text-white"
             }`}
           >
-            Pesquisar no Kuwerenga
+            <Search className="w-3.5 h-3.5" />
+            <span>Catálogo Kuwerenga</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("custom")}
-            className={`flex-1 py-2 px-3 rounded-xl transition-all text-center ${
+            className={`flex-1 py-2 px-3 rounded-lg transition-all text-center flex items-center justify-center gap-1.5 ${
               activeTab === "custom"
                 ? "bg-white dark:bg-black text-black dark:text-white shadow-xs font-bold"
                 : "text-gray-500 hover:text-black dark:hover:text-white"
             }`}
           >
-            📖 Livro Físico / Externo
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Livro Físico ou Externo</span>
           </button>
         </div>
 
         {feedbackSuccess ? (
           <div className="py-12 flex flex-col items-center justify-center text-center animate-in zoom-in-95 duration-200">
-            <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-500 flex items-center justify-center mb-3">
-              <CheckCircle2 className="w-8 h-8 stroke-[2.2]" />
+            <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 text-black dark:text-white flex items-center justify-center mb-3">
+              <CheckCircle2 className="w-6 h-6 stroke-[2.2]" />
             </div>
-            <h4 className="font-bold text-base mb-1">Livro Adicionado aos Lidos!</h4>
-            <p className="text-xs text-gray-400">Já está colocado na tua estante de honra.</p>
+            <h4 className="font-bold text-base mb-1">Livro Registado como Lido</h4>
+            <p className="text-xs text-gray-400">Adicionado com sucesso à tua biblioteca.</p>
           </div>
         ) : activeTab === "search" ? (
           <div className="space-y-4">
@@ -201,25 +203,25 @@ export default function MarkBookReadModal({
                 <div className="py-8 text-center text-xs text-gray-400">A pesquisar catálogo...</div>
               ) : searchQuery && catalogResults.length === 0 ? (
                 <div className="py-8 text-center text-xs text-gray-400">
-                  Nenhum livro encontrado com esse nome.<br />
+                  Nenhum livro encontrado no sistema.<br />
                   <span 
                     onClick={() => {
                       setCustomTitle(searchQuery);
                       setActiveTab("custom");
                     }}
-                    className="text-black dark:text-white underline font-semibold cursor-pointer mt-1 inline-block"
+                    className="text-black dark:text-white underline font-semibold cursor-pointer mt-2 inline-block"
                   >
-                    Registar como Livro Físico / Outro Local &rarr;
+                    Registar como Livro Físico / Externo &rarr;
                   </span>
                 </div>
               ) : catalogResults.length > 0 ? (
                 catalogResults.map((b) => (
                   <div
                     key={b.id}
-                    className="p-2.5 rounded-2xl border border-gray-100 dark:border-gray-800 hover:border-black dark:hover:border-white transition-all flex items-center justify-between gap-3 bg-gray-50/50 dark:bg-gray-800/40"
+                    className="p-2.5 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-black dark:hover:border-white transition-all flex items-center justify-between gap-3 bg-gray-50/50 dark:bg-gray-800/40"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-10 h-14 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden shrink-0 flex items-center justify-center">
+                      <div className="w-10 h-14 bg-gray-200 dark:bg-gray-700 rounded-md overflow-hidden shrink-0 flex items-center justify-center">
                         {b.cover_url ? (
                           <img src={b.cover_url} alt={b.title} className="w-full h-full object-cover" />
                         ) : (
@@ -236,7 +238,7 @@ export default function MarkBookReadModal({
                       type="button"
                       disabled={submitting}
                       onClick={() => handleMarkCatalogFinished(b)}
-                      className="px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-bold active:scale-95 transition-transform shrink-0 flex items-center gap-1 shadow-xs"
+                      className="px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-lg text-xs font-bold active:scale-95 transition-transform shrink-0 flex items-center gap-1 shadow-xs"
                     >
                       <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                       <span>Marcar Lido</span>
@@ -245,24 +247,24 @@ export default function MarkBookReadModal({
                 ))
               ) : (
                 <div className="py-6 text-center text-xs text-gray-400 leading-relaxed">
-                  Digita o nome do livro lido no catálogo do Kuwerenga+ para colocá-lo na tua estante.
+                  Digita o nome da obra para procurá-la no catálogo e marcá-la como concluída.
                 </div>
               )}
             </div>
           </div>
         ) : (
           /* Formulário de Livro Físico / Externo */
-          <form onSubmit={handleSaveCustomBook} className="space-y-3.5 text-xs">
+          <form onSubmit={handleSaveCustomBook} className="space-y-3 text-xs">
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">
-                Título do Livro *
+                Título da Obra *
               </label>
               <input
                 type="text"
                 required
                 value={customTitle}
                 onChange={(e) => setCustomTitle(e.target.value)}
-                placeholder="Ex: O Alquimista, Terra Sonâmbula..."
+                placeholder="Ex: Terra Sonâmbula, O Alquimista..."
                 className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
               />
             </div>
@@ -276,14 +278,14 @@ export default function MarkBookReadModal({
                   type="text"
                   value={customAuthor}
                   onChange={(e) => setCustomAuthor(e.target.value)}
-                  placeholder="Ex: Mia Couto"
+                  placeholder="Nome do autor"
                   className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">
-                  Nº de Páginas
+                  Total de Páginas
                 </label>
                 <input
                   type="number"
@@ -295,41 +297,43 @@ export default function MarkBookReadModal({
               </div>
             </div>
 
-            {/* Formato: Papel vs Digital */}
+            {/* Formato: Físico vs Digital */}
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-                Onde leste a obra?
+                Tipo de Leitura
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setCustomFormat("physical")}
-                  className={`py-2 px-3 rounded-xl border text-center font-semibold transition-all ${
+                  className={`py-2 px-3 rounded-xl border text-center font-semibold transition-all flex items-center justify-center gap-1.5 ${
                     customFormat === "physical"
                       ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black"
                       : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400"
                   }`}
                 >
-                  📖 Livro Físico (Papel)
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Livro Físico</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setCustomFormat("digital")}
-                  className={`py-2 px-3 rounded-xl border text-center font-semibold transition-all ${
+                  className={`py-2 px-3 rounded-xl border text-center font-semibold transition-all flex items-center justify-center gap-1.5 ${
                     customFormat === "digital"
                       ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black"
                       : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400"
                   }`}
                 >
-                  📱 Ebook / Noutro Local
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Digital / Ebook</span>
                 </button>
               </div>
             </div>
 
-            {/* Avaliação em Estrelas */}
+            {/* Avaliação em Estrelas Monocromática */}
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">
-                A tua Avaliação:
+                Avaliação da Obra
               </label>
               <div className="flex items-center gap-1.5 pt-0.5">
                 {[1, 2, 3, 4, 5].map((star) => (
@@ -340,25 +344,25 @@ export default function MarkBookReadModal({
                     className="p-1 hover:scale-110 transition-transform"
                   >
                     <Star
-                      className={`w-5 h-5 ${
+                      className={`w-4 h-4 ${
                         star <= customRating
-                          ? "fill-amber-400 text-amber-400"
+                          ? "fill-current text-black dark:text-white"
                           : "text-gray-300 dark:text-gray-700"
                       }`}
                     />
                   </button>
                 ))}
-                <span className="text-xs font-bold text-amber-500 ml-2">{customRating}/5 estrelas</span>
+                <span className="text-xs font-bold ml-2">{customRating} de 5</span>
               </div>
             </div>
 
             <button
               type="submit"
               disabled={submitting || !customTitle.trim()}
-              className="w-full mt-2 py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl font-bold text-xs shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full mt-2 py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl font-bold text-xs shadow-sm active:scale-95 transition-transform flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>Guardar na Estante de Lidos</span>
+              <span>Adicionar aos Lidos</span>
             </button>
           </form>
         )}

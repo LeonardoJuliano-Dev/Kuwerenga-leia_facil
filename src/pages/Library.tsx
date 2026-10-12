@@ -34,7 +34,7 @@ export default function Library() {
       const data = await loadUserBookshelf();
       setItems(data);
     } catch (err) {
-      console.error("Erro ao carregar estante:", err);
+      console.error("Erro ao carregar biblioteca:", err);
     } finally {
       setLoading(false);
     }
@@ -44,24 +44,28 @@ export default function Library() {
     fetchShelf();
   }, []);
 
-  // Remover livro da estante
+  // Remover livro da biblioteca
   const handleRemove = async (e: React.MouseEvent, item: BookshelfItem) => {
     e.stopPropagation();
-    if (!confirm(`Remover "${item.title}" da tua estante?`)) return;
+    if (!confirm(`Remover "${item.title}" da tua biblioteca?`)) return;
     await removeBookFromShelf(item);
-    setItems((prev) => prev.filter((i) => i.id !== item.id));
+    setItems((prev) => prev.filter((i) => i.id !== item.id && i.bookId !== item.bookId));
   };
 
   // Alternar status do livro (ex: marcar como lido ou voltar a ler)
-  const handleToggleStatus = async (e: React.MouseEvent, item: BookshelfItem, newStatus: "reading" | "finished" | "saved") => {
+  const handleToggleStatus = async (
+    e: React.MouseEvent,
+    item: BookshelfItem,
+    newStatus: "reading" | "finished" | "saved"
+  ) => {
     e.stopPropagation();
     await updateShelfBookStatus(item, newStatus);
     fetchShelf();
   };
 
   // Filtros de exibição
-  const readingBooks = items.filter((i) => i.status === "reading" || i.status === "to_read");
-  const finishedBooks = items.filter((i) => i.status === "finished");
+  const readingBooks = items.filter((i) => (i.status === "reading" || i.status === "to_read") && (i.progress || 0) < 100);
+  const finishedBooks = items.filter((i) => i.status === "finished" || (i.progress || 0) >= 100);
   const savedBooks = items.filter((i) => i.status === "saved");
 
   const displayedItems =
@@ -73,17 +77,6 @@ export default function Library() {
       ? finishedBooks
       : savedBooks;
 
-  // Agrupar livros em prateleiras para a visualização de estante (4 livros por prateleira)
-  const chunkIntoShelves = (arr: BookshelfItem[], size = 4) => {
-    const shelves: BookshelfItem[][] = [];
-    for (let i = 0; i < arr.length; i += size) {
-      shelves.push(arr.slice(i, i + size));
-    }
-    return shelves;
-  };
-
-  const shelvesData = chunkIntoShelves(displayedItems, 4);
-
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white pb-28 md:pb-12 md:pt-16 relative select-none">
       
@@ -94,13 +87,13 @@ export default function Library() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2">
-                <span>Minha Estante</span>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 font-bold border border-amber-200 dark:border-amber-900">
+                <span>Biblioteca</span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-black dark:text-white font-bold border border-gray-200 dark:border-gray-700">
                   {items.length} obras
                 </span>
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Os teus livros lidos, em andamento e guardados
+                Livros em leitura, concluídos e guardados
               </p>
             </div>
 
@@ -126,7 +119,7 @@ export default function Library() {
                       ? "bg-white dark:bg-black text-black dark:text-white shadow-xs font-bold"
                       : "text-gray-400 hover:text-black dark:hover:text-white"
                   }`}
-                  title="Visualização em Lista / Grade"
+                  title="Visualização em Grade / Lista"
                 >
                   <LayoutGrid className="w-4 h-4" />
                 </button>
@@ -135,7 +128,7 @@ export default function Library() {
               {/* Botão Principal: Registar Livro Lido */}
               <button
                 onClick={() => setShowAddReadModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-black dark:bg-white text-white dark:text-black rounded-2xl text-xs font-bold active:scale-95 transition-transform shadow-sm"
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-black dark:bg-white text-white dark:text-black rounded-2xl text-xs font-bold active:scale-95 transition-transform shadow-xs"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span className="hidden sm:inline">Registar</span>
@@ -144,36 +137,36 @@ export default function Library() {
             </div>
           </div>
 
-          {/* Cartão de Resumo Literário */}
+          {/* Cartão de Resumo de Leitura (Monocromático) */}
           <div className="grid grid-cols-3 gap-2 p-3 bg-gray-50 dark:bg-gray-900/60 rounded-2xl border border-gray-100 dark:border-gray-800/80 mb-3 text-center">
             <div 
               onClick={() => setActiveTab("reading")}
-              className="cursor-pointer hover:opacity-80 transition-opacity"
+              className={`cursor-pointer transition-opacity ${activeTab === "reading" ? "opacity-100" : "opacity-80 hover:opacity-100"}`}
             >
               <span className="block text-lg font-black">{readingBooks.length}</span>
               <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">A Ler</span>
             </div>
             <div 
               onClick={() => setActiveTab("finished")}
-              className="cursor-pointer hover:opacity-80 transition-opacity border-x border-gray-200 dark:border-gray-800"
+              className={`cursor-pointer transition-opacity border-x border-gray-200 dark:border-gray-800 ${activeTab === "finished" ? "opacity-100" : "opacity-80 hover:opacity-100"}`}
             >
-              <span className="block text-lg font-black text-emerald-600 dark:text-emerald-400">
+              <span className="block text-lg font-black text-black dark:text-white">
                 {finishedBooks.length}
               </span>
-              <span className="text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold">
-                Lidos ✨
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">
+                Lidos
               </span>
             </div>
             <div 
               onClick={() => setActiveTab("saved")}
-              className="cursor-pointer hover:opacity-80 transition-opacity"
+              className={`cursor-pointer transition-opacity ${activeTab === "saved" ? "opacity-100" : "opacity-80 hover:opacity-100"}`}
             >
               <span className="block text-lg font-black">{savedBooks.length}</span>
               <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Salvos</span>
             </div>
           </div>
 
-          {/* Abas de Navegação na Estante */}
+          {/* Abas de Navegação na Biblioteca (Sem Emojis) */}
           <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 text-xs">
             <button
               onClick={() => setActiveTab("all")}
@@ -183,7 +176,7 @@ export default function Library() {
                   : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
               }`}
             >
-              Toda a Estante ({items.length})
+              Todos ({items.length})
             </button>
             <button
               onClick={() => setActiveTab("reading")}
@@ -193,17 +186,17 @@ export default function Library() {
                   : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
               }`}
             >
-              📖 A Ler Agora ({readingBooks.length})
+              A Ler ({readingBooks.length})
             </button>
             <button
               onClick={() => setActiveTab("finished")}
               className={`px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
                 activeTab === "finished"
-                  ? "bg-emerald-600 text-white shadow-xs font-bold"
+                  ? "bg-black dark:bg-white text-white dark:text-black shadow-xs"
                   : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
               }`}
             >
-              🏆 Lidos & Concluídos ({finishedBooks.length})
+              Lidos ({finishedBooks.length})
             </button>
             <button
               onClick={() => setActiveTab("saved")}
@@ -213,7 +206,7 @@ export default function Library() {
                   : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
               }`}
             >
-              📌 Salvos ({savedBooks.length})
+              Salvos ({savedBooks.length})
             </button>
           </div>
         </div>
@@ -224,12 +217,12 @@ export default function Library() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-3">
             <div className="w-8 h-8 border-2 border-black dark:border-white border-t-transparent dark:border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-xs text-gray-400">A carregar a tua estante literária...</p>
+            <p className="text-xs text-gray-400">A carregar a tua biblioteca...</p>
           </div>
         ) : displayedItems.length === 0 ? (
-          /* Estado Vazio Elegante */
+          /* Estado Vazio Monocromático */
           <div className="bg-gray-50 dark:bg-gray-900/60 rounded-3xl p-8 sm:p-12 border border-gray-100 dark:border-gray-800 text-center my-8 shadow-xs">
-            <div className="w-16 h-16 bg-white dark:bg-gray-800 text-amber-500 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-gray-100 dark:border-gray-700 shadow-md">
+            <div className="w-16 h-16 bg-white dark:bg-gray-800 text-black dark:text-white rounded-3xl flex items-center justify-center mx-auto mb-4 border border-gray-100 dark:border-gray-700 shadow-xs">
               <BookOpen className="w-8 h-8 stroke-[1.8]" />
             </div>
             <h3 className="font-extrabold text-lg mb-1.5">
@@ -237,20 +230,20 @@ export default function Library() {
                 ? "Nenhum livro marcado como lido ainda"
                 : activeTab === "reading"
                 ? "Nenhum livro em leitura no momento"
-                : "A tua estante está à espera de livros"}
+                : "A tua biblioteca está à espera de livros"}
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-6 leading-relaxed max-w-sm mx-auto">
               {activeTab === "finished"
-                ? "Termina um livro no leitor digital ou regista qualquer livro físico que tenhas lido para preencher a tua prateleira de honra."
-                : "Explora o catálogo moçambicano e internacional ou regista obras físicas da tua biblioteca pessoal."}
+                ? "Termina um livro no leitor digital ou regista qualquer livro físico que tenhas lido para preencher a tua prateleira de obras lidas."
+                : "Explora o catálogo ou regista livros físicos da tua estante pessoal."}
             </p>
             <div className="flex flex-col sm:flex-row gap-2.5 justify-center">
               <button
                 onClick={() => setShowAddReadModal(true)}
-                className="px-5 py-3 bg-black dark:bg-white text-white dark:text-black rounded-2xl text-xs font-bold shadow-md active:scale-95 transition-transform inline-flex items-center justify-center gap-1.5"
+                className="px-5 py-3 bg-black dark:bg-white text-white dark:text-black rounded-2xl text-xs font-bold shadow-xs active:scale-95 transition-transform inline-flex items-center justify-center gap-1.5"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
-                <span>Registar Livro Lido (Físico ou Digital)</span>
+                <span>Registar Livro Lido</span>
               </button>
               <Link
                 to="/explore"
@@ -262,109 +255,105 @@ export default function Library() {
           </div>
         ) : viewMode === "shelf" ? (
           /* ══════════════════════════════════════════════════════════ */
-          /* 🏛️ VISTA 1: PRATELEIRA DE BIBLIOTECA (BOOKSHELF AESTHETIC) */
+          /* VISTA 1: PRATELEIRA DE BIBLIOTECA RESPONSIVA              */
           /* ══════════════════════════════════════════════════════════ */
-          <div className="space-y-12 sm:space-y-14 py-4">
-            {shelvesData.map((shelf, shelfIndex) => (
-              <div key={shelfIndex} className="relative pt-6">
-                
-                {/* Linha de Livros Apoiados na Prateleira */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 px-3 sm:px-6 items-end min-h-[220px]">
-                  {shelf.map((book) => {
-                    const isFinished = book.status === "finished";
-                    const isReading = book.status === "reading" || book.status === "to_read";
+          <div className="py-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 sm:gap-x-6 gap-y-10 sm:gap-y-12 items-end">
+              {displayedItems.map((book) => {
+                const isFinished = book.status === "finished" || (book.progress || 0) >= 100;
+                const isReading = (book.status === "reading" || book.status === "to_read") && !isFinished;
 
-                    return (
-                      <div
-                        key={book.id}
-                        onClick={() => {
-                          if (book.source === "system" && book.bookId) {
-                            navigate(`/reader?bookId=${book.bookId}`);
-                          }
-                        }}
-                        className={`bookshelf-book group cursor-pointer flex flex-col items-center text-center relative ${
-                          book.source === "system" ? "hover:z-10" : ""
-                        }`}
-                      >
-                        {/* Efeito 3D do Livro com Lombada e Sombra */}
-                        <div className="relative w-28 sm:w-32 h-40 sm:h-44 rounded-r-xl rounded-l-xs overflow-hidden shadow-xl border-l-[5px] border-l-black/30 dark:border-l-white/20 transition-all duration-300 group-hover:shadow-2xl">
-                          
-                          {book.coverUrl ? (
-                            <img
-                              src={book.coverUrl}
-                              alt={book.title}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            /* Capa Estilizada Minimalista */
-                            <div className="w-full h-full p-2.5 flex flex-col justify-between bg-gradient-to-br from-zinc-800 to-black text-white text-left">
-                              <span className="text-[8px] uppercase tracking-widest text-amber-400 font-bold">
-                                {book.isPhysical ? "Livro Físico" : book.fileType || "Kuwerenga"}
+                return (
+                  <div
+                    key={book.id}
+                    onClick={() => {
+                      if (book.source === "system" && book.bookId) {
+                        navigate(`/reader?bookId=${book.bookId}`);
+                      }
+                    }}
+                    className="flex flex-col items-center group cursor-pointer w-full"
+                  >
+                    {/* Efeito 3D do Livro com Lombada e Sombra */}
+                    <div className="relative w-full max-w-[130px] sm:max-w-[150px] aspect-[2/3] rounded-r-lg rounded-l-xs overflow-hidden shadow-lg border-l-[5px] border-l-black/30 dark:border-l-white/20 transition-all duration-300 group-hover:-translate-y-2 group-hover:shadow-xl bg-zinc-900">
+                      
+                      {book.coverUrl ? (
+                        <img
+                          src={book.coverUrl}
+                          alt={book.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        /* Capa Estilizada Minimalista Monocromática */
+                        <div className="w-full h-full p-2.5 flex flex-col justify-between bg-black text-white text-left">
+                          <span className="text-[8px] uppercase tracking-widest text-zinc-400 font-bold">
+                            {book.isPhysical ? "Físico" : book.fileType || "Kuwerenga"}
+                          </span>
+                          <div>
+                            <h4 className="font-serif text-[11px] font-bold line-clamp-3 leading-tight text-white/95">
+                              {book.title}
+                            </h4>
+                            <span className="text-[8px] text-zinc-400 truncate block mt-1">
+                              {book.author}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[7px] text-zinc-400">
+                            <span>{book.totalPages ? `${book.totalPages}p` : ""}</span>
+                            {book.rating && (
+                              <span className="text-white font-bold flex items-center gap-0.5">
+                                <Star className="w-2.5 h-2.5 fill-white text-white" />
+                                {book.rating}
                               </span>
-                              <div>
-                                <h4 className="font-serif text-[11px] font-bold line-clamp-3 leading-tight text-white/95">
-                                  {book.title}
-                                </h4>
-                                <span className="text-[8px] text-zinc-400 truncate block mt-1">
-                                  {book.author}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-[7px] text-zinc-400">
-                                <span>{book.totalPages ? `${book.totalPages}p` : ""}</span>
-                                {book.rating && (
-                                  <span className="text-amber-400 font-bold">★ {book.rating}</span>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Selo / Badge no Topo do Livro */}
-                          {isFinished && (
-                            <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-emerald-500 text-white text-[9px] font-extrabold flex items-center gap-0.5 shadow-md">
-                              <CheckCircle2 className="w-2.5 h-2.5" />
-                              <span>Lido</span>
-                            </div>
-                          )}
-
-                          {book.isPhysical && !isFinished && (
-                            <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-amber-500 text-white text-[9px] font-bold shadow-md">
-                              Físico
-                            </div>
-                          )}
-
-                          {/* Barra de Progresso no Fundo da Capa para Livros a Ler */}
-                          {isReading && (
-                            <div className="absolute bottom-0 inset-x-0 bg-black/70 backdrop-blur-xs py-1 px-1.5 text-[9px] font-bold text-white flex items-center justify-between">
-                              <span>Progresso</span>
-                              <span className="text-emerald-400">{Math.round(book.progress)}%</span>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
+                      )}
 
-                        {/* Metadados Rápidos Abaixo do Livro (Visíveis ao Pairar) */}
-                        <div className="mt-2 w-full px-1">
-                          <h4 className="text-[11px] sm:text-xs font-bold truncate leading-tight group-hover:underline">
-                            {book.title}
-                          </h4>
-                          <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
-                            {book.author}
-                          </p>
+                      {/* Selo / Badge no Topo do Livro */}
+                      {isFinished && (
+                        <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black text-white dark:bg-white dark:text-black text-[9px] font-extrabold flex items-center gap-0.5 shadow-md">
+                          <CheckCircle2 className="w-2.5 h-2.5" />
+                          <span>Lido</span>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      )}
 
-                {/* ─── A Tábua da Prateleira de Madeira ─── */}
-                <div className="bookshelf-shelf w-full h-4 sm:h-5 mt-2 rounded-md relative z-0">
-                  <div className="absolute -top-1 inset-x-0 h-1 bg-black/10 dark:bg-white/10" />
-                </div>
-              </div>
-            ))}
+                      {book.isPhysical && !isFinished && (
+                        <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-zinc-800 text-white text-[9px] font-bold shadow-md flex items-center gap-0.5 border border-zinc-700">
+                          <BookOpen className="w-2.5 h-2.5" />
+                          <span>Físico</span>
+                        </div>
+                      )}
+
+                      {/* Barra de Progresso no Fundo da Capa para Livros a Ler */}
+                      {isReading && (
+                        <div className="absolute bottom-0 inset-x-0 bg-black/80 backdrop-blur-xs py-1 px-1.5 text-[9px] font-bold text-white flex items-center justify-between">
+                          <span>Progresso</span>
+                          <span>{Math.round(book.progress)}%</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ─── Tábua da Prateleira Sob Cada Livro (Alinhamento Perfeito e Responsivo) ─── */}
+                    <div className="bookshelf-shelf w-full h-3.5 sm:h-4 mt-2.5 rounded-xs relative z-0">
+                      <div className="absolute -top-0.5 inset-x-0 h-0.5 bg-black/10 dark:bg-white/10" />
+                    </div>
+
+                    {/* Metadados Abaixo da Prateleira */}
+                    <div className="mt-2 w-full text-center px-1">
+                      <h4 className="text-[11px] sm:text-xs font-bold truncate leading-tight group-hover:underline">
+                        {book.title}
+                      </h4>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                        {book.author}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : (
           /* ══════════════════════════════════════════════════════════ */
-          /* 📑 VISTA 2: LISTA / GRADE DETALHADA                        */
+          /* VISTA 2: LISTA / GRADE DETALHADA                           */
           /* ══════════════════════════════════════════════════════════ */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {displayedItems.map((item) => (
@@ -383,7 +372,7 @@ export default function Library() {
                     <img src={item.coverUrl} alt={item.title} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full p-2 flex flex-col justify-between bg-black text-white text-left">
-                      <span className="text-[7px] text-amber-400 uppercase font-bold">
+                      <span className="text-[7px] text-zinc-400 uppercase font-bold">
                         {item.isPhysical ? "Físico" : "Kuwerenga"}
                       </span>
                       <span className="text-[9px] font-bold line-clamp-3 leading-tight">{item.title}</span>
@@ -391,7 +380,7 @@ export default function Library() {
                     </div>
                   )}
                   {item.status === "finished" && (
-                    <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-xs">
+                    <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center justify-center shadow-xs">
                       <CheckCircle2 className="w-3 h-3 stroke-[2.5]" />
                     </div>
                   )}
@@ -400,17 +389,11 @@ export default function Library() {
                 {/* Detalhes */}
                 <div className="flex-1 min-w-0 py-0.5">
                   <div className="flex items-center gap-1.5 mb-1">
-                    <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
-                      item.status === "finished"
-                        ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300"
-                        : item.status === "reading"
-                        ? "bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300"
-                        : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
-                    }`}>
+                    <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700">
                       {item.status === "finished" ? "Lido" : item.status === "reading" ? "A Ler" : "Salvo"}
                     </span>
                     {item.isPhysical && (
-                      <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold">
+                      <span className="text-[9px] text-gray-500 font-bold">
                         • Físico
                       </span>
                     )}
@@ -425,12 +408,14 @@ export default function Library() {
 
                   {/* Progresso ou Avaliação */}
                   {item.status === "finished" ? (
-                    <div className="flex items-center gap-1 text-amber-500 text-xs">
+                    <div className="flex items-center gap-1 text-black dark:text-white text-xs">
                       {[1, 2, 3, 4, 5].map((s) => (
                         <Star
                           key={s}
                           className={`w-3.5 h-3.5 ${
-                            s <= (item.rating || 5) ? "fill-amber-400 text-amber-400" : "text-gray-300 dark:text-gray-700"
+                            s <= (item.rating || 5)
+                              ? "fill-current text-black dark:text-white"
+                              : "text-gray-300 dark:text-gray-700"
                           }`}
                         />
                       ))}
@@ -456,7 +441,7 @@ export default function Library() {
                   {item.status !== "finished" ? (
                     <button
                       onClick={(e) => handleToggleStatus(e, item, "finished")}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                       title="Marcar como Lido"
                     >
                       <BookCheck className="w-4 h-4" />
@@ -464,7 +449,7 @@ export default function Library() {
                   ) : (
                     <button
                       onClick={(e) => handleToggleStatus(e, item, "reading")}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors"
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                       title="Voltar a Ler"
                     >
                       <RotateCcw className="w-4 h-4" />
@@ -473,8 +458,8 @@ export default function Library() {
 
                   <button
                     onClick={(e) => handleRemove(e, item)}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                    title="Remover da Estante"
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    title="Remover da Biblioteca"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

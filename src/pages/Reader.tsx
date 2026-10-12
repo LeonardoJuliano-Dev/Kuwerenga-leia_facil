@@ -40,7 +40,7 @@ import { supabase } from "../lib/supabase";
 import { getTermDefinition, type DefinitionResult } from "../lib/dictionaryService";
 import { isGuestMode } from "../lib/guestMode";
 import GuestRestrictionModal from "../components/GuestRestrictionModal";
-import { markBookAsFinished } from "../lib/bookshelfService";
+import { markBookAsFinished, markBookAsReading } from "../lib/bookshelfService";
 
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -390,6 +390,9 @@ export default function Reader() {
                 file_type: "pdf"
               }).then(() => setIsOfflineSaved(true)).catch(() => {});
             }
+
+            // Regista automaticamente na secção de 'A Ler' da biblioteca
+            markBookAsReading(bookId, title);
           } else {
             if (isMounted) setError("Este livro não tem ficheiro associado.");
           }

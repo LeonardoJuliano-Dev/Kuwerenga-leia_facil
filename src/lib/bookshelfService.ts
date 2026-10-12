@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { setCached } from "./cache";
+import { setCached, getCached } from "./cache";
 
 export interface BookshelfItem {
   id: string;
@@ -98,7 +98,7 @@ export async function loadUserBookshelf(): Promise<BookshelfItem[]> {
   // Agrega itens do sistema + livros manuais/físicos (sem duplicar por ID)
   const combined = [...systemItems];
   for (const custom of localCustom) {
-    if (!combined.some((item) => item.id === custom.id)) {
+    if (!combined.some((item) => item.id === custom.id || (custom.bookId && item.bookId === custom.bookId))) {
       combined.push(custom);
     }
   }
@@ -163,6 +163,14 @@ export async function markBookAsFinished(bookId: string, totalPages?: number) {
     console.error("Erro ao marcar livro como lido no Supabase:", err);
   }
 
+  // Remove imediatamente do cache da Home para não aparecer em Continuar a Ler
+  try {
+    const cached = getCached<any[]>("home_reading_list");
+    if (cached) {
+      setCached("home_reading_list", cached.filter((b) => b.bookId !== bookId));
+    }
+  } catch {}
+
   // Também atualiza o registo local se existir
   const local = getLocalCustomBooks();
   const index = local.findIndex((b) => b.bookId === bookId || b.id === bookId);
@@ -171,6 +179,59 @@ export async function markBookAsFinished(bookId: string, totalPages?: number) {
     local[index].progress = 100;
     local[index].finishedAt = new Date().toISOString();
     saveLocalCustomBooks(local);
+  }
+}
+
+/** Regista automaticamente um livro na secção de 'A Ler' quando a leitura começa */
+export async function markBookAsReading(bookId: string, title?: string, author?: string) {
+  if (!bookId || bookId === "demo-book" || bookId.startsWith("local-")) return;
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: existing } = await supabase
+        .from("user_books")
+        .select("status")
+        .eq("user_id", user.id)
+        .eq("book_id", bookId)
+        .maybeSingle();
+
+      // Só coloca em 'reading' se o livro ainda não foi finalizado/lido
+      if (!existing || existing.status !== "finished") {
+        await supabase
+          .from("user_books")
+          .upsert({
+            user_id: user.id,
+            book_id: bookId,
+            status: "reading",
+            last_read_at: new Date().toISOString(),
+          }, { onConflict: "user_id,book_id" });
+      }
+    } else {
+      // Visitante ou modo convidado local
+      const local = getLocalCustomBooks();
+      const existing = local.find((b) => b.bookId === bookId || b.id === bookId);
+      if (!existing) {
+        local.unshift({
+          id: `reading-${bookId}`,
+          bookId,
+          title: title || "Livro",
+          author: author || "Autor Desconhecido",
+          status: "reading",
+          progress: 5,
+          currentPage: 1,
+          source: "system",
+          lastReadAt: new Date().toISOString(),
+        });
+        saveLocalCustomBooks(local);
+      } else if (existing.status !== "finished") {
+        existing.status = "reading";
+        existing.lastReadAt = new Date().toISOString();
+        saveLocalCustomBooks(local);
+      }
+    }
+  } catch (err) {
+    console.warn("Erro ao registar início de leitura:", err);
   }
 }
 
@@ -207,6 +268,15 @@ export async function updateShelfBookStatus(
       }
       saveLocalCustomBooks(local);
     }
+  }
+
+  if (newStatus === "finished") {
+    try {
+      const cached = getCached<any[]>("home_reading_list");
+      if (cached) {
+        setCached("home_reading_list", cached.filter((b) => b.bookId !== (item.bookId || item.id)));
+      }
+    } catch {}
   }
 }
 

@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, Compass, Users, Library, Bell, BookOpen, Plus } from "lucide-react";
+import { Search, Compass, Users, Library, Bell, BookOpen, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
 import { getCached, setCached } from "../lib/cache";
+import { getLocalCustomBooks } from "../lib/bookshelfService";
 
 interface Book {
   id: string;
@@ -25,25 +26,27 @@ interface CurrentReading {
 }
 
 export default function Home() {
-  const [currentReading, setCurrentReading] = useState<CurrentReading | null>(() => getCached<CurrentReading>("home_current_reading"));
+  const [readingList, setReadingList] = useState<CurrentReading[]>(() => getCached<CurrentReading[]>("home_reading_list") || []);
   const [featuredBooks, setFeaturedBooks] = useState<Book[]>(() => getCached<Book[]>("home_featured_books") || []);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(() => !getCached<Book[]>("home_featured_books"));
+  const sliderRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     async function loadHomeData() {
-      // Se não temos cache, mostra loading, senão atualiza em background silenciosamente
       try {
         const { data: { user } } = await supabase.auth.getUser();
 
-        // 1. Livro atualmente em leitura pelo utilizador
+        // 1. Livros atualmente em leitura (exclui concluídos / lidos)
         if (user) {
-          const { data: userBook } = await supabase
+          const { data: userBooks } = await supabase
             .from("user_books")
             .select(`
               current_page,
               progress,
+              status,
+              last_read_at,
               book:books (
                 id,
                 title,
@@ -53,27 +56,46 @@ export default function Home() {
               )
             `)
             .eq("user_id", user.id)
-            .order("last_read_at", { ascending: false, nullsFirst: false })
-            .limit(1)
-            .maybeSingle();
+            .neq("status", "finished")
+            .order("last_read_at", { ascending: false, nullsFirst: false });
 
-          if (userBook?.book) {
-            const b: any = userBook.book;
-            const readingData: CurrentReading = {
-              bookId: b.id,
-              title: b.title,
-              author: b.author,
-              cover_url: b.cover_url,
-              currentPage: userBook.current_page || 1,
-              totalPages: b.total_pages || 1,
-              progress: userBook.progress || 0
-            };
-            setCurrentReading(readingData);
-            setCached("home_current_reading", readingData);
+          if (userBooks) {
+            const activeItems: CurrentReading[] = userBooks
+              .filter((item: any) => item.book && item.status !== "finished" && (item.progress || 0) < 100)
+              .map((item: any) => ({
+                bookId: item.book.id,
+                title: item.book.title,
+                author: item.book.author,
+                cover_url: item.book.cover_url,
+                currentPage: item.current_page || 1,
+                totalPages: item.book.total_pages || 1,
+                progress: item.progress || 0,
+              }));
+
+            setReadingList(activeItems);
+            setCached("home_reading_list", activeItems);
           } else {
-            setCurrentReading(null);
-            setCached("home_current_reading", null);
+            setReadingList([]);
+            setCached("home_reading_list", []);
           }
+        } else {
+          // Modo convidado / offline: carregar da estante local
+          const local = getLocalCustomBooks();
+          const activeItems: CurrentReading[] = local
+            .filter((item) => (item.status === "reading" || item.status === "to_read") && (item.progress || 0) < 100)
+            .sort((a, b) => new Date(b.lastReadAt || 0).getTime() - new Date(a.lastReadAt || 0).getTime())
+            .map((item) => ({
+              bookId: item.bookId || item.id,
+              title: item.title,
+              author: item.author,
+              cover_url: item.coverUrl || null,
+              currentPage: item.currentPage || 1,
+              totalPages: item.totalPages || 100,
+              progress: item.progress || 0,
+            }));
+
+          setReadingList(activeItems);
+          setCached("home_reading_list", activeItems);
         }
 
         // 2. Livros em destaque reais
@@ -142,52 +164,116 @@ export default function Home() {
           </div>
         </form>
 
-        {/* Continuar a ler (Real) */}
+        {/* Continuar a ler: Slide / Pilha Horizontal Deslizante */}
         <section className="px-4 sm:px-6 mb-8 app-container">
-          <h2 className="text-lg font-bold mb-4">Continuar a ler</h2>
-          {currentReading ? (
-            <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-xs border border-gray-100 dark:border-gray-800">
-              <div className="flex gap-4">
-                <div className="w-20 h-28 bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-200 dark:border-gray-700">
-                  {currentReading.cover_url ? (
-                    <img
-                      src={currentReading.cover_url}
-                      alt={currentReading.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full p-2 flex flex-col justify-between bg-black text-white text-center">
-                      <span className="text-[7px] uppercase tracking-widest text-gray-400">Livro</span>
-                      <span className="font-serif text-[10px] font-bold line-clamp-3 leading-tight">
-                        {currentReading.title}
-                      </span>
-                      <span className="text-[6px] text-gray-400 truncate">{currentReading.author}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex-1 flex flex-col justify-center">
-                  <h3 className="font-bold text-sm leading-tight mb-1 truncate">{currentReading.title}</h3>
-                  <p className="text-xs text-gray-500 mb-2 truncate">{currentReading.author}</p>
-                  <p className="text-xs text-gray-400 mb-3">
-                    Página {currentReading.currentPage} • {Math.round(currentReading.progress)}%
-                  </p>
-
-                  <div className="w-full h-1 bg-gray-200 dark:bg-gray-800 rounded-full mb-3 overflow-hidden">
-                    <div
-                      className="h-full bg-black dark:bg-white rounded-full transition-all duration-300"
-                      style={{ width: `${Math.max(5, currentReading.progress)}%` }}
-                    />
-                  </div>
-                </div>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-lg font-bold">Continuar a ler</h2>
+              {readingList.length > 1 && (
+                <span className="text-[11px] text-gray-400 font-semibold block">
+                  {readingList.length} em andamento • desliza para navegar
+                </span>
+              )}
+            </div>
+            {readingList.length > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (sliderRef.current) {
+                      sliderRef.current.scrollBy({ left: -320, behavior: "smooth" });
+                    }
+                  }}
+                  className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-black dark:text-white flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-95 transition-all"
+                  aria-label="Deslizar para a esquerda"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (sliderRef.current) {
+                      sliderRef.current.scrollBy({ left: 320, behavior: "smooth" });
+                    }
+                  }}
+                  className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-black dark:text-white flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-95 transition-all"
+                  aria-label="Deslizar para a direita"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
+            )}
+          </div>
 
-              <Link
-                to={`/reader?bookId=${currentReading.bookId}`}
-                className="w-full mt-3 bg-black dark:bg-white text-white dark:text-black py-3 rounded-xl text-sm font-semibold flex items-center justify-center active:scale-95 transition-transform"
-              >
-                Continuar a Leitura
-              </Link>
+          {readingList.length > 0 ? (
+            <div
+              ref={sliderRef}
+              className="flex gap-3.5 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-smooth pb-2 -mx-4 px-4 sm:mx-0 sm:px-0"
+            >
+              {readingList.map((reading, index) => (
+                <div
+                  key={reading.bookId}
+                  className="min-w-[280px] sm:min-w-[340px] max-w-[380px] flex-shrink-0 snap-center bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-xs border border-gray-100 dark:border-gray-800 flex flex-col justify-between transition-all"
+                >
+                  <div className="flex gap-3.5 mb-3">
+                    {/* Capa */}
+                    <div className="w-18 h-26 bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-200 dark:border-gray-700">
+                      {reading.cover_url ? (
+                        <img
+                          src={reading.cover_url}
+                          alt={reading.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full p-2 flex flex-col justify-between bg-black text-white text-center">
+                          <span className="text-[7px] uppercase tracking-widest text-gray-400">Livro</span>
+                          <span className="font-serif text-[10px] font-bold line-clamp-3 leading-tight">
+                            {reading.title}
+                          </span>
+                          <span className="text-[6px] text-gray-400 truncate">{reading.author}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Detalhes do Livro */}
+                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        {index === 0 && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-black dark:bg-white text-white dark:text-black">
+                            Mais Recente
+                          </span>
+                        )}
+                        <span className="text-[10px] text-gray-400 truncate">
+                          Pág. {reading.currentPage} de {reading.totalPages}
+                        </span>
+                      </div>
+
+                      <h3 className="font-bold text-sm leading-tight mb-0.5 truncate">{reading.title}</h3>
+                      <p className="text-xs text-gray-500 mb-2 truncate">{reading.author}</p>
+
+                      <div className="w-full">
+                        <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+                          <span>Progresso</span>
+                          <span className="font-bold">{Math.round(reading.progress)}%</span>
+                        </div>
+                        <div className="w-full h-1 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-black dark:bg-white rounded-full transition-all duration-300"
+                            style={{ width: `${Math.max(5, reading.progress)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Link
+                    to={`/reader?bookId=${reading.bookId}`}
+                    className="w-full bg-black dark:bg-white text-white dark:text-black py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center active:scale-95 transition-transform shadow-xs"
+                  >
+                    Continuar a Leitura
+                  </Link>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-xs border border-gray-100 dark:border-gray-800 text-center">
