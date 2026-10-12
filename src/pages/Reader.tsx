@@ -29,6 +29,7 @@ import type Book from "epubjs/types/book";
 import type Rendition from "epubjs/types/rendition";
 import {
   getBookOffline,
+  getBookMetadataOffline,
   saveBookOffline,
   saveReadingProgress,
   getReadingProgress,
@@ -305,27 +306,40 @@ export default function Reader() {
       setError("");
 
       try {
-        // Tenta obter do IndexedDB (Offline)
+        // 1. Tenta obter do IndexedDB (Armazenamento Offline local)
         const offlineBlob = await getBookOffline(bookId);
 
         if (offlineBlob) {
           setIsOfflineSaved(true);
-          const format = await detectBookFormat(offlineBlob);
+          const offlineMeta = await getBookMetadataOffline(bookId);
+          const resolvedTitle = offlineMeta?.title || bookTitle || "Livro Guardado";
+          setBookTitle(resolvedTitle);
 
+          const format = await detectBookFormat(offlineBlob);
           if (!isMounted) return;
 
           if (format === "epub") {
-            await initEpub(offlineBlob, bookTitle);
+            await initEpub(offlineBlob, resolvedTitle);
           } else if (format === "pdf") {
-            await initPdf(offlineBlob, bookTitle);
+            await initPdf(offlineBlob, resolvedTitle);
           } else {
             throw new Error("O ficheiro guardado localmente está corrompido.");
           }
-        } else if (bookId !== "demo-book") {
+          return;
+        }
+
+        // 2. Se não estiver no IndexedDB e o utilizador estiver offline, avisa de imediato
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          if (!isMounted) return;
+          setError("Estás sem ligação à internet e este livro ainda não foi descarregado para leitura offline. Acede à Biblioteca para leres as obras guardadas no dispositivo.");
+          return;
+        }
+
+        if (bookId !== "demo-book") {
           // Busca do Supabase
           const { data: bookRecord, error: fetchRecordErr } = await supabase
             .from("books")
-            .select("title, file_url, file_type")
+            .select("title, author, cover_url, file_url, file_type, total_pages")
             .eq("id", bookId)
             .maybeSingle();
 
@@ -377,18 +391,20 @@ export default function Reader() {
 
             if (!isMounted) return;
 
+            const metadataToSave = {
+              title,
+              author: bookRecord.author || "Autor",
+              coverUrl: bookRecord.cover_url || null,
+              totalPages: bookRecord.total_pages || 1,
+              file_type: format
+            };
+
             if (format === "epub") {
               await initEpub(blob, title);
-              saveBookOffline(bookId, blob, {
-                title,
-                file_type: "epub"
-              }).then(() => setIsOfflineSaved(true)).catch(() => {});
+              saveBookOffline(bookId, blob, metadataToSave).then(() => setIsOfflineSaved(true)).catch(() => {});
             } else {
               await initPdf(blob, title);
-              saveBookOffline(bookId, blob, {
-                title,
-                file_type: "pdf"
-              }).then(() => setIsOfflineSaved(true)).catch(() => {});
+              saveBookOffline(bookId, blob, metadataToSave).then(() => setIsOfflineSaved(true)).catch(() => {});
             }
 
             // Regista automaticamente na secção de 'A Ler' da biblioteca
@@ -1544,14 +1560,23 @@ export default function Reader() {
 
         {error && (
           <div className="p-6 max-w-sm text-center">
-            <BookOpen className="w-12 h-12 mx-auto mb-3 text-red-500 opacity-80" />
+            <BookOpen className="w-12 h-12 mx-auto mb-3 text-black dark:text-white opacity-80" />
             <h3 className="font-semibold text-base mb-1">Aviso de Leitura</h3>
-            <p className="text-xs text-gray-500 mb-6">{error}</p>
-            <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold cursor-pointer">
-              <FileUp className="w-4 h-4" />
-              <span>Abrir um PDF ou EPUB</span>
-              <input type="file" accept="application/pdf,application/epub+zip,.epub,.pdf" onChange={handleFileUpload} className="hidden" />
-            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">{error}</p>
+            <div className="flex flex-col gap-2.5">
+              <Link
+                to="/library"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold"
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>Ver Livros na Biblioteca</span>
+              </Link>
+              <label className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 dark:bg-gray-800 text-black dark:text-white rounded-xl text-xs font-semibold cursor-pointer border border-gray-200 dark:border-gray-700">
+                <FileUp className="w-4 h-4" />
+                <span>Abrir um PDF ou EPUB</span>
+                <input type="file" accept="application/pdf,application/epub+zip,.epub,.pdf" onChange={handleFileUpload} className="hidden" />
+              </label>
+            </div>
           </div>
         )}
 

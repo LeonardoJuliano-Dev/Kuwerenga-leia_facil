@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { setCached, getCached } from "./cache";
+import { getAllDownloadedBooksOffline, getAllDownloadedBookIds } from "./offlineStorage";
 
 export interface BookshelfItem {
   id: string;
@@ -18,6 +19,7 @@ export interface BookshelfItem {
   lastReadAt?: string | null;
   source: "system" | "custom";
   fileType?: string;
+  isOfflineAvailable?: boolean;
 }
 
 const LOCAL_CUSTOM_BOOKS_KEY = "kuwerenga_custom_bookshelf";
@@ -43,68 +45,122 @@ export function saveLocalCustomBooks(books: BookshelfItem[]) {
   }
 }
 
-/** Carrega todos os livros da estante do utilizador (Supabase + Locais/Físicos) */
+/** Carrega todos os livros da estante do utilizador (Supabase + Locais/Físicos + Ficheiros Offline) */
 export async function loadUserBookshelf(): Promise<BookshelfItem[]> {
   const localCustom = getLocalCustomBooks();
-  let systemItems: BookshelfItem[] = [];
+  const cachedItems = getCached<BookshelfItem[]>("bookshelf_all_items") || [];
+  let downloadedIds = new Set<string>();
+  let offlineBooks: any[] = [];
 
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (user) {
-      const { data, error } = await supabase
-        .from("user_books")
-        .select(`
-          id,
-          status,
-          current_page,
-          progress,
-          last_read_at,
-          book:books (
-            id,
-            title,
-            author,
-            cover_url,
-            total_pages,
-            file_type
-          )
-        `)
-        .eq("user_id", user.id)
-        .order("last_read_at", { ascending: false, nullsFirst: false });
-
-      if (!error && data) {
-        systemItems = data
-          .filter((item: any) => item.book)
-          .map((item: any) => ({
-            id: item.id,
-            bookId: item.book.id,
-            title: item.book.title,
-            author: item.book.author,
-            coverUrl: item.book.cover_url,
-            status: item.status,
-            currentPage: item.current_page || 1,
-            totalPages: item.book.total_pages || 1,
-            progress: item.progress || 0,
-            lastReadAt: item.last_read_at,
-            source: "system",
-            fileType: item.book.file_type || "pdf",
-          }));
-      }
-    }
-  } catch (err) {
-    console.error("Erro ao carregar estante do Supabase:", err);
+    const ids = await getAllDownloadedBookIds();
+    downloadedIds = new Set(ids);
+    offlineBooks = await getAllDownloadedBooksOffline();
+  } catch (e) {
+    console.warn("Erro ao ler livros do IndexedDB:", e);
   }
 
-  // Agrega itens do sistema + livros manuais/físicos (sem duplicar por ID)
-  const combined = [...systemItems];
+  const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+  let systemItems: BookshelfItem[] = [];
+
+  if (!isOffline) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data, error } = await supabase
+          .from("user_books")
+          .select(`
+            id,
+            status,
+            current_page,
+            progress,
+            last_read_at,
+            book:books (
+              id,
+              title,
+              author,
+              cover_url,
+              total_pages,
+              file_type
+            )
+          `)
+          .eq("user_id", user.id)
+          .order("last_read_at", { ascending: false, nullsFirst: false });
+
+        if (!error && data) {
+          systemItems = data
+            .filter((item: any) => item.book)
+            .map((item: any) => ({
+              id: item.id,
+              bookId: item.book.id,
+              title: item.book.title,
+              author: item.book.author,
+              coverUrl: item.book.cover_url,
+              status: item.status,
+              currentPage: item.current_page || 1,
+              totalPages: item.book.total_pages || 1,
+              progress: item.progress || 0,
+              lastReadAt: item.last_read_at,
+              source: "system",
+              fileType: item.book.file_type || "pdf",
+              isOfflineAvailable: downloadedIds.has(item.book.id),
+            }));
+        }
+      }
+    } catch (err) {
+      console.warn("Rede falhou ao carregar estante do Supabase:", err);
+    }
+  }
+
+  // Se não obteve itens do sistema (ex: offline ou erro de rede), usa os do cache que eram do sistema
+  if (systemItems.length === 0 && cachedItems.length > 0) {
+    systemItems = cachedItems.filter((i) => i.source === "system");
+  }
+
+  // Agrega itens do sistema + livros manuais/físicos
+  const combined: BookshelfItem[] = [...systemItems];
+
   for (const custom of localCustom) {
     if (!combined.some((item) => item.id === custom.id || (custom.bookId && item.bookId === custom.bookId))) {
-      combined.push(custom);
+      combined.push({
+        ...custom,
+        isOfflineAvailable: custom.bookId ? downloadedIds.has(custom.bookId) : false,
+      });
     }
   }
 
-  setCached("bookshelf_all_items", combined);
-  return combined;
+  // Adiciona livros guardados no IndexedDB que ainda não estejam presentes na estante
+  for (const off of offlineBooks) {
+    const alreadyExists = combined.some(
+      (item) => item.bookId === off.bookId || item.id === off.bookId || item.title === off.title
+    );
+    if (!alreadyExists) {
+      combined.push({
+        id: off.bookId,
+        bookId: off.bookId,
+        title: off.title,
+        author: off.author || "Autor Desconhecido",
+        coverUrl: off.coverUrl || null,
+        status: "saved",
+        progress: 0,
+        currentPage: 1,
+        totalPages: off.totalPages || 100,
+        source: "system",
+        fileType: off.fileType || "pdf",
+        isOfflineAvailable: true,
+      });
+    }
+  }
+
+  // Atualiza anotação de isOfflineAvailable em todos os itens
+  const finalized = combined.map((item) => ({
+    ...item,
+    isOfflineAvailable: item.isOfflineAvailable || (item.bookId ? downloadedIds.has(item.bookId) : false) || downloadedIds.has(item.id),
+  }));
+
+  setCached("bookshelf_all_items", finalized);
+  return finalized;
 }
 
 /** Adiciona um livro físico ou lido noutro local à estante de Lidos */

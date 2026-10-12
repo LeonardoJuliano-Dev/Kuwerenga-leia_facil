@@ -23,7 +23,8 @@ import {
   deleteAnnotationOffline,
   type OfflineAnnotation
 } from "../lib/offlineStorage";
-import { loadUserBookshelf } from "../lib/bookshelfService";
+import { loadUserBookshelf, type BookshelfItem } from "../lib/bookshelfService";
+import { getCached, setCached } from "../lib/cache";
 
 interface UserClub {
   id: string;
@@ -37,19 +38,26 @@ interface EnrichedAnnotation extends OfflineAnnotation {
   bookTitle?: string;
 }
 
+interface ProfileCache {
+  fullName: string;
+  email: string;
+  avatarUrl: string | null;
+}
+
 export default function Profile() {
-  const [userName, setUserName] = useState<string>("Leitor");
-  const [userEmail, setUserEmail] = useState<string>("");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedProfile = getCached<ProfileCache>("profile_user_data");
+  const [userName, setUserName] = useState<string>(cachedProfile?.fullName || "Leitor");
+  const [userEmail, setUserEmail] = useState<string>(cachedProfile?.email || "");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(cachedProfile?.avatarUrl || null);
+  const [loading, setLoading] = useState(!cachedProfile && !isGuestMode());
   const [isGuest, setIsGuest] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  // Sub-telas / Modais de detalhe
+  // Sub-telas / Modais de detalhe com dados pré-carregados do cache
   const [activeView, setActiveView] = useState<"menu" | "notes" | "bookmarks" | "clubs">("menu");
-  const [allNotes, setAllNotes] = useState<EnrichedAnnotation[]>([]);
-  const [allBookmarks, setAllBookmarks] = useState<EnrichedAnnotation[]>([]);
-  const [userClubs, setUserClubs] = useState<UserClub[]>([]);
+  const [allNotes, setAllNotes] = useState<EnrichedAnnotation[]>(() => getCached<EnrichedAnnotation[]>("profile_user_notes") || []);
+  const [allBookmarks, setAllBookmarks] = useState<EnrichedAnnotation[]>(() => getCached<EnrichedAnnotation[]>("profile_user_bookmarks") || []);
+  const [userClubs, setUserClubs] = useState<UserClub[]>(() => getCached<UserClub[]>("profile_user_clubs") || []);
   const [loadingData, setLoadingData] = useState(false);
 
   const [restrictionModal, setRestrictionModal] = useState<{
@@ -78,9 +86,13 @@ export default function Profile() {
 
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user) {
+          setLoading(false);
+          return;
+        }
 
-        setUserEmail(user.email || user.phone || "");
+        const email = user.email || user.phone || "";
+        setUserEmail(email);
 
         const { data: profile } = await supabase
           .from("profiles")
@@ -88,33 +100,53 @@ export default function Profile() {
           .eq("id", user.id)
           .maybeSingle();
 
-        if (profile) {
-          if (profile.full_name) setUserName(profile.full_name);
-          if (profile.avatar_url) setAvatarUrl(profile.avatar_url);
-        }
+        const resolvedName = profile?.full_name || userName || "Leitor";
+        const resolvedAvatar = profile?.avatar_url || avatarUrl;
+
+        if (profile?.full_name) setUserName(profile.full_name);
+        if (profile?.avatar_url) setAvatarUrl(profile.avatar_url);
+
+        setCached("profile_user_data", {
+          fullName: resolvedName,
+          email,
+          avatarUrl: resolvedAvatar
+        });
       } catch (err) {
-        console.error("Erro ao carregar perfil:", err);
+        console.warn("Erro ao carregar perfil:", err);
       } finally {
         setLoading(false);
       }
     }
 
     loadProfile();
+    // Pré-carrega anotações e clubes silenciosamente em background para abertura imediata
+    fetchAnnotations();
+    fetchUserClubs();
   }, []);
 
-  // ─── 2. Carregar Anotações e Marcações ───
+  // ─── 2. Carregar Anotações e Marcações (0ms com Stale-While-Revalidate) ───
   const fetchAnnotations = async () => {
-    setLoadingData(true);
+    // Apenas ativa spinner se não tivermos nenhum dado em cache
+    if (allNotes.length === 0 && allBookmarks.length === 0) {
+      setLoadingData(true);
+    }
+
     try {
-      // Mapeamento de títulos de livros conhecidos
-      const shelfBooks = await loadUserBookshelf();
+      // 1. Mapeamento de títulos a partir do cache local da estante (ultra-rápido)
+      let shelfBooks = getCached<BookshelfItem[]>("bookshelf_all_items") || [];
+      if (shelfBooks.length === 0 && typeof navigator !== "undefined" && navigator.onLine) {
+        try {
+          shelfBooks = await loadUserBookshelf();
+        } catch {}
+      }
+
       const bookTitleMap = new Map<string, string>();
       shelfBooks.forEach((b) => {
         if (b.bookId) bookTitleMap.set(b.bookId, b.title);
         bookTitleMap.set(b.id, b.title);
       });
 
-      // 1. Obter do IndexedDB local
+      // 2. Obter do IndexedDB local (funciona 100% offline)
       let rawList: OfflineAnnotation[] = [];
       try {
         rawList = await getAllAnnotationsOffline();
@@ -122,65 +154,71 @@ export default function Profile() {
         console.warn("Erro ao buscar anotações offline:", err);
       }
 
-      // 2. Obter do Supabase se autenticado
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: supaNotes } = await supabase
-            .from("annotations")
-            .select(`
-              id,
-              book_id,
-              type,
-              content,
-              selected_text,
-              page_number,
-              chapter,
-              created_at,
-              book:books ( id, title )
-            `)
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false });
+      // 3. Obter do Supabase se online e autenticado
+      if (typeof navigator !== "undefined" && navigator.onLine && !isGuestMode()) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: supaNotes } = await supabase
+              .from("annotations")
+              .select(`
+                id,
+                book_id,
+                type,
+                content,
+                selected_text,
+                page_number,
+                chapter,
+                created_at,
+                book:books ( id, title )
+              `)
+              .eq("user_id", user.id)
+              .order("created_at", { ascending: false });
 
-          if (supaNotes) {
-            supaNotes.forEach((sn: any) => {
-              if (sn.book?.title) {
-                bookTitleMap.set(sn.book_id, sn.book.title);
-              }
-              if (!rawList.some((item) => item.id === sn.id)) {
-                rawList.push({
-                  id: sn.id,
-                  bookId: sn.book_id,
-                  type: sn.type as any,
-                  content: sn.content || "",
-                  selectedText: sn.selected_text || "",
-                  pageNumber: sn.page_number || 1,
-                  chapter: sn.chapter || `Página ${sn.page_number || 1}`,
-                  synced: true,
-                  createdAt: sn.created_at
-                });
-              }
-            });
+            if (supaNotes) {
+              supaNotes.forEach((sn: any) => {
+                if (sn.book?.title) {
+                  bookTitleMap.set(sn.book_id, sn.book.title);
+                }
+                if (!rawList.some((item) => item.id === sn.id)) {
+                  rawList.push({
+                    id: sn.id,
+                    bookId: sn.book_id,
+                    type: sn.type as any,
+                    content: sn.content || "",
+                    selectedText: sn.selected_text || "",
+                    pageNumber: sn.page_number || 1,
+                    chapter: sn.chapter || `Página ${sn.page_number || 1}`,
+                    synced: true,
+                    createdAt: sn.created_at
+                  });
+                }
+              });
+            }
           }
+        } catch (err) {
+          console.warn("Erro ao buscar anotações do Supabase:", err);
         }
-      } catch (err) {
-        console.warn("Erro ao buscar anotações do Supabase:", err);
       }
 
-      // Enriquecer com títulos de livros
+      // 4. Enriquecer com títulos de livros
       const enriched: EnrichedAnnotation[] = rawList.map((ann) => ({
         ...ann,
         bookTitle: bookTitleMap.get(ann.bookId) || "Livro na Biblioteca"
       }));
 
-      // Separar em Anotações e Marcações
+      // 5. Separar em Anotações e Marcações
       const notes = enriched.filter((a) => a.type === "note");
       const marks = enriched.filter((a) => a.type === "highlight" || a.type === "bookmark");
 
       setAllNotes(notes);
       setAllBookmarks(marks);
+
+      // Guardar no cache para o próximo acesso ser a 0ms
+      setCached("profile_user_notes", notes);
+      setCached("profile_user_bookmarks", marks);
     } catch (err) {
-      console.error("Erro ao carregar anotações e marcações:", err);
+      console.error("Erro ao processar anotações e marcações:", err);
     } finally {
       setLoadingData(false);
     }
@@ -188,11 +226,13 @@ export default function Profile() {
 
   // ─── 3. Carregar Apenas os Clubes em que o Utilizador está Inscrito ───
   const fetchUserClubs = async () => {
-    setLoadingData(true);
     if (isGuestMode()) {
       setUserClubs([]);
-      setLoadingData(false);
       return;
+    }
+
+    if (userClubs.length === 0) {
+      setLoadingData(true);
     }
 
     try {
@@ -237,7 +277,9 @@ export default function Profile() {
         });
       }
 
-      setUserClubs(Array.from(clubsMap.values()));
+      const clubsList = Array.from(clubsMap.values());
+      setUserClubs(clubsList);
+      setCached("profile_user_clubs", clubsList);
     } catch (err) {
       console.error("Erro ao carregar clubes do utilizador:", err);
     } finally {

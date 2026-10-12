@@ -9,7 +9,9 @@ import {
   Columns,
   Star,
   BookCheck,
-  RotateCcw
+  RotateCcw,
+  Download,
+  Check
 } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import MarkBookReadModal from "../components/MarkBookReadModal";
@@ -19,16 +21,19 @@ import {
   removeBookFromShelf,
   type BookshelfItem
 } from "../lib/bookshelfService";
+import { getCached } from "../lib/cache";
+import { downloadBookForOffline } from "../lib/offlineStorage";
 
 export default function Library() {
-  const [items, setItems] = useState<BookshelfItem[]>([]);
+  const [items, setItems] = useState<BookshelfItem[]>(() => getCached<BookshelfItem[]>("bookshelf_all_items") || []);
   const [activeTab, setActiveTab] = useState<"all" | "reading" | "finished" | "saved">("all");
   const [viewMode, setViewMode] = useState<"shelf" | "grid">("shelf");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !getCached<BookshelfItem[]>("bookshelf_all_items")?.length);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [showAddReadModal, setShowAddReadModal] = useState(false);
   const navigate = useNavigate();
 
-  // Carregar estante completa
+  // Carregar estante completa (revalidação em segundo plano)
   const fetchShelf = async () => {
     try {
       const data = await loadUserBookshelf();
@@ -43,6 +48,34 @@ export default function Library() {
   useEffect(() => {
     fetchShelf();
   }, []);
+
+  // Descarregar livro para leitura offline com 1 clique
+  const handleDownloadOffline = async (e: React.MouseEvent, item: BookshelfItem) => {
+    e.stopPropagation();
+    const targetId = item.bookId || item.id;
+    if (!targetId || downloadingId) return;
+
+    setDownloadingId(targetId);
+    try {
+      await downloadBookForOffline({
+        id: targetId,
+        title: item.title,
+        author: item.author,
+        coverUrl: item.coverUrl,
+        fileType: item.fileType,
+        totalPages: item.totalPages,
+      });
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === item.id || i.bookId === targetId ? { ...i, isOfflineAvailable: true } : i
+        )
+      );
+    } catch (err: any) {
+      alert(err?.message || "Não foi possível descarregar o livro para leitura offline.");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   // Remover livro da biblioteca
   const handleRemove = async (e: React.MouseEvent, item: BookshelfItem) => {
@@ -316,6 +349,14 @@ export default function Library() {
                         </div>
                       )}
 
+                      {/* Badge de Disponibilidade Offline */}
+                      {book.isOfflineAvailable && (
+                        <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black text-white dark:bg-white dark:text-black text-[8px] font-extrabold flex items-center gap-0.5 shadow-md" title="Disponível para leitura offline">
+                          <Check className="w-2.5 h-2.5 stroke-[3]" />
+                          <span>Offline</span>
+                        </div>
+                      )}
+
                       {book.isPhysical && !isFinished && (
                         <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-zinc-800 text-white text-[9px] font-bold shadow-md flex items-center gap-0.5 border border-zinc-700">
                           <BookOpen className="w-2.5 h-2.5" />
@@ -392,6 +433,12 @@ export default function Library() {
                     <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700">
                       {item.status === "finished" ? "Lido" : item.status === "reading" ? "A Ler" : "Salvo"}
                     </span>
+                    {item.isOfflineAvailable && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-black text-white dark:bg-white dark:text-black flex items-center gap-0.5 shadow-xs" title="Disponível para leitura offline">
+                        <Check className="w-2.5 h-2.5 stroke-[3]" />
+                        <span>Offline</span>
+                      </span>
+                    )}
                     {item.isPhysical && (
                       <span className="text-[9px] text-gray-600 dark:text-gray-400 font-bold">
                         • Físico
@@ -438,6 +485,21 @@ export default function Library() {
 
                 {/* Ações Rápidas */}
                 <div className="flex flex-col gap-1 items-end">
+                  {!item.isOfflineAvailable && item.source === "system" && item.bookId && (
+                    <button
+                      onClick={(e) => handleDownloadOffline(e, item)}
+                      disabled={downloadingId === item.bookId}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      title="Descarregar para Leitura Offline"
+                    >
+                      {downloadingId === item.bookId ? (
+                        <div className="w-4 h-4 border-2 border-black dark:border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                    </button>
+                  )}
+
                   {item.status !== "finished" ? (
                     <button
                       onClick={(e) => handleToggleStatus(e, item, "finished")}

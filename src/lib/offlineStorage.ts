@@ -1,3 +1,5 @@
+import { supabase } from "./supabase";
+
 // Offline storage using IndexedDB for books and reading progress
 // This allows users to download and read books without internet
 
@@ -81,6 +83,165 @@ export async function deleteBookOffline(bookId: string) {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+
+export async function getBookMetadataOffline(bookId: string): Promise<Record<string, any> | null> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction('book_metadata', 'readonly');
+    const request = tx.objectStore('book_metadata').get(bookId);
+
+    return new Promise((resolve) => {
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => resolve(null);
+    });
+  } catch (err) {
+    console.warn("Erro ao ler metadados offline:", err);
+    return null;
+  }
+}
+
+export async function getAllDownloadedBookIds(): Promise<string[]> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction('book_files', 'readonly');
+    const store = tx.objectStore('book_files');
+    const request = store.getAllKeys();
+
+    return new Promise((resolve) => {
+      request.onsuccess = () => resolve((request.result as string[]) || []);
+      request.onerror = () => resolve([]);
+    });
+  } catch (err) {
+    console.warn("Erro ao listar IDs descarregados:", err);
+    return [];
+  }
+}
+
+export async function getAllDownloadedBooksOffline(): Promise<any[]> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(['book_files', 'book_metadata'], 'readonly');
+    const filesStore = tx.objectStore('book_files');
+    const metaStore = tx.objectStore('book_metadata');
+
+    return new Promise((resolve) => {
+      const filesReq = filesStore.getAll();
+      filesReq.onsuccess = () => {
+        const files = filesReq.result || [];
+        if (files.length === 0) {
+          resolve([]);
+          return;
+        }
+
+        const metaReq = metaStore.getAll();
+        metaReq.onsuccess = () => {
+          const metas = metaReq.result || [];
+          const metaMap = new Map(metas.map((m: any) => [m.id, m]));
+
+          const results = files.map((f: any) => {
+            const m = metaMap.get(f.bookId) || {};
+            return {
+              id: f.bookId,
+              bookId: f.bookId,
+              title: m.title || "Livro Guardado",
+              author: m.author || "Autor Desconhecido",
+              coverUrl: m.coverUrl || m.cover_url || null,
+              fileType: m.file_type || m.fileType || "pdf",
+              totalPages: m.totalPages || m.total_pages || 1,
+              downloadedAt: f.downloadedAt,
+              isOfflineAvailable: true,
+              source: "system",
+              ...m
+            };
+          });
+          resolve(results);
+        };
+        metaReq.onerror = () => resolve([]);
+      };
+      filesReq.onerror = () => resolve([]);
+    });
+  } catch (err) {
+    console.warn("Erro ao listar livros offline completos:", err);
+    return [];
+  }
+}
+
+export async function downloadBookForOffline(book: {
+  id: string;
+  title: string;
+  author?: string;
+  coverUrl?: string | null;
+  fileUrl?: string | null;
+  fileType?: string;
+  totalPages?: number;
+}): Promise<boolean> {
+  try {
+    let fileBlob: Blob | null = null;
+    let resolvedFileType = book.fileType || "pdf";
+
+    // 1. Se não tiver fileUrl, tenta buscar no Supabase
+    let fileUrl = book.fileUrl;
+    if (!fileUrl) {
+      const { data } = await supabase
+        .from("books")
+        .select("file_url, file_type, total_pages, cover_url")
+        .eq("id", book.id)
+        .maybeSingle();
+
+      if (data?.file_url) {
+        fileUrl = data.file_url;
+        if (data.file_type) resolvedFileType = data.file_type;
+      }
+    }
+
+    if (!fileUrl) {
+      throw new Error("O livro não tem ficheiro associado para descarregar.");
+    }
+
+    // 2. Fetch direto do ficheiro
+    try {
+      const res = await fetch(fileUrl);
+      if (res.ok) {
+        const b = await res.blob();
+        if (b.type !== "application/json") {
+          fileBlob = b;
+        }
+      }
+    } catch (e) {
+      console.warn("Fetch direto falhou, a tentar Storage do Supabase:", e);
+    }
+
+    // 3. Fallback via Supabase Storage
+    if (!fileBlob && fileUrl) {
+      const urlParts = fileUrl.split("/books/");
+      const storagePath = urlParts.length > 1 ? urlParts[1] : fileUrl.split("/").pop();
+      if (storagePath) {
+        const { data: downloadedBlob } = await supabase.storage.from("books").download(storagePath);
+        if (downloadedBlob && downloadedBlob.type !== "application/json") {
+          fileBlob = downloadedBlob;
+        }
+      }
+    }
+
+    if (!fileBlob) {
+      throw new Error("Não foi possível transferir o ficheiro do livro.");
+    }
+
+    // 4. Salvar no IndexedDB
+    await saveBookOffline(book.id, fileBlob, {
+      title: book.title,
+      author: book.author || "Autor",
+      coverUrl: book.coverUrl,
+      file_type: resolvedFileType,
+      totalPages: book.totalPages || 1,
+    });
+
+    return true;
+  } catch (err) {
+    console.error("Erro ao transferir livro para offline:", err);
+    throw err;
+  }
 }
 
 // ========== READING PROGRESS ==========
