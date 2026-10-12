@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "Inter", system-ui, sans-serif;
   
@@ -19,15 +21,14 @@
 
 @layer base {
   :root {
-    --background: #ffffff;
-    --foreground: #000000;
+    --background: #fbfbfb;
+    --foreground: #09090b;
   }
   
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --background: #000000;
-      --foreground: #ffffff;
-    }
+  :root.dark,
+  .dark {
+    --background: #000000;
+    --foreground: #ffffff;
   }
 
   html {

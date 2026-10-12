@@ -132,16 +132,16 @@ export default function Home() {
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-20 md:pb-12 md:pt-16">
       
       {/* Header Mobile (oculto em desktop pois o BottomNav já tem o Top Navbar) */}
-      <header className="md:hidden px-4 sm:px-6 pt-safe sticky top-0 z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
+      <header className="md:hidden px-4 sm:px-6 pt-safe sticky top-0 z-10 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-900">
         <div className="app-container pt-6 sm:pt-8 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <img src="/favicon.svg" alt="KUWERENGA" className="w-8 h-8 rounded-xl shadow-xs" />
             <div>
               <h1 className="text-xl font-bold leading-none tracking-tight">KUWERENGA+</h1>
-              <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold block mt-0.5">Leia Fácil</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400 font-semibold block mt-0.5">Leia Fácil</span>
             </div>
           </div>
-          <button className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300 touch-target">
+          <button className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 touch-target">
             <Bell className="w-5 h-5" />
           </button>
         </div>
@@ -153,13 +153,13 @@ export default function Home() {
         {/* Barra de Pesquisa */}
         <form onSubmit={handleSearchSubmit} className="px-4 sm:px-6 my-4 sm:my-6 app-container">
           <div className="relative">
-            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Pesquisar livros, autores..."
-              className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl focus:outline-none text-sm font-medium shadow-xs"
+              className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl focus:outline-none text-sm font-medium shadow-xs"
             />
           </div>
         </form>
@@ -170,7 +170,7 @@ export default function Home() {
             <div>
               <h2 className="text-lg font-bold">Continuar a ler</h2>
               {readingList.length > 1 && (
-                <span className="text-[11px] text-gray-400 font-semibold block">
+                <span className="text-[11px] text-gray-500 dark:text-gray-400 font-semibold block">
                   {readingList.length} em andamento • desliza para navegar
                 </span>
               )}
@@ -184,7 +184,7 @@ export default function Home() {
                       sliderRef.current.scrollBy({ left: -320, behavior: "smooth" });
                     }
                   }}
-                  className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-black dark:text-white flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-95 transition-all"
+                  className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-black dark:text-white flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-95 transition-all"
                   aria-label="Deslizar para a esquerda"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -196,7 +196,7 @@ export default function Home() {
                       sliderRef.current.scrollBy({ left: 320, behavior: "smooth" });
                     }
                   }}
-                  className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-black dark:text-white flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-95 transition-all"
+                  className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-black dark:text-white flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-95 transition-all"
                   aria-label="Deslizar para a direita"
                 >
                   <ChevronRight className="w-4 h-4" />
@@ -213,7 +213,7 @@ export default function Home() {
               {readingList.map((reading, index) => (
                 <div
                   key={reading.bookId}
-                  className="min-w-[280px] sm:min-w-[340px] max-w-[380px] flex-shrink-0 snap-center bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-xs border border-gray-100 dark:border-gray-800 flex flex-col justify-between transition-all"
+                  className="min-w-[280px] sm:min-w-[340px] max-w-[380px] flex-shrink-0 snap-center bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 flex flex-col justify-between transition-all"
                 >
                   <div className="flex gap-3.5 mb-3">
                     {/* Capa */}
@@ -243,18 +243,18 @@ export default function Home() {
                             Mais Recente
                           </span>
                         )}
-                        <span className="text-[10px] text-gray-400 truncate">
+                        <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate font-medium">
                           Pág. {reading.currentPage} de {reading.totalPages}
                         </span>
                       </div>
 
                       <h3 className="font-bold text-sm leading-tight mb-0.5 truncate">{reading.title}</h3>
-                      <p className="text-xs text-gray-500 mb-2 truncate">{reading.author}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 truncate">{reading.author}</p>
 
                       <div className="w-full">
-                        <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+                        <div className="flex justify-between text-[10px] text-gray-500 dark:text-gray-400 mb-1 font-medium">
                           <span>Progresso</span>
-                          <span className="font-bold">{Math.round(reading.progress)}%</span>
+                          <span className="font-bold text-black dark:text-white">{Math.round(reading.progress)}%</span>
                         </div>
                         <div className="w-full h-1 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
                           <div

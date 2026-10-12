@@ -138,31 +138,31 @@ export default function Library() {
           </div>
 
           {/* Cartão de Resumo de Leitura (Monocromático) */}
-          <div className="grid grid-cols-3 gap-2 p-3 bg-gray-50 dark:bg-gray-900/60 rounded-2xl border border-gray-100 dark:border-gray-800/80 mb-3 text-center">
+          <div className="grid grid-cols-3 gap-2 p-3 bg-gray-50 dark:bg-gray-900/60 rounded-2xl border border-gray-200 dark:border-gray-800 mb-3 text-center shadow-xs">
             <div 
               onClick={() => setActiveTab("reading")}
-              className={`cursor-pointer transition-opacity ${activeTab === "reading" ? "opacity-100" : "opacity-80 hover:opacity-100"}`}
+              className={`cursor-pointer transition-opacity ${activeTab === "reading" ? "opacity-100 font-bold" : "opacity-80 hover:opacity-100"}`}
             >
               <span className="block text-lg font-black">{readingBooks.length}</span>
-              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">A Ler</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-600 dark:text-gray-400 font-bold">A Ler</span>
             </div>
             <div 
               onClick={() => setActiveTab("finished")}
-              className={`cursor-pointer transition-opacity border-x border-gray-200 dark:border-gray-800 ${activeTab === "finished" ? "opacity-100" : "opacity-80 hover:opacity-100"}`}
+              className={`cursor-pointer transition-opacity border-x border-gray-200 dark:border-gray-800 ${activeTab === "finished" ? "opacity-100 font-bold" : "opacity-80 hover:opacity-100"}`}
             >
               <span className="block text-lg font-black text-black dark:text-white">
                 {finishedBooks.length}
               </span>
-              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">
+              <span className="text-[10px] uppercase tracking-wider text-gray-600 dark:text-gray-400 font-bold">
                 Lidos
               </span>
             </div>
             <div 
               onClick={() => setActiveTab("saved")}
-              className={`cursor-pointer transition-opacity ${activeTab === "saved" ? "opacity-100" : "opacity-80 hover:opacity-100"}`}
+              className={`cursor-pointer transition-opacity ${activeTab === "saved" ? "opacity-100 font-bold" : "opacity-80 hover:opacity-100"}`}
             >
               <span className="block text-lg font-black">{savedBooks.length}</span>
-              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Salvos</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-600 dark:text-gray-400 font-bold">Salvos</span>
             </div>
           </div>
 
@@ -173,7 +173,7 @@ export default function Library() {
               className={`px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
                 activeTab === "all"
                   ? "bg-black dark:bg-white text-white dark:text-black shadow-xs"
-                  : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
+                  : "bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
               }`}
             >
               Todos ({items.length})
@@ -183,7 +183,7 @@ export default function Library() {
               className={`px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
                 activeTab === "reading"
                   ? "bg-black dark:bg-white text-white dark:text-black shadow-xs"
-                  : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
+                  : "bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
               }`}
             >
               A Ler ({readingBooks.length})
@@ -193,7 +193,7 @@ export default function Library() {
               className={`px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
                 activeTab === "finished"
                   ? "bg-black dark:bg-white text-white dark:text-black shadow-xs"
-                  : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
+                  : "bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
               }`}
             >
               Lidos ({finishedBooks.length})
@@ -203,7 +203,7 @@ export default function Library() {
               className={`px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
                 activeTab === "saved"
                   ? "bg-black dark:bg-white text-white dark:text-black shadow-xs"
-                  : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
+                  : "bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
               }`}
             >
               Salvos ({savedBooks.length})
@@ -364,7 +364,7 @@ export default function Library() {
                     navigate(`/reader?bookId=${item.bookId}`);
                   }
                 }}
-                className="p-3.5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-900/40 hover:border-black dark:hover:border-white transition-all flex items-center gap-3.5 cursor-pointer group"
+                className="p-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/40 hover:border-black dark:hover:border-white transition-all flex items-center gap-3.5 cursor-pointer group shadow-xs"
               >
                 {/* Capa */}
                 <div className="w-16 h-24 rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800 shrink-0 flex items-center justify-center border border-gray-200 dark:border-gray-700 relative">
@@ -393,7 +393,7 @@ export default function Library() {
                       {item.status === "finished" ? "Lido" : item.status === "reading" ? "A Ler" : "Salvo"}
                     </span>
                     {item.isPhysical && (
-                      <span className="text-[9px] text-gray-500 font-bold">
+                      <span className="text-[9px] text-gray-600 dark:text-gray-400 font-bold">
                         • Físico
                       </span>
                     )}
@@ -402,7 +402,7 @@ export default function Library() {
                   <h4 className="font-bold text-xs sm:text-sm truncate leading-tight group-hover:underline">
                     {item.title}
                   </h4>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate mb-2">
+                  <p className="text-[11px] text-gray-600 dark:text-gray-400 truncate mb-2">
                     {item.author}
                   </p>
 

@@ -541,18 +541,21 @@ export default function Profile() {
       {/* ══════════════════════════════════════════════════════════ */}
       {/* 📑 MODAL / SHEET: LISTA DE ANOTAÇÕES POR LIVRO E PÁGINA   */}
       {/* ══════════════════════════════════════════════════════════ */}
+      {/* ══════════════════════════════════════════════════════════ */}
+      {/* 📑 MODAL: LISTA DE ANOTAÇÕES POR LIVRO E PÁGINA (CENTRALIZADO) */}
+      {/* ══════════════════════════════════════════════════════════ */}
       {activeView === "notes" && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center sm:p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 w-full sm:max-w-xl max-h-[85vh] rounded-t-3xl sm:rounded-2xl flex flex-col shadow-2xl text-black dark:text-white animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 w-full max-w-xl max-h-[85vh] rounded-2xl flex flex-col shadow-2xl text-black dark:text-white animate-in zoom-in-95 duration-200 overflow-hidden">
             
-            <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+            <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <AlignLeft className="w-5 h-5 text-gray-500" />
                 <h3 className="font-bold text-base">Minhas Anotações ({allNotes.length})</h3>
               </div>
               <button
                 onClick={() => setActiveView("menu")}
-                className="p-1.5 rounded-full text-gray-400 hover:text-black dark:hover:text-white"
+                className="p-1.5 rounded-full text-gray-400 hover:text-black dark:hover:text-white transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -560,9 +563,9 @@ export default function Profile() {
 
             <div className="p-4 sm:p-5 overflow-y-auto space-y-3 no-scrollbar">
               {loadingData ? (
-                <div className="py-12 text-center text-xs text-gray-400">A carregar as tuas anotações...</div>
+                <div className="py-12 text-center text-xs text-gray-500 dark:text-gray-400">A carregar as tuas anotações...</div>
               ) : allNotes.length === 0 ? (
-                <div className="py-12 text-center text-xs text-gray-400 leading-relaxed">
+                <div className="py-12 text-center text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
                   Ainda não tens nenhuma anotação registada.<br />
                   Abre qualquer livro no leitor e cria anotações durante a leitura.
                 </div>
@@ -575,14 +578,14 @@ export default function Profile() {
                         navigate(`/reader?bookId=${note.bookId}`);
                       }
                     }}
-                    className="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-850 hover:border-black dark:hover:border-white transition-all cursor-pointer group"
+                    className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-800/40 hover:border-black dark:hover:border-white transition-all cursor-pointer group shadow-xs"
                   >
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-black dark:bg-white text-white dark:text-black truncate">
                           {note.bookTitle}
                         </span>
-                        <span className="text-xs text-gray-500 font-semibold truncate">
+                        <span className="text-xs text-gray-600 dark:text-gray-400 font-semibold truncate">
                           {note.chapter || `Pág. ${note.pageNumber}`}
                         </span>
                       </div>
@@ -596,7 +599,7 @@ export default function Profile() {
                     </div>
 
                     {note.selectedText && (
-                      <blockquote className="text-xs text-gray-500 dark:text-gray-400 italic border-l-2 border-gray-300 dark:border-gray-700 pl-2.5 my-2">
+                      <blockquote className="text-xs text-gray-600 dark:text-gray-300 italic border-l-2 border-gray-400 dark:border-gray-600 pl-2.5 my-2">
                         "{note.selectedText}"
                       </blockquote>
                     )}
@@ -605,7 +608,7 @@ export default function Profile() {
                       {note.content}
                     </p>
 
-                    <div className="flex justify-between items-center text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-100 dark:border-gray-800">
+                    <div className="flex justify-between items-center text-[10px] text-gray-500 dark:text-gray-400 mt-3 pt-2 border-t border-gray-200 dark:border-gray-800">
                       <span>{new Date(note.createdAt).toLocaleDateString("pt-PT")}</span>
                       <span className="font-bold underline group-hover:text-black dark:group-hover:text-white">
                         Abrir no Leitor &rarr;
@@ -620,20 +623,20 @@ export default function Profile() {
       )}
 
       {/* ══════════════════════════════════════════════════════════ */}
-      {/* 🔖 MODAL / SHEET: LISTA DE MARCAÇÕES E DESTAQUES          */}
+      {/* 🔖 MODAL: LISTA DE MARCAÇÕES E DESTAQUES (CENTRALIZADO)    */}
       {/* ══════════════════════════════════════════════════════════ */}
       {activeView === "bookmarks" && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center sm:p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 w-full sm:max-w-xl max-h-[85vh] rounded-t-3xl sm:rounded-2xl flex flex-col shadow-2xl text-black dark:text-white animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 w-full max-w-xl max-h-[85vh] rounded-2xl flex flex-col shadow-2xl text-black dark:text-white animate-in zoom-in-95 duration-200 overflow-hidden">
             
-            <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+            <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Bookmark className="w-5 h-5 text-gray-500" />
                 <h3 className="font-bold text-base">Minhas Marcações ({allBookmarks.length})</h3>
               </div>
               <button
                 onClick={() => setActiveView("menu")}
-                className="p-1.5 rounded-full text-gray-400 hover:text-black dark:hover:text-white"
+                className="p-1.5 rounded-full text-gray-400 hover:text-black dark:hover:text-white transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -641,9 +644,9 @@ export default function Profile() {
 
             <div className="p-4 sm:p-5 overflow-y-auto space-y-3 no-scrollbar">
               {loadingData ? (
-                <div className="py-12 text-center text-xs text-gray-400">A carregar as tuas marcações...</div>
+                <div className="py-12 text-center text-xs text-gray-500 dark:text-gray-400">A carregar as tuas marcações...</div>
               ) : allBookmarks.length === 0 ? (
-                <div className="py-12 text-center text-xs text-gray-400 leading-relaxed">
+                <div className="py-12 text-center text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
                   Ainda não tens nenhuma página marcada ou texto destacado.<br />
                   No leitor de livros, clica no marcador de página ou destaca textos para consultares aqui.
                 </div>
@@ -656,17 +659,17 @@ export default function Profile() {
                         navigate(`/reader?bookId=${mark.bookId}`);
                       }
                     }}
-                    className="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-850 hover:border-black dark:hover:border-white transition-all cursor-pointer group"
+                    className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-800/40 hover:border-black dark:hover:border-white transition-all cursor-pointer group shadow-xs"
                   >
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-black dark:bg-white text-white dark:text-black truncate">
                           {mark.bookTitle}
                         </span>
-                        <span className="text-xs text-gray-500 font-semibold truncate">
+                        <span className="text-xs text-gray-600 dark:text-gray-400 font-semibold truncate">
                           {mark.chapter || `Pág. ${mark.pageNumber}`}
                         </span>
-                        <span className="text-[9px] uppercase font-bold text-gray-400 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">
+                        <span className="text-[9px] uppercase font-bold text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">
                           {mark.type === "bookmark" ? "Marcador" : "Destaque"}
                         </span>
                       </div>
@@ -683,7 +686,7 @@ export default function Profile() {
                       {mark.content || mark.selectedText}
                     </p>
 
-                    <div className="flex justify-between items-center text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-100 dark:border-gray-800">
+                    <div className="flex justify-between items-center text-[10px] text-gray-500 dark:text-gray-400 mt-3 pt-2 border-t border-gray-200 dark:border-gray-800">
                       <span>{new Date(mark.createdAt).toLocaleDateString("pt-PT")}</span>
                       <span className="font-bold underline group-hover:text-black dark:group-hover:text-white">
                         Ir para a Página &rarr;
@@ -698,20 +701,20 @@ export default function Profile() {
       )}
 
       {/* ══════════════════════════════════════════════════════════ */}
-      {/* 👥 MODAL / SHEET: APENAS OS CLUBES EM QUE ESTOU INSCRITO   */}
+      {/* 👥 MODAL: APENAS OS CLUBES EM QUE ESTOU INSCRITO (CENTRALIZADO) */}
       {/* ══════════════════════════════════════════════════════════ */}
       {activeView === "clubs" && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center sm:p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 w-full sm:max-w-xl max-h-[85vh] rounded-t-3xl sm:rounded-2xl flex flex-col shadow-2xl text-black dark:text-white animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 w-full max-w-xl max-h-[85vh] rounded-2xl flex flex-col shadow-2xl text-black dark:text-white animate-in zoom-in-95 duration-200 overflow-hidden">
             
-            <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+            <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Users className="w-5 h-5 text-gray-500" />
                 <h3 className="font-bold text-base">Clubes em que Participo ({userClubs.length})</h3>
               </div>
               <button
                 onClick={() => setActiveView("menu")}
-                className="p-1.5 rounded-full text-gray-400 hover:text-black dark:hover:text-white"
+                className="p-1.5 rounded-full text-gray-400 hover:text-black dark:hover:text-white transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -719,7 +722,7 @@ export default function Profile() {
 
             <div className="p-4 sm:p-5 overflow-y-auto space-y-3 no-scrollbar">
               {loadingData ? (
-                <div className="py-12 text-center text-xs text-gray-400">A carregar os teus clubes...</div>
+                <div className="py-12 text-center text-xs text-gray-500 dark:text-gray-400">A carregar os teus clubes...</div>
               ) : userClubs.length === 0 ? (
                 <div className="py-10 text-center space-y-4">
                   <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto text-gray-400">
@@ -743,10 +746,10 @@ export default function Profile() {
                   <div
                     key={club.id}
                     onClick={() => navigate(`/club/${club.id}`)}
-                    className="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-850 hover:border-black dark:hover:border-white transition-all cursor-pointer flex items-center justify-between gap-3 group"
+                    className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-800/40 hover:border-black dark:hover:border-white transition-all cursor-pointer flex items-center justify-between gap-3 group shadow-xs"
                   >
                     <div className="flex items-center gap-3.5 min-w-0">
-                      <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-gray-700 overflow-hidden shrink-0 flex items-center justify-center font-bold text-sm">
+                      <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-gray-700 overflow-hidden shrink-0 flex items-center justify-center font-bold text-sm border border-gray-300 dark:border-gray-600">
                         {club.cover_url ? (
                           <img src={club.cover_url} alt={club.name} className="w-full h-full object-cover" />
                         ) : (
@@ -757,16 +760,16 @@ export default function Profile() {
                         <h4 className="font-bold text-xs sm:text-sm truncate group-hover:underline">
                           {club.name}
                         </h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">
+                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1 mt-0.5">
                           {club.description || "Clube comunitário de leitura"}
                         </p>
-                        <span className="text-[10px] text-gray-400 font-semibold block mt-1">
+                        <span className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold block mt-1">
                           {club.member_count || 1} membros inscritos
                         </span>
                       </div>
                     </div>
 
-                    <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-700 shrink-0" />
+                    <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
                   </div>
                 ))
               )}

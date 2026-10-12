@@ -15,6 +15,7 @@ import Community from "./pages/Community";
 import ClubDetails from "./pages/ClubDetails";
 import Settings from "./pages/Settings";
 import Support from "./pages/Support";
+import { initThemeListener } from "./lib/theme";
 
 import { isGuestMode, disableGuestMode } from "./lib/guestMode";
 
@@ -65,6 +66,9 @@ function AuthRouter() {
   };
 
   useEffect(() => {
+    // 0. Inicializa ouvinte de tema
+    const cleanupTheme = initThemeListener();
+
     // 1. Check existing session in localStorage
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
@@ -97,7 +101,10 @@ function AuthRouter() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cleanupTheme();
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
   if (checkingAuth) {

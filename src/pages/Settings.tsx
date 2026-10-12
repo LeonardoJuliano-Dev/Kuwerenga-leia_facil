@@ -17,34 +17,18 @@ import {
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
 import { isGuestMode } from "../lib/guestMode";
+import { applyTheme as setGlobalTheme, getStoredTheme, type AppTheme } from "../lib/theme";
 
 export default function Settings() {
   const [isGuest, setIsGuest] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
   // ─── 1. Tema ───
-  const [currentTheme, setCurrentTheme] = useState<"light" | "dark" | "system">(() => {
-    if (typeof window === "undefined") return "system";
-    return (localStorage.getItem("theme") as any) || "system";
-  });
+  const [currentTheme, setCurrentTheme] = useState<AppTheme>(getStoredTheme);
 
-  const applyTheme = (theme: "light" | "dark" | "system") => {
+  const handleSelectTheme = (theme: AppTheme) => {
     setCurrentTheme(theme);
-    localStorage.setItem("theme", theme);
-
-    const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else if (theme === "light") {
-      root.classList.remove("dark");
-    } else {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      if (prefersDark) {
-        root.classList.add("dark");
-      } else {
-        root.classList.remove("dark");
-      }
-    }
+    setGlobalTheme(theme);
   };
 
   // ─── 2. Eliminação de Conta (Período de 7 dias) ───
@@ -203,40 +187,40 @@ export default function Settings() {
           <div className="grid grid-cols-3 gap-2.5">
             <button
               type="button"
-              onClick={() => applyTheme("light")}
-              className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${
+              onClick={() => handleSelectTheme("light")}
+              className={`p-3.5 rounded-xl border flex flex-col items-center gap-2 transition-all ${
                 currentTheme === "light"
-                  ? "border-black dark:border-white bg-gray-100 dark:bg-gray-800 font-bold shadow-xs"
-                  : "border-gray-200 dark:border-gray-800 text-gray-500 hover:text-black dark:hover:text-white"
+                  ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black font-bold shadow-xs scale-[1.02]"
+                  : "border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40 text-gray-600 dark:text-gray-400 hover:border-black dark:hover:border-white"
               }`}
             >
-              <Sun className="w-5 h-5 stroke-[1.8]" />
+              <Sun className="w-5 h-5 stroke-[2]" />
               <span className="text-xs">Claro</span>
             </button>
 
             <button
               type="button"
-              onClick={() => applyTheme("dark")}
-              className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${
+              onClick={() => handleSelectTheme("dark")}
+              className={`p-3.5 rounded-xl border flex flex-col items-center gap-2 transition-all ${
                 currentTheme === "dark"
-                  ? "border-black dark:border-white bg-gray-100 dark:bg-gray-800 font-bold shadow-xs"
-                  : "border-gray-200 dark:border-gray-800 text-gray-500 hover:text-black dark:hover:text-white"
+                  ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black font-bold shadow-xs scale-[1.02]"
+                  : "border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40 text-gray-600 dark:text-gray-400 hover:border-black dark:hover:border-white"
               }`}
             >
-              <Moon className="w-5 h-5 stroke-[1.8]" />
+              <Moon className="w-5 h-5 stroke-[2]" />
               <span className="text-xs">Escuro</span>
             </button>
 
             <button
               type="button"
-              onClick={() => applyTheme("system")}
-              className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${
+              onClick={() => handleSelectTheme("system")}
+              className={`p-3.5 rounded-xl border flex flex-col items-center gap-2 transition-all ${
                 currentTheme === "system"
-                  ? "border-black dark:border-white bg-gray-100 dark:bg-gray-800 font-bold shadow-xs"
-                  : "border-gray-200 dark:border-gray-800 text-gray-500 hover:text-black dark:hover:text-white"
+                  ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black font-bold shadow-xs scale-[1.02]"
+                  : "border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40 text-gray-600 dark:text-gray-400 hover:border-black dark:hover:border-white"
               }`}
             >
-              <Laptop className="w-5 h-5 stroke-[1.8]" />
+              <Laptop className="w-5 h-5 stroke-[2]" />
               <span className="text-xs">Sistema</span>
             </button>
           </div>
