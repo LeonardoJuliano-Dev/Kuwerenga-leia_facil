@@ -3,6 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { ArrowLeft, UploadCloud, Book, Image, CheckCircle, AlertCircle, FileText } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { saveBookOffline } from "../lib/offlineStorage";
+import { isGuestMode } from "../lib/guestMode";
+import GuestRestrictionModal from "../components/GuestRestrictionModal";
 
 interface Category {
   id: string;
@@ -18,6 +20,7 @@ export default function DonateBook() {
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
+  const [showGuestModal, setShowGuestModal] = useState(false);
 
   // Ficheiros
   const [bookFile, setBookFile] = useState<File | null>(null);
@@ -30,8 +33,13 @@ export default function DonateBook() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  // Carregar categorias existentes
+  // Carregar categorias existentes e verificar modo convidado
   useEffect(() => {
+    if (isGuestMode()) {
+      setShowGuestModal(true);
+      return;
+    }
+
     async function fetchCategories() {
       const { data } = await supabase.from("categories").select("id, name").order("name");
       if (data && data.length > 0) {
@@ -388,6 +396,16 @@ export default function DonateBook() {
           </form>
         )}
       </main>
+
+      {/* Modal de Restrição para Convidados */}
+      <GuestRestrictionModal
+        isOpen={showGuestModal}
+        feature="donate"
+        onClose={() => {
+          setShowGuestModal(false);
+          navigate(-1);
+        }}
+      />
     </div>
   );
 }

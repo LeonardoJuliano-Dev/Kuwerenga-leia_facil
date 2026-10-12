@@ -12,9 +12,12 @@ import {
   Plus,
   X,
   FileText,
-  UserPlus
+  UserPlus,
+  Lock
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { isGuestMode } from "../lib/guestMode";
+import GuestRestrictionModal from "../components/GuestRestrictionModal";
 
 interface Club {
   id: string;
@@ -57,6 +60,7 @@ export default function ClubDetails() {
   const [currentUserName, setCurrentUserName] = useState("Eu");
   const [isMember, setIsMember] = useState(true);
   const [joining, setJoining] = useState(false);
+  const [showGuestModal, setShowGuestModal] = useState(false);
 
   // Input de Mensagem
   const [inputText, setInputText] = useState("");
@@ -338,6 +342,10 @@ export default function ClubDetails() {
 
   // 2. Gravador de Áudio com Limite Estrito de 30 Segundos
   const startRecording = async () => {
+    if (isGuestMode()) {
+      setShowGuestModal(true);
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -464,6 +472,10 @@ export default function ClubDetails() {
   // 4. Enviar Mensagem de Texto ou Imagem
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isGuestMode()) {
+      setShowGuestModal(true);
+      return;
+    }
     if ((!inputText.trim() && !selectedImage) || !currentUserId) return;
 
     setSending(true);
@@ -851,6 +863,20 @@ export default function ClubDetails() {
                   </button>
                 </div>
               </div>
+            ) : isGuestMode() ? (
+              <div className="flex items-center justify-between gap-3 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-3">
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <Lock className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span>Estás a ver em Modo Convidado.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowGuestModal(true)}
+                  className="px-3.5 py-2 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-bold active:scale-95 transition-transform shrink-0"
+                >
+                  Entrar para Conversar
+                </button>
+              </div>
             ) : (
               <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                 {/* Botão de Anexar Foto */}
@@ -917,7 +943,13 @@ export default function ClubDetails() {
                 Cria o primeiro debate sobre um capítulo específico ou ideia central da leitura!
               </p>
               <button
-                onClick={() => setShowForumModal(true)}
+                onClick={() => {
+                  if (isGuestMode()) {
+                    setShowGuestModal(true);
+                  } else {
+                    setShowForumModal(true);
+                  }
+                }}
                 className="px-5 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold"
               >
                 Criar Novo Tópico
@@ -1023,6 +1055,13 @@ export default function ClubDetails() {
           </div>
         </div>
       )}
+
+      {/* Modal de Restrições para Convidados */}
+      <GuestRestrictionModal
+        isOpen={showGuestModal}
+        feature="community"
+        onClose={() => setShowGuestModal(false)}
+      />
 
     </div>
   );

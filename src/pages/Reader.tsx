@@ -38,6 +38,8 @@ import {
 } from "../lib/offlineStorage";
 import { supabase } from "../lib/supabase";
 import { getTermDefinition, type DefinitionResult } from "../lib/dictionaryService";
+import { isGuestMode } from "../lib/guestMode";
+import GuestRestrictionModal from "../components/GuestRestrictionModal";
 
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -142,6 +144,15 @@ export default function Reader() {
   // Estados para Saltar de Página
   const [showJumpPopover, setShowJumpPopover] = useState(false);
   const [jumpInputValue, setJumpInputValue] = useState("");
+
+  // Estado para Modal de Restrição do Modo Convidado
+  const [guestRestrictionModal, setGuestRestrictionModal] = useState<{
+    isOpen: boolean;
+    feature: "notes" | "highlights" | "bookmarks" | "community" | "donate" | "general";
+  }>({
+    isOpen: false,
+    feature: "general"
+  });
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const textLayerRef = useRef<HTMLDivElement | null>(null);
@@ -954,6 +965,11 @@ export default function Reader() {
   );
 
   const toggleBookmark = async () => {
+    if (isGuestMode()) {
+      setGuestRestrictionModal({ isOpen: true, feature: "bookmarks" });
+      return;
+    }
+
     if (isCurrentPageBookmarked) {
       const updated = annotations.filter(
         (a) => !(a.type === "bookmark" && a.pageNumber === currentPage)
@@ -984,6 +1000,12 @@ export default function Reader() {
 
   const handleSaveNote = async () => {
     if (!noteContent.trim()) return;
+
+    if (isGuestMode()) {
+      setShowAddNoteModal(false);
+      setGuestRestrictionModal({ isOpen: true, feature: "notes" });
+      return;
+    }
 
     const newNote: OfflineAnnotation = {
       id: `note-${Date.now()}`,
@@ -1157,12 +1179,23 @@ export default function Reader() {
 
   const handleCreateNoteFromSelection = () => {
     setShowFloatingMenu(false);
+    if (isGuestMode()) {
+      setGuestRestrictionModal({ isOpen: true, feature: "notes" });
+      return;
+    }
     setNoteContent(`"${selectedText}"\n\n`);
     setShowAddNoteModal(true);
   };
 
   const handleHighlightSelection = async (color: "yellow" | "green" | "blue" | "pink") => {
     if (!selectedText.trim()) return;
+
+    if (isGuestMode()) {
+      setShowFloatingMenu(false);
+      setShowColorPicker(false);
+      setGuestRestrictionModal({ isOpen: true, feature: "highlights" });
+      return;
+    }
 
     if (fileType === "epub" && epubRenditionRef.current && selectedCfiRange) {
       try {
@@ -1223,6 +1256,12 @@ export default function Reader() {
 
   const handleSaveDefinitionAsNote = async () => {
     if (!dictionaryResult) return;
+
+    if (isGuestMode()) {
+      setShowDictionaryModal(false);
+      setGuestRestrictionModal({ isOpen: true, feature: "notes" });
+      return;
+    }
 
     const mainDef = dictionaryResult.definitions[0] || "";
     const noteText = `[Dicionário] ${dictionaryResult.term}${
@@ -1337,7 +1376,13 @@ export default function Reader() {
 
           {/* Botão de Anotações (visível a partir de ecrãs de ~380px) */}
           <button
-            onClick={() => setShowAddNoteModal(true)}
+            onClick={() => {
+              if (isGuestMode()) {
+                setGuestRestrictionModal({ isOpen: true, feature: "notes" });
+              } else {
+                setShowAddNoteModal(true);
+              }
+            }}
             className={`hidden min-[400px]:flex p-1.5 sm:p-2 rounded-full transition-colors ${
               themeMode === "sepia"
                 ? "hover:bg-[#433422]/10 text-[#7a6449] hover:text-[#433422]"
@@ -2161,6 +2206,13 @@ export default function Reader() {
           </div>
         </div>
       )}
+
+      {/* Modal de Restrições para Visitantes / Convidado */}
+      <GuestRestrictionModal
+        isOpen={guestRestrictionModal.isOpen}
+        feature={guestRestrictionModal.feature}
+        onClose={() => setGuestRestrictionModal((prev) => ({ ...prev, isOpen: false }))}
+      />
 
     </div>
   );

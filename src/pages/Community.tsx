@@ -12,6 +12,8 @@ import {
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
 import { getCached, setCached } from "../lib/cache";
+import { isGuestMode } from "../lib/guestMode";
+import GuestRestrictionModal from "../components/GuestRestrictionModal";
 
 interface Club {
   id: string;
@@ -57,6 +59,7 @@ export default function Community() {
   const [submittingDiscussion, setSubmittingDiscussion] = useState(false);
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [showGuestRestriction, setShowGuestRestriction] = useState(false);
 
   // 1. Carregar Clubes e Discussões Reais do Supabase
   useEffect(() => {
@@ -133,6 +136,10 @@ export default function Community() {
 
   // Entrar / Sair de um Clube
   const handleToggleJoinClub = async (clubId: string, isMember: boolean) => {
+    if (isGuestMode()) {
+      setShowGuestRestriction(true);
+      return;
+    }
     if (!currentUserId) return;
 
     try {
@@ -296,7 +303,13 @@ export default function Community() {
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">Comunidade</h1>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => {
+              if (isGuestMode()) {
+                setShowGuestRestriction(true);
+              } else {
+                setShowCreateModal(true);
+              }
+            }}
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-semibold active:scale-95 transition-transform shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -384,7 +397,13 @@ export default function Community() {
                   Sê o pioneiro e cria o primeiro clube de leitura para debater obras com outros leitores!
                 </p>
                 <button
-                  onClick={() => setShowCreateModal(true)}
+                  onClick={() => {
+                    if (isGuestMode()) {
+                      setShowGuestRestriction(true);
+                    } else {
+                      setShowCreateModal(true);
+                    }
+                  }}
                   className="px-5 py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold"
                 >
                   Criar o Primeiro Clube
@@ -734,6 +753,13 @@ export default function Community() {
           </div>
         </div>
       )}
+
+      {/* Modal de Restrição para Convidados */}
+      <GuestRestrictionModal
+        isOpen={showGuestRestriction}
+        feature="community"
+        onClose={() => setShowGuestRestriction(false)}
+      />
 
       {/* Bottom Navigation */}
       <BottomNav />
