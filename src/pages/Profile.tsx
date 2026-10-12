@@ -35,6 +35,7 @@ import { loadUserBookshelf, type BookshelfItem } from "../lib/bookshelfService";
 import { getCached, setCached } from "../lib/cache";
 import {
   fetchUserProfile,
+  getCachedUserProfile,
   updateUserProfile,
   formatReadingTime,
   type UserProfileData,
@@ -61,13 +62,19 @@ export default function Profile() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Utilizador logado
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("last_active_user_id") || null;
+    }
+    return null;
+  });
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
-  const [isGuest, setIsGuest] = useState(false);
+  const [isGuest, setIsGuest] = useState(() => isGuestMode());
 
-  // Estado do Perfil Carregado
-  const [profile, setProfile] = useState<UserProfileData | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Estado do Perfil Carregado (Instantâneo a partir do Cache 0ms)
+  const initialProfile = getCachedUserProfile(routeUserId || (typeof window !== "undefined" ? localStorage.getItem("last_active_user_id") || "current" : "current"));
+  const [profile, setProfile] = useState<UserProfileData | null>(initialProfile);
+  const [loading, setLoading] = useState(!initialProfile && !isGuestMode());
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Navegação por abas superiores (estilo captura enviada)
@@ -79,9 +86,9 @@ export default function Profile() {
 
   // Modal: Editar Perfil
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
-  const [editFullName, setEditFullName] = useState("");
-  const [editUsername, setEditUsername] = useState("");
-  const [editBio, setEditBio] = useState("");
+  const [editFullName, setEditFullName] = useState(initialProfile?.full_name || "");
+  const [editUsername, setEditUsername] = useState(initialProfile?.username || "");
+  const [editBio, setEditBio] = useState(initialProfile?.bio || "");
   const [savingProfile, setSavingProfile] = useState(false);
 
   // Modal: Selecionar Livro Favorito
@@ -101,7 +108,7 @@ export default function Profile() {
   const isDarkMode = currentTheme === "dark" || (currentTheme === "system" && typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   // Eliminação de Conta Agendada (7 dias)
-  const [scheduledDeleteAt, setScheduledDeleteAt] = useState<string | null>(null);
+  const [scheduledDeleteAt, setScheduledDeleteAt] = useState<string | null>(initialProfile?.scheduled_delete_at || null);
   const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false);
   const [processingDelete, setProcessingDelete] = useState(false);
 
@@ -116,66 +123,73 @@ export default function Profile() {
   // Determinar se estamos a visualizar o próprio perfil ou o perfil de outro leitor
   const isOwnProfile = !routeUserId || (currentUserId && routeUserId === currentUserId);
 
-  // ─── 1. Carregar Sessão e Dados Iniciais ───
+  // ─── 1. Carregar Sessão e Dados Iniciais (com Stale-While-Revalidate) ───
   useEffect(() => {
     let isMounted = true;
 
     async function init() {
-      setLoading(true);
+      // Se não houver nada em cache, mostra o indicador
+      if (!profile) {
+        setLoading(true);
+      }
+
+      let myId: string | null = null;
+      let targetIdToFetch = routeUserId || null;
 
       if (isGuestMode()) {
         setIsGuest(true);
         setCurrentUserId("guest");
         setCurrentUserEmail("Modo Convidado");
+        if (!routeUserId) targetIdToFetch = "guest";
       } else {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
+          myId = user.id;
           if (isMounted) {
             setCurrentUserId(user.id);
             setCurrentUserEmail(user.email || user.phone || "");
+            localStorage.setItem("last_active_user_id", user.id);
           }
+          if (!targetIdToFetch) targetIdToFetch = user.id;
         }
       }
 
-      // ID a carregar
-      const idToFetch = routeUserId || (await supabase.auth.getUser()).data.user?.id || (isGuestMode() ? "guest" : null);
+      if (targetIdToFetch === "guest") {
+        const guestAvatar = localStorage.getItem("guest_avatar_url");
+        const guestProfile: UserProfileData = {
+          id: "guest",
+          full_name: "Leitor Convidado",
+          username: "@convidado",
+          bio: "Leitor em sessão temporária no dispositivo.",
+          avatar_url: guestAvatar,
+          views_count: 1,
+          clubs_count: 0,
+          books_count: 0,
+          reading_time_minutes: 0,
+          sessions_count: 0,
+          favorite_books: [],
+        };
+        if (isMounted) {
+          setProfile(guestProfile);
+          setLoading(false);
+        }
+        return;
+      }
 
-      if (idToFetch) {
-        if (idToFetch === "guest") {
-          const guestAvatar = localStorage.getItem("guest_avatar_url");
-          const guestProfile: UserProfileData = {
-            id: "guest",
-            full_name: "Leitor Convidado",
-            username: "@convidado",
-            bio: "Leitor em sessão temporária no dispositivo.",
-            avatar_url: guestAvatar,
-            views_count: 1,
-            clubs_count: 0,
-            books_count: 0,
-            reading_time_minutes: 0,
-            sessions_count: 0,
-            favorite_books: [],
-          };
+      if (targetIdToFetch) {
+        try {
+          const data = await fetchUserProfile(targetIdToFetch, myId);
           if (isMounted) {
-            setProfile(guestProfile);
-            setLoading(false);
+            setProfile(data);
+            setEditFullName(data.full_name);
+            setEditUsername(data.username);
+            setEditBio(data.bio);
+            setScheduledDeleteAt(data.scheduled_delete_at || localStorage.getItem(`scheduled_delete_${data.id}`) || null);
           }
-        } else {
-          try {
-            const myId = (await supabase.auth.getUser()).data.user?.id || null;
-            const data = await fetchUserProfile(idToFetch, myId);
-            if (isMounted) {
-              setProfile(data);
-              setEditFullName(data.full_name);
-              setEditUsername(data.username);
-              setEditBio(data.bio);
-              setScheduledDeleteAt(data.scheduled_delete_at || localStorage.getItem(`scheduled_delete_${data.id}`) || null);
-            }
-          } catch (err) {
-            console.error("Erro ao carregar perfil:", err);
-          } finally {
-            if (isMounted) setLoading(false);
-          }
+        } catch (err) {
+          console.warn("Aviso ao sincronizar perfil em segundo plano:", err);
+        } finally {
+          if (isMounted) setLoading(false);
         }
       } else {
         if (isMounted) setLoading(false);

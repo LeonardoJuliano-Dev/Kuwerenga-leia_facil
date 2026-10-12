@@ -288,109 +288,147 @@ export default function Library() {
           </div>
         ) : viewMode === "shelf" ? (
           /* ══════════════════════════════════════════════════════════ */
-          /* VISTA 1: PRATELEIRA DE BIBLIOTECA RESPONSIVA              */
+          /* VISTA 1: ESTANTE DE BIBLIOTECA REALISTA COM PRATELEIRAS   */
           /* ══════════════════════════════════════════════════════════ */
-          <div className="py-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 sm:gap-x-6 gap-y-10 sm:gap-y-12 items-end">
-              {displayedItems.map((book) => {
-                const isFinished = book.status === "finished" || (book.progress || 0) >= 100;
-                const isReading = (book.status === "reading" || book.status === "to_read") && !isFinished;
+          <div className="py-2 max-w-4xl mx-auto space-y-10 sm:space-y-12">
+            {(() => {
+              // Divide os livros em fileiras de prateleiras (4 livros por prateleira)
+              const BOOKS_PER_SHELF = 4;
+              const tiers: BookshelfItem[][] = [];
+              for (let i = 0; i < displayedItems.length; i += BOOKS_PER_SHELF) {
+                tiers.push(displayedItems.slice(i, i + BOOKS_PER_SHELF));
+              }
 
-                return (
-                  <div
-                    key={book.id}
-                    onClick={() => {
-                      if (book.source === "system" && book.bookId) {
-                        navigate(`/reader?bookId=${book.bookId}`);
-                      }
-                    }}
-                    className="flex flex-col items-center group cursor-pointer w-full"
-                  >
-                    {/* Efeito 3D do Livro com Lombada e Sombra */}
-                    <div className="relative w-full max-w-[130px] sm:max-w-[150px] aspect-[2/3] rounded-r-lg rounded-l-xs overflow-hidden shadow-lg border-l-[5px] border-l-black/30 dark:border-l-white/20 transition-all duration-300 group-hover:-translate-y-2 group-hover:shadow-xl bg-zinc-900">
-                      
-                      {book.coverUrl ? (
-                        <img
-                          src={book.coverUrl}
-                          alt={book.title}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        /* Capa Estilizada Minimalista Monocromática */
-                        <div className="w-full h-full p-2.5 flex flex-col justify-between bg-black text-white text-left">
-                          <span className="text-[8px] uppercase tracking-widest text-zinc-400 font-bold">
-                            {book.isPhysical ? "Físico" : book.fileType || "Kuwerenga"}
-                          </span>
-                          <div>
-                            <h4 className="font-serif text-[11px] font-bold line-clamp-3 leading-tight text-white/95">
-                              {book.title}
-                            </h4>
-                            <span className="text-[8px] text-zinc-400 truncate block mt-1">
-                              {book.author}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-[7px] text-zinc-400">
-                            <span>{book.totalPages ? `${book.totalPages}p` : ""}</span>
-                            {book.rating && (
-                              <span className="text-white font-bold flex items-center gap-0.5">
-                                <Star className="w-2.5 h-2.5 fill-white text-white" />
-                                {book.rating}
-                              </span>
+              return tiers.map((tierBooks, tierIdx) => (
+                <div key={tierIdx} className="relative">
+                  
+                  {/* Fileira de Livros Apoiados na Prateleira */}
+                  <div className="grid grid-cols-4 gap-2.5 sm:gap-5 px-1 sm:px-3 items-end">
+                    {tierBooks.map((book) => {
+                      const isFinished = book.status === "finished" || (book.progress || 0) >= 100;
+                      const isReading = (book.status === "reading" || book.status === "to_read") && !isFinished;
+
+                      return (
+                        <div
+                          key={book.id}
+                          onClick={() => {
+                            if (book.source === "system" && book.bookId) {
+                              navigate(`/reader?bookId=${book.bookId}`);
+                            }
+                          }}
+                          className="flex flex-col items-center group cursor-pointer w-full"
+                        >
+                          {/* Capa do Livro em Formato Físico com Lombada 3D */}
+                          <div className="relative w-full aspect-[2/3] rounded-r-lg rounded-l-xs overflow-hidden shadow-md border-l-[4px] border-l-black/30 dark:border-l-white/20 transition-all duration-300 group-hover:-translate-y-2 group-hover:shadow-2xl bg-zinc-900">
+                            
+                            {book.coverUrl ? (
+                              <img
+                                src={book.coverUrl}
+                                alt={book.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              />
+                            ) : (
+                              /* Capa Tipográfica Minimalista Monocromática */
+                              <div className="w-full h-full p-2 sm:p-2.5 flex flex-col justify-between bg-black text-white text-left">
+                                <span className="text-[7px] sm:text-[8px] uppercase tracking-widest text-zinc-400 font-bold">
+                                  {book.isPhysical ? "Físico" : book.fileType || "Kuwerenga"}
+                                </span>
+                                <div>
+                                  <h4 className="font-serif text-[10px] sm:text-[11px] font-bold line-clamp-3 leading-tight text-white/95">
+                                    {book.title}
+                                  </h4>
+                                  <span className="text-[7px] sm:text-[8px] text-zinc-400 truncate block mt-1">
+                                    {book.author}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between text-[7px] text-zinc-400">
+                                  <span>{book.totalPages ? `${book.totalPages}p` : ""}</span>
+                                  {book.rating && (
+                                    <span className="text-white font-bold flex items-center gap-0.5">
+                                      <Star className="w-2.5 h-2.5 fill-white text-white" />
+                                      {book.rating}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Badge: Lido */}
+                            {isFinished && (
+                              <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black text-white dark:bg-white dark:text-black text-[8px] sm:text-[9px] font-extrabold flex items-center gap-0.5 shadow-md">
+                                <CheckCircle2 className="w-2.5 h-2.5" />
+                                <span>Lido</span>
+                              </div>
+                            )}
+
+                            {/* Badge: Disponível Offline */}
+                            {book.isOfflineAvailable && (
+                              <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black text-white dark:bg-white dark:text-black text-[7px] sm:text-[8px] font-extrabold flex items-center gap-0.5 shadow-md" title="Disponível para leitura offline">
+                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                <span className="hidden sm:inline">Offline</span>
+                              </div>
+                            )}
+
+                            {/* Badge: Livro Físico */}
+                            {book.isPhysical && !isFinished && (
+                              <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-zinc-800 text-white text-[8px] sm:text-[9px] font-bold shadow-md flex items-center gap-0.5 border border-zinc-700">
+                                <BookOpen className="w-2.5 h-2.5" />
+                                <span className="hidden sm:inline">Físico</span>
+                              </div>
+                            )}
+
+                            {/* Barra de Progresso no Fundo da Capa para Livros a Ler */}
+                            {isReading && (
+                              <div className="absolute bottom-0 inset-x-0 bg-black/85 backdrop-blur-xs py-0.5 sm:py-1 px-1.5 text-[8px] sm:text-[9px] font-bold text-white flex items-center justify-between">
+                                <span>Progresso</span>
+                                <span>{Math.round(book.progress)}%</span>
+                              </div>
                             )}
                           </div>
+
+                          {/* Metadados Abaixo do Livro (Título e Autor) */}
+                          <div className="mt-2 w-full text-center px-0.5">
+                            <h4 className="text-[10px] sm:text-xs font-bold truncate leading-tight group-hover:underline">
+                              {book.title}
+                            </h4>
+                            <p className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                              {book.author}
+                            </p>
+                          </div>
                         </div>
-                      )}
+                      );
+                    })}
 
-                      {/* Selo / Badge no Topo do Livro */}
-                      {isFinished && (
-                        <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black text-white dark:bg-white dark:text-black text-[9px] font-extrabold flex items-center gap-0.5 shadow-md">
-                          <CheckCircle2 className="w-2.5 h-2.5" />
-                          <span>Lido</span>
-                        </div>
-                      )}
-
-                      {/* Badge de Disponibilidade Offline */}
-                      {book.isOfflineAvailable && (
-                        <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black text-white dark:bg-white dark:text-black text-[8px] font-extrabold flex items-center gap-0.5 shadow-md" title="Disponível para leitura offline">
-                          <Check className="w-2.5 h-2.5 stroke-[3]" />
-                          <span>Offline</span>
-                        </div>
-                      )}
-
-                      {book.isPhysical && !isFinished && (
-                        <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-zinc-800 text-white text-[9px] font-bold shadow-md flex items-center gap-0.5 border border-zinc-700">
-                          <BookOpen className="w-2.5 h-2.5" />
-                          <span>Físico</span>
-                        </div>
-                      )}
-
-                      {/* Barra de Progresso no Fundo da Capa para Livros a Ler */}
-                      {isReading && (
-                        <div className="absolute bottom-0 inset-x-0 bg-black/80 backdrop-blur-xs py-1 px-1.5 text-[9px] font-bold text-white flex items-center justify-between">
-                          <span>Progresso</span>
-                          <span>{Math.round(book.progress)}%</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* ─── Tábua da Prateleira Sob Cada Livro (Alinhamento Perfeito e Responsivo) ─── */}
-                    <div className="bookshelf-shelf w-full h-3.5 sm:h-4 mt-2.5 rounded-xs relative z-0">
-                      <div className="absolute -top-0.5 inset-x-0 h-0.5 bg-black/10 dark:bg-white/10" />
-                    </div>
-
-                    {/* Metadados Abaixo da Prateleira */}
-                    <div className="mt-2 w-full text-center px-1">
-                      <h4 className="text-[11px] sm:text-xs font-bold truncate leading-tight group-hover:underline">
-                        {book.title}
-                      </h4>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
-                        {book.author}
-                      </p>
-                    </div>
+                    {/* Espaço restante no último degrau: Slot para adicionar mais livros à estante */}
+                    {tierIdx === tiers.length - 1 && tierBooks.length < BOOKS_PER_SHELF && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAddReadModal(true)}
+                        className="w-full aspect-[2/3] rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 bg-[#f5f0eb]/40 dark:bg-gray-900/30 flex flex-col items-center justify-center gap-1 hover:border-black dark:hover:border-white transition-all cursor-pointer group active:scale-95"
+                        title="Registar livro lido ou físico na estante"
+                      >
+                        <Plus className="w-5 h-5 text-gray-400 group-hover:text-black dark:group-hover:text-white" />
+                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400 group-hover:text-black dark:group-hover:text-white">
+                          Adicionar
+                        </span>
+                      </button>
+                    )}
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* ─── A TÁBUA CONTÍNUA DE MADEIRA DA PRATELEIRA (Idêntica ao estilo do perfil) ─── */}
+                  <div className="mt-1 px-0.5 sm:px-1">
+                    <div className="h-3 sm:h-3.5 bg-[#422a1d] dark:bg-[#2c1d14] rounded-sm shadow-md relative">
+                      {/* Suportes triangulares sob a prateleira distribuídos harmonicamente */}
+                      <div className="absolute -bottom-2 left-4 sm:left-8 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-[#422a1d] dark:border-t-[#2c1d14]" />
+                      <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-[#422a1d] dark:border-t-[#2c1d14]" />
+                      <div className="absolute -bottom-2 right-4 sm:right-8 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-[#422a1d] dark:border-t-[#2c1d14]" />
+                    </div>
+                    {/* Sombra suave projetada na parede abaixo da prateleira */}
+                    <div className="h-2.5 bg-gradient-to-b from-black/15 dark:from-white/5 to-transparent blur-xs -mt-0.5" />
+                  </div>
+                </div>
+              ));
+            })()}
           </div>
         ) : (
           /* ══════════════════════════════════════════════════════════ */

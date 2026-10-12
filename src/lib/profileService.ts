@@ -47,7 +47,55 @@ export function formatReadingTime(totalMinutes: number): string {
   return mins > 0 ? `${hours}h ${mins}min` : `${hours}h`;
 }
 
-/** Carrega os dados do perfil de qualquer utilizador (próprio ou visitante) */
+/** Recupera imediatamente os dados do perfil em cache sem atraso de rede (0ms) */
+export function getCachedUserProfile(targetUserId: string): UserProfileData | null {
+  const cacheKey = `profile_detail_${targetUserId}`;
+  const directCached = getCached<UserProfileData>(cacheKey);
+  if (directCached) return directCached;
+
+  // Fallback: verificar cache de dados do utilizador
+  const oldCached = getCached<any>("profile_user_data");
+  if (oldCached && (!targetUserId || targetUserId === "current" || targetUserId === oldCached.id)) {
+    let favBooks: FavoriteBookItem[] = [];
+    try {
+      const saved = localStorage.getItem(`profile_fav_books_${targetUserId}`);
+      if (saved) favBooks = JSON.parse(saved);
+    } catch {}
+
+    const views = parseInt(localStorage.getItem(`profile_views_${targetUserId}`) || "0", 10);
+    const clubs = getCached<any[]>("profile_user_clubs")?.length || 0;
+    const books = getCached<any[]>("bookshelf_all_items")?.length || 0;
+    const timeMins = parseInt(localStorage.getItem(`reading_time_mins_${targetUserId}`) || "0", 10);
+    const sessions = parseInt(localStorage.getItem(`reading_sessions_${targetUserId}`) || "0", 10) || Math.max(books, Math.ceil(timeMins / 25));
+
+    return {
+      id: targetUserId,
+      full_name: oldCached.fullName || "Leitor",
+      username: generateDefaultUsername(oldCached.fullName || "Leitor", oldCached.email),
+      bio: "Apaixonado pela descoberta e pelo poder dos livros.",
+      avatar_url: oldCached.avatarUrl || null,
+      email: oldCached.email,
+      views_count: views,
+      clubs_count: clubs,
+      books_count: books,
+      reading_time_minutes: timeMins,
+      sessions_count: sessions,
+      favorite_books: favBooks,
+    };
+  }
+
+  return null;
+}
+
+/** Promessa com timeout para evitar esperas infinitas na rede */
+function withTimeout<T>(query: PromiseLike<T>, ms: number, defaultValue: T): Promise<T> {
+  return Promise.race([
+    Promise.resolve(query).catch(() => defaultValue),
+    new Promise<T>((resolve) => setTimeout(() => resolve(defaultValue), ms)),
+  ]);
+}
+
+/** Carrega os dados do perfil em segundo plano com chamadas paralelas (ultra rápido) */
 export async function fetchUserProfile(
   targetUserId: string,
   currentUserId?: string | null
@@ -56,37 +104,47 @@ export async function fetchUserProfile(
   const cached = getCached<UserProfileData>(cacheKey);
 
   let profileData: any = null;
-  let clubsCount = 0;
-  let booksCount = 0;
-  let readingTime = 0;
-  let sessionsCount = 0;
+  let clubsCount = cached?.clubs_count || 0;
+  let booksCount = cached?.books_count || 0;
+  let readingTime = cached?.reading_time_minutes || 0;
+  let sessionsCount = cached?.sessions_count || 0;
 
-  // 1. Tentar ler do Supabase
-  try {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, full_name, username, bio, avatar_url, profile_views, favorite_books, reading_time_minutes, scheduled_delete_at")
-      .eq("id", targetUserId)
-      .maybeSingle();
+  // Executa todas as consultas ao Supabase em PARALELO com timeout de 2.5s
+  const [profileRes, clubsRes, booksRes] = await Promise.allSettled([
+    withTimeout(
+      supabase
+        .from("profiles")
+        .select("id, full_name, username, bio, avatar_url, profile_views, favorite_books, reading_time_minutes, scheduled_delete_at")
+        .eq("id", targetUserId)
+        .maybeSingle(),
+      2500,
+      { data: null, error: null } as any
+    ),
+    withTimeout(
+      supabase
+        .from("club_members")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", targetUserId),
+      2500,
+      { count: null } as any
+    ),
+    withTimeout(
+      supabase
+        .from("user_books")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", targetUserId),
+      2500,
+      { count: null } as any
+    ),
+  ]);
 
-    if (!error && data) {
-      profileData = data;
-    }
-  } catch (err) {
-    console.warn("Aviso ao ler perfil remoto:", err);
+  if (profileRes.status === "fulfilled" && (profileRes.value as any)?.data) {
+    profileData = (profileRes.value as any).data;
   }
 
-  // 2. Contagem de Clubes em que o utilizador participa
-  try {
-    const { count } = await supabase
-      .from("club_members")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", targetUserId);
-    if (count !== null && count !== undefined) {
-      clubsCount = count;
-    }
-  } catch {
-    // Fallback local se necessário
+  if (clubsRes.status === "fulfilled" && (clubsRes.value as any)?.count !== null && (clubsRes.value as any)?.count !== undefined) {
+    clubsCount = (clubsRes.value as any).count;
+  } else if (!clubsCount) {
     const localClubs = localStorage.getItem("profile_user_clubs");
     if (localClubs) {
       try {
@@ -95,21 +153,14 @@ export async function fetchUserProfile(
     }
   }
 
-  // 3. Contagem de Livros na Estante
-  try {
-    const { count } = await supabase
-      .from("user_books")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", targetUserId);
-    if (count !== null && count !== undefined) {
-      booksCount = count;
-    }
-  } catch {
+  if (booksRes.status === "fulfilled" && (booksRes.value as any)?.count !== null && (booksRes.value as any)?.count !== undefined) {
+    booksCount = (booksRes.value as any).count;
+  } else if (!booksCount) {
     const shelfCached = getCached<any[]>("bookshelf_all_items");
     if (shelfCached) booksCount = shelfCached.length;
   }
 
-  // 4. Se for o próprio perfil, verificar tempo de leitura guardado localmente
+  // 4. Tempo de leitura e sessões
   const isMe = currentUserId === targetUserId;
   const localTime = localStorage.getItem(`reading_time_mins_${targetUserId}`);
   if (localTime) {
@@ -126,7 +177,7 @@ export async function fetchUserProfile(
   }
 
   // 5. Visualizações de Perfil
-  let views = profileData?.profile_views || 0;
+  let views = profileData?.profile_views || cached?.views_count || 0;
   const localViewsKey = `profile_views_${targetUserId}`;
   const localViews = localStorage.getItem(localViewsKey);
   if (localViews) {
@@ -141,25 +192,19 @@ export async function fetchUserProfile(
       views += 1;
       localStorage.setItem(localViewsKey, String(views));
 
-      // Tentar atualizar no Supabase com RPC ou update direto
-      try {
-        await supabase.rpc("increment_profile_views", { target_user_id: targetUserId });
-      } catch {
-        try {
-          await supabase
-            .from("profiles")
-            .update({ profile_views: views })
-            .eq("id", targetUserId);
-        } catch {}
-      }
+      // Atualização em background (não bloqueia nada)
+      Promise.resolve(supabase.rpc("increment_profile_views", { target_user_id: targetUserId }))
+        .catch(() => {
+          Promise.resolve(supabase.from("profiles").update({ profile_views: views }).eq("id", targetUserId)).catch(() => {});
+        });
     }
   }
 
   // 6. Livros Favoritos
-  let favBooks: FavoriteBookItem[] = [];
-  if (profileData?.favorite_books && Array.isArray(profileData.favorite_books)) {
+  let favBooks: FavoriteBookItem[] = cached?.favorite_books || [];
+  if (profileData?.favorite_books && Array.isArray(profileData.favorite_books) && profileData.favorite_books.length > 0) {
     favBooks = profileData.favorite_books;
-  } else {
+  } else if (favBooks.length === 0) {
     const localFavs = localStorage.getItem(`profile_fav_books_${targetUserId}`);
     if (localFavs) {
       try {
@@ -207,12 +252,12 @@ export async function updateUserProfile(
     if (data.avatar_url !== undefined) payload.avatar_url = data.avatar_url;
     if (data.favorite_books !== undefined) payload.favorite_books = data.favorite_books;
 
-    const { error } = await supabase.from("profiles").update(payload).eq("id", userId);
-    if (error) {
-      console.warn("Aviso na atualização remota do perfil:", error);
-    }
+    // Atualização remota assíncrona
+    Promise.resolve(supabase.from("profiles").update(payload).eq("id", userId)).catch((err: unknown) => {
+      console.warn("Aviso na atualização remota do perfil:", err);
+    });
 
-    // Atualiza caches locais
+    // Atualiza caches locais imediatamente (0ms)
     if (data.favorite_books) {
       localStorage.setItem(`profile_fav_books_${userId}`, JSON.stringify(data.favorite_books));
     }
