@@ -1,282 +1,496 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, BookOpen, Trash2 } from "lucide-react";
+import {
+  Plus,
+  BookOpen,
+  Trash2,
+  CheckCircle2,
+  LayoutGrid,
+  Columns,
+  Star,
+  BookCheck,
+  RotateCcw
+} from "lucide-react";
 import BottomNav from "../components/BottomNav";
-import { supabase } from "../lib/supabase";
-import { getCached, setCached } from "../lib/cache";
-
-interface UserBookItem {
-  id: string;
-  status: "reading" | "to_read" | "finished" | "saved";
-  current_page: number;
-  progress: number;
-  last_read_at: string | null;
-  book: {
-    id: string;
-    title: string;
-    author: string;
-    cover_url: string | null;
-    total_pages: number;
-    file_type: string;
-  };
-}
+import MarkBookReadModal from "../components/MarkBookReadModal";
+import {
+  loadUserBookshelf,
+  updateShelfBookStatus,
+  removeBookFromShelf,
+  type BookshelfItem
+} from "../lib/bookshelfService";
 
 export default function Library() {
-  const [items, setItems] = useState<UserBookItem[]>(() => getCached<UserBookItem[]>("library_items") || []);
-  const [activeTab, setActiveTab] = useState<"reading" | "saved" | "finished" | "all">("all");
-  const [loading, setLoading] = useState(() => !getCached<UserBookItem[]>("library_items"));
+  const [items, setItems] = useState<BookshelfItem[]>([]);
+  const [activeTab, setActiveTab] = useState<"all" | "reading" | "finished" | "saved">("all");
+  const [viewMode, setViewMode] = useState<"shelf" | "grid">("shelf");
+  const [loading, setLoading] = useState(true);
+  const [showAddReadModal, setShowAddReadModal] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    async function loadLibrary() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // Busca os livros da biblioteca do utilizador com os dados do livro
-        const { data, error } = await supabase
-          .from("user_books")
-          .select(`
-            id,
-            status,
-            current_page,
-            progress,
-            last_read_at,
-            book:books (
-              id,
-              title,
-              author,
-              cover_url,
-              total_pages,
-              file_type
-            )
-          `)
-          .eq("user_id", user.id)
-          .order("last_read_at", { ascending: false, nullsFirst: false });
-
-        if (!error && data) {
-          // Normaliza itens onde o livro existe
-          const validItems = data
-            .filter((item: any) => item.book)
-            .map((item: any) => ({
-              id: item.id,
-              status: item.status,
-              current_page: item.current_page || 1,
-              progress: item.progress || 0,
-              last_read_at: item.last_read_at,
-              book: item.book
-            }));
-
-          setItems(validItems);
-          setCached("library_items", validItems);
-        }
-      } catch (err) {
-        console.error("Erro ao carregar biblioteca:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadLibrary();
-  }, []);
-
-  // Remover livro da biblioteca
-  const handleRemoveFromLibrary = async (e: React.MouseEvent, bookId: string) => {
-    e.stopPropagation();
+  // Carregar estante completa
+  const fetchShelf = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      await supabase
-        .from("user_books")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("book_id", bookId);
-
-      setItems(items.filter((i) => i.book.id !== bookId));
+      const data = await loadUserBookshelf();
+      setItems(data);
     } catch (err) {
-      console.error(err);
+      console.error("Erro ao carregar estante:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Filtros
-  const filteredItems = items.filter((item) => {
-    if (activeTab === "all") return true;
-    if (activeTab === "reading") return item.status === "reading" || item.status === "to_read";
-    return item.status === activeTab;
-  });
+  useEffect(() => {
+    fetchShelf();
+  }, []);
 
-  const countReading = items.filter((i) => i.status === "reading" || i.status === "to_read").length;
-  const countFinished = items.filter((i) => i.status === "finished").length;
-  const countSaved = items.filter((i) => i.status === "saved").length;
+  // Remover livro da estante
+  const handleRemove = async (e: React.MouseEvent, item: BookshelfItem) => {
+    e.stopPropagation();
+    if (!confirm(`Remover "${item.title}" da tua estante?`)) return;
+    await removeBookFromShelf(item);
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+  };
+
+  // Alternar status do livro (ex: marcar como lido ou voltar a ler)
+  const handleToggleStatus = async (e: React.MouseEvent, item: BookshelfItem, newStatus: "reading" | "finished" | "saved") => {
+    e.stopPropagation();
+    await updateShelfBookStatus(item, newStatus);
+    fetchShelf();
+  };
+
+  // Filtros de exibição
+  const readingBooks = items.filter((i) => i.status === "reading" || i.status === "to_read");
+  const finishedBooks = items.filter((i) => i.status === "finished");
+  const savedBooks = items.filter((i) => i.status === "saved");
+
+  const displayedItems =
+    activeTab === "all"
+      ? items
+      : activeTab === "reading"
+      ? readingBooks
+      : activeTab === "finished"
+      ? finishedBooks
+      : savedBooks;
+
+  // Agrupar livros em prateleiras para a visualização de estante (4 livros por prateleira)
+  const chunkIntoShelves = (arr: BookshelfItem[], size = 4) => {
+    const shelves: BookshelfItem[][] = [];
+    for (let i = 0; i < arr.length; i += size) {
+      shelves.push(arr.slice(i, i + size));
+    }
+    return shelves;
+  };
+
+  const shelvesData = chunkIntoShelves(displayedItems, 4);
 
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white pb-24 md:pb-12 md:pt-16 relative">
-      {/* Header com Abas Reais */}
-      <header className="px-4 sm:px-6 pt-safe sticky top-0 md:static z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
-        <div className="app-container pt-6 sm:pt-8 pb-2">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">Minha Biblioteca</h1>
-          <Link
-            to="/donate-book"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-semibold active:scale-95 transition-transform"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Doar Livro</span>
-          </Link>
-        </div>
+    <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white pb-28 md:pb-12 md:pt-16 relative select-none">
+      
+      {/* ─── Top Bar com Controles da Biblioteca ─── */}
+      <header className="px-4 sm:px-6 pt-safe sticky top-0 md:static z-20 bg-white/95 dark:bg-black/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-900">
+        <div className="app-container pt-5 sm:pt-7 pb-3">
+          
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2">
+                <span>Minha Estante</span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 font-bold border border-amber-200 dark:border-amber-900">
+                  {items.length} obras
+                </span>
+              </h1>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Os teus livros lidos, em andamento e guardados
+              </p>
+            </div>
 
-        {/* Abas com Contadores Reais */}
-        <div className="flex justify-between items-end pb-3 text-xs">
-          <button
-            onClick={() => setActiveTab("all")}
-            className={`flex flex-col items-center transition-colors ${
-              activeTab === "all" ? "text-black dark:text-white font-bold" : "text-gray-400"
-            }`}
-          >
-            <span className="text-sm">{items.length}</span>
-            <span className="text-[11px] mt-0.5">Todos</span>
-            {activeTab === "all" && <div className="w-6 h-0.5 bg-black dark:bg-white mt-1.5 rounded-full" />}
-          </button>
+            {/* Ações de Topo */}
+            <div className="flex items-center gap-2">
+              {/* Alternador de Visualização: Prateleira vs Grade */}
+              <div className="flex items-center bg-gray-100 dark:bg-gray-900 p-1 rounded-2xl border border-gray-200 dark:border-gray-800">
+                <button
+                  onClick={() => setViewMode("shelf")}
+                  className={`p-1.5 rounded-xl transition-all ${
+                    viewMode === "shelf"
+                      ? "bg-white dark:bg-black text-black dark:text-white shadow-xs font-bold"
+                      : "text-gray-400 hover:text-black dark:hover:text-white"
+                  }`}
+                  title="Visualização em Prateleira de Biblioteca"
+                >
+                  <Columns className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`p-1.5 rounded-xl transition-all ${
+                    viewMode === "grid"
+                      ? "bg-white dark:bg-black text-black dark:text-white shadow-xs font-bold"
+                      : "text-gray-400 hover:text-black dark:hover:text-white"
+                  }`}
+                  title="Visualização em Lista / Grade"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+              </div>
 
-          <button
-            onClick={() => setActiveTab("reading")}
-            className={`flex flex-col items-center transition-colors ${
-              activeTab === "reading" ? "text-black dark:text-white font-bold" : "text-gray-400"
-            }`}
-          >
-            <span className="text-sm">{countReading}</span>
-            <span className="text-[11px] mt-0.5">A Ler</span>
-            {activeTab === "reading" && <div className="w-6 h-0.5 bg-black dark:bg-white mt-1.5 rounded-full" />}
-          </button>
+              {/* Botão Principal: Registar Livro Lido */}
+              <button
+                onClick={() => setShowAddReadModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-black dark:bg-white text-white dark:text-black rounded-2xl text-xs font-bold active:scale-95 transition-transform shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span className="hidden sm:inline">Registar</span>
+                <span>Lido</span>
+              </button>
+            </div>
+          </div>
 
-          <button
-            onClick={() => setActiveTab("saved")}
-            className={`flex flex-col items-center transition-colors ${
-              activeTab === "saved" ? "text-black dark:text-white font-bold" : "text-gray-400"
-            }`}
-          >
-            <span className="text-sm">{countSaved}</span>
-            <span className="text-[11px] mt-0.5">Salvos</span>
-            {activeTab === "saved" && <div className="w-6 h-0.5 bg-black dark:bg-white mt-1.5 rounded-full" />}
-          </button>
+          {/* Cartão de Resumo Literário */}
+          <div className="grid grid-cols-3 gap-2 p-3 bg-gray-50 dark:bg-gray-900/60 rounded-2xl border border-gray-100 dark:border-gray-800/80 mb-3 text-center">
+            <div 
+              onClick={() => setActiveTab("reading")}
+              className="cursor-pointer hover:opacity-80 transition-opacity"
+            >
+              <span className="block text-lg font-black">{readingBooks.length}</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">A Ler</span>
+            </div>
+            <div 
+              onClick={() => setActiveTab("finished")}
+              className="cursor-pointer hover:opacity-80 transition-opacity border-x border-gray-200 dark:border-gray-800"
+            >
+              <span className="block text-lg font-black text-emerald-600 dark:text-emerald-400">
+                {finishedBooks.length}
+              </span>
+              <span className="text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold">
+                Lidos ✨
+              </span>
+            </div>
+            <div 
+              onClick={() => setActiveTab("saved")}
+              className="cursor-pointer hover:opacity-80 transition-opacity"
+            >
+              <span className="block text-lg font-black">{savedBooks.length}</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Salvos</span>
+            </div>
+          </div>
 
-          <button
-            onClick={() => setActiveTab("finished")}
-            className={`flex flex-col items-center transition-colors ${
-              activeTab === "finished" ? "text-black dark:text-white font-bold" : "text-gray-400"
-            }`}
-          >
-            <span className="text-sm">{countFinished}</span>
-            <span className="text-[11px] mt-0.5">Lidos</span>
-            {activeTab === "finished" && <div className="w-6 h-0.5 bg-black dark:bg-white mt-1.5 rounded-full" />}
-          </button>
-        </div>
+          {/* Abas de Navegação na Estante */}
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 text-xs">
+            <button
+              onClick={() => setActiveTab("all")}
+              className={`px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+                activeTab === "all"
+                  ? "bg-black dark:bg-white text-white dark:text-black shadow-xs"
+                  : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
+              }`}
+            >
+              Toda a Estante ({items.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("reading")}
+              className={`px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+                activeTab === "reading"
+                  ? "bg-black dark:bg-white text-white dark:text-black shadow-xs"
+                  : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
+              }`}
+            >
+              📖 A Ler Agora ({readingBooks.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("finished")}
+              className={`px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+                activeTab === "finished"
+                  ? "bg-emerald-600 text-white shadow-xs font-bold"
+                  : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
+              }`}
+            >
+              🏆 Lidos & Concluídos ({finishedBooks.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("saved")}
+              className={`px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+                activeTab === "saved"
+                  ? "bg-black dark:bg-white text-white dark:text-black shadow-xs"
+                  : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
+              }`}
+            >
+              📌 Salvos ({savedBooks.length})
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Conteúdo Principal */}
-      <main className="flex-1 px-4 sm:px-6 pt-6 app-container space-y-4">
+      {/* ─── Conteúdo Principal: Estante ou Lista ─── */}
+      <main className="flex-1 px-4 sm:px-6 pt-6 app-container">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <div className="flex flex-col items-center justify-center py-24 gap-3">
             <div className="w-8 h-8 border-2 border-black dark:border-white border-t-transparent dark:border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-xs text-gray-400">A carregar a tua biblioteca...</p>
+            <p className="text-xs text-gray-400">A carregar a tua estante literária...</p>
           </div>
-        ) : filteredItems.length === 0 ? (
-          <div className="bg-gray-50 dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 text-center my-8 shadow-xs">
-            <div className="w-14 h-14 bg-white dark:bg-gray-800 text-gray-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100 dark:border-gray-700">
-              <BookOpen className="w-7 h-7" />
+        ) : displayedItems.length === 0 ? (
+          /* Estado Vazio Elegante */
+          <div className="bg-gray-50 dark:bg-gray-900/60 rounded-3xl p-8 sm:p-12 border border-gray-100 dark:border-gray-800 text-center my-8 shadow-xs">
+            <div className="w-16 h-16 bg-white dark:bg-gray-800 text-amber-500 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-gray-100 dark:border-gray-700 shadow-md">
+              <BookOpen className="w-8 h-8 stroke-[1.8]" />
             </div>
-            <h3 className="font-bold text-base mb-1">
-              {activeTab === "all" ? "A tua biblioteca está vazia" : "Nenhum livro nesta secção"}
+            <h3 className="font-extrabold text-lg mb-1.5">
+              {activeTab === "finished"
+                ? "Nenhum livro marcado como lido ainda"
+                : activeTab === "reading"
+                ? "Nenhum livro em leitura no momento"
+                : "A tua estante está à espera de livros"}
             </h3>
-            <p className="text-xs text-gray-500 mb-6 leading-relaxed max-w-xs mx-auto">
-              Explora os livros disponíveis na comunidade ou faz a doação de uma obra em PDF/ePub para começares a ler.
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-6 leading-relaxed max-w-sm mx-auto">
+              {activeTab === "finished"
+                ? "Termina um livro no leitor digital ou regista qualquer livro físico que tenhas lido para preencher a tua prateleira de honra."
+                : "Explora o catálogo moçambicano e internacional ou regista obras físicas da tua biblioteca pessoal."}
             </p>
-            <div className="flex flex-col sm:flex-row gap-2 justify-center">
+            <div className="flex flex-col sm:flex-row gap-2.5 justify-center">
+              <button
+                onClick={() => setShowAddReadModal(true)}
+                className="px-5 py-3 bg-black dark:bg-white text-white dark:text-black rounded-2xl text-xs font-bold shadow-md active:scale-95 transition-transform inline-flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>Registar Livro Lido (Físico ou Digital)</span>
+              </button>
               <Link
                 to="/explore"
-                className="px-5 py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold shadow-xs active:scale-95 transition-transform inline-flex items-center justify-center gap-1.5"
+                className="px-5 py-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-black rounded-2xl text-xs font-bold active:scale-95 transition-transform inline-flex items-center justify-center gap-1.5"
               >
                 <span>Explorar Catálogo</span>
               </Link>
-              <Link
-                to="/donate-book"
-                className="px-5 py-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-black rounded-xl text-xs font-semibold active:scale-95 transition-transform inline-flex items-center justify-center gap-1.5"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Doar Livro</span>
-              </Link>
             </div>
           </div>
+        ) : viewMode === "shelf" ? (
+          /* ══════════════════════════════════════════════════════════ */
+          /* 🏛️ VISTA 1: PRATELEIRA DE BIBLIOTECA (BOOKSHELF AESTHETIC) */
+          /* ══════════════════════════════════════════════════════════ */
+          <div className="space-y-12 sm:space-y-14 py-4">
+            {shelvesData.map((shelf, shelfIndex) => (
+              <div key={shelfIndex} className="relative pt-6">
+                
+                {/* Linha de Livros Apoiados na Prateleira */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 px-3 sm:px-6 items-end min-h-[220px]">
+                  {shelf.map((book) => {
+                    const isFinished = book.status === "finished";
+                    const isReading = book.status === "reading" || book.status === "to_read";
+
+                    return (
+                      <div
+                        key={book.id}
+                        onClick={() => {
+                          if (book.source === "system" && book.bookId) {
+                            navigate(`/reader?bookId=${book.bookId}`);
+                          }
+                        }}
+                        className={`bookshelf-book group cursor-pointer flex flex-col items-center text-center relative ${
+                          book.source === "system" ? "hover:z-10" : ""
+                        }`}
+                      >
+                        {/* Efeito 3D do Livro com Lombada e Sombra */}
+                        <div className="relative w-28 sm:w-32 h-40 sm:h-44 rounded-r-xl rounded-l-xs overflow-hidden shadow-xl border-l-[5px] border-l-black/30 dark:border-l-white/20 transition-all duration-300 group-hover:shadow-2xl">
+                          
+                          {book.coverUrl ? (
+                            <img
+                              src={book.coverUrl}
+                              alt={book.title}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            /* Capa Estilizada Minimalista */
+                            <div className="w-full h-full p-2.5 flex flex-col justify-between bg-gradient-to-br from-zinc-800 to-black text-white text-left">
+                              <span className="text-[8px] uppercase tracking-widest text-amber-400 font-bold">
+                                {book.isPhysical ? "Livro Físico" : book.fileType || "Kuwerenga"}
+                              </span>
+                              <div>
+                                <h4 className="font-serif text-[11px] font-bold line-clamp-3 leading-tight text-white/95">
+                                  {book.title}
+                                </h4>
+                                <span className="text-[8px] text-zinc-400 truncate block mt-1">
+                                  {book.author}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between text-[7px] text-zinc-400">
+                                <span>{book.totalPages ? `${book.totalPages}p` : ""}</span>
+                                {book.rating && (
+                                  <span className="text-amber-400 font-bold">★ {book.rating}</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Selo / Badge no Topo do Livro */}
+                          {isFinished && (
+                            <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-emerald-500 text-white text-[9px] font-extrabold flex items-center gap-0.5 shadow-md">
+                              <CheckCircle2 className="w-2.5 h-2.5" />
+                              <span>Lido</span>
+                            </div>
+                          )}
+
+                          {book.isPhysical && !isFinished && (
+                            <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-amber-500 text-white text-[9px] font-bold shadow-md">
+                              Físico
+                            </div>
+                          )}
+
+                          {/* Barra de Progresso no Fundo da Capa para Livros a Ler */}
+                          {isReading && (
+                            <div className="absolute bottom-0 inset-x-0 bg-black/70 backdrop-blur-xs py-1 px-1.5 text-[9px] font-bold text-white flex items-center justify-between">
+                              <span>Progresso</span>
+                              <span className="text-emerald-400">{Math.round(book.progress)}%</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Metadados Rápidos Abaixo do Livro (Visíveis ao Pairar) */}
+                        <div className="mt-2 w-full px-1">
+                          <h4 className="text-[11px] sm:text-xs font-bold truncate leading-tight group-hover:underline">
+                            {book.title}
+                          </h4>
+                          <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                            {book.author}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* ─── A Tábua da Prateleira de Madeira ─── */}
+                <div className="bookshelf-shelf w-full h-4 sm:h-5 mt-2 rounded-md relative z-0">
+                  <div className="absolute -top-1 inset-x-0 h-1 bg-black/10 dark:bg-white/10" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filteredItems.map(({ id, book, current_page, progress }) => (
+          /* ══════════════════════════════════════════════════════════ */
+          /* 📑 VISTA 2: LISTA / GRADE DETALHADA                        */
+          /* ══════════════════════════════════════════════════════════ */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {displayedItems.map((item) => (
               <div
-                key={id}
-                onClick={() => navigate(`/reader?bookId=${book.id}`)}
-                className="flex gap-4 items-center p-3 rounded-2xl border border-gray-100 dark:border-gray-800 hover:border-black dark:hover:border-white transition-all cursor-pointer group bg-gray-50/50 dark:bg-gray-900/40"
+                key={item.id}
+                onClick={() => {
+                  if (item.source === "system" && item.bookId) {
+                    navigate(`/reader?bookId=${item.bookId}`);
+                  }
+                }}
+                className="p-3.5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-900/40 hover:border-black dark:hover:border-white transition-all flex items-center gap-3.5 cursor-pointer group"
               >
                 {/* Capa */}
-                <div className="w-16 h-24 bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-200 dark:border-gray-700 relative">
-                  {book.cover_url ? (
-                    <img src={book.cover_url} alt={book.title} className="w-full h-full object-cover" />
+                <div className="w-16 h-24 rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800 shrink-0 flex items-center justify-center border border-gray-200 dark:border-gray-700 relative">
+                  {item.coverUrl ? (
+                    <img src={item.coverUrl} alt={item.title} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full p-2 flex flex-col justify-between bg-black text-white text-center">
-                      <span className="text-[7px] uppercase tracking-widest text-gray-400">
-                        {book.file_type}
+                    <div className="w-full h-full p-2 flex flex-col justify-between bg-black text-white text-left">
+                      <span className="text-[7px] text-amber-400 uppercase font-bold">
+                        {item.isPhysical ? "Físico" : "Kuwerenga"}
                       </span>
-                      <span className="font-serif text-[9px] font-bold line-clamp-3 leading-tight">
-                        {book.title}
-                      </span>
-                      <span className="text-[6px] text-gray-400 truncate">{book.author}</span>
+                      <span className="text-[9px] font-bold line-clamp-3 leading-tight">{item.title}</span>
+                      <span className="text-[7px] text-gray-400 truncate">{item.author}</span>
+                    </div>
+                  )}
+                  {item.status === "finished" && (
+                    <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-xs">
+                      <CheckCircle2 className="w-3 h-3 stroke-[2.5]" />
                     </div>
                   )}
                 </div>
 
                 {/* Detalhes */}
-                <div className="flex-1 min-w-0 py-1">
-                  <h3 className="font-bold text-sm leading-tight mb-1 truncate group-hover:underline">
-                    {book.title}
-                  </h3>
-                  <p className="text-xs text-gray-500 truncate mb-3">{book.author}</p>
-
-                  <div className="w-full">
-                    <div className="flex justify-between text-[10px] text-gray-400 mb-1 font-medium">
-                      <span>Pág. {current_page} {book.total_pages ? `de ${book.total_pages}` : ""}</span>
-                      <span>{Math.round(progress)}%</span>
-                    </div>
-                    <div className="w-full h-1 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-black dark:bg-white rounded-full transition-all duration-300"
-                        style={{ width: `${Math.max(5, progress)}%` }}
-                      />
-                    </div>
+                <div className="flex-1 min-w-0 py-0.5">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                      item.status === "finished"
+                        ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300"
+                        : item.status === "reading"
+                        ? "bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300"
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+                    }`}>
+                      {item.status === "finished" ? "Lido" : item.status === "reading" ? "A Ler" : "Salvo"}
+                    </span>
+                    {item.isPhysical && (
+                      <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold">
+                        • Físico
+                      </span>
+                    )}
                   </div>
+
+                  <h4 className="font-bold text-xs sm:text-sm truncate leading-tight group-hover:underline">
+                    {item.title}
+                  </h4>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate mb-2">
+                    {item.author}
+                  </p>
+
+                  {/* Progresso ou Avaliação */}
+                  {item.status === "finished" ? (
+                    <div className="flex items-center gap-1 text-amber-500 text-xs">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          className={`w-3.5 h-3.5 ${
+                            s <= (item.rating || 5) ? "fill-amber-400 text-amber-400" : "text-gray-300 dark:text-gray-700"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="w-full">
+                      <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+                        <span>Pág. {item.currentPage || 1} {item.totalPages ? `de ${item.totalPages}` : ""}</span>
+                        <span className="font-bold">{Math.round(item.progress)}%</span>
+                      </div>
+                      <div className="w-full h-1 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-black dark:bg-white rounded-full transition-all duration-300"
+                          style={{ width: `${Math.max(5, item.progress)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Botão Remover */}
-                <button
-                  onClick={(e) => handleRemoveFromLibrary(e, book.id)}
-                  className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                  title="Remover da Biblioteca"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {/* Ações Rápidas */}
+                <div className="flex flex-col gap-1 items-end">
+                  {item.status !== "finished" ? (
+                    <button
+                      onClick={(e) => handleToggleStatus(e, item, "finished")}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                      title="Marcar como Lido"
+                    >
+                      <BookCheck className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => handleToggleStatus(e, item, "reading")}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors"
+                      title="Voltar a Ler"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  <button
+                    onClick={(e) => handleRemove(e, item)}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                    title="Remover da Estante"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </main>
 
-      {/* Floating Action Button para Doar */}
-      <Link
-        to="/donate-book"
-        className="fixed bottom-24 right-6 w-14 h-14 bg-black dark:bg-white text-white dark:text-black rounded-full flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-transform z-20"
-        title="Doar um Livro"
-      >
-        <Plus className="w-6 h-6" />
-      </Link>
+      {/* Modal para Registar Livro Lido (Pesquisa no Catálogo ou Físico) */}
+      <MarkBookReadModal
+        isOpen={showAddReadModal}
+        onClose={() => setShowAddReadModal(false)}
+        onBookAdded={fetchShelf}
+      />
 
       <BottomNav />
     </div>

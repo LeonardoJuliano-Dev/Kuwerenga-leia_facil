@@ -40,6 +40,7 @@ import { supabase } from "../lib/supabase";
 import { getTermDefinition, type DefinitionResult } from "../lib/dictionaryService";
 import { isGuestMode } from "../lib/guestMode";
 import GuestRestrictionModal from "../components/GuestRestrictionModal";
+import { markBookAsFinished } from "../lib/bookshelfService";
 
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -503,6 +504,11 @@ export default function Reader() {
           lastReadAt: new Date().toISOString(),
           synced: false,
         });
+
+        // Marca automaticamente como lido na estante se chegou à última página ou 98%
+        if (progressPercent >= 98 || (pdfDoc && currentPage >= pdfDoc.numPages)) {
+          markBookAsFinished(bookId, pdfDoc?.numPages);
+        }
       } catch (err: any) {
         if (err?.name !== "RenderingCancelledException") {
           console.error("Erro de renderização:", err);
@@ -735,6 +741,11 @@ export default function Reader() {
         lastReadAt: new Date().toISOString(),
         synced: false,
       });
+
+      // Marca automaticamente como lido na estante se chegou ao fim do EPUB (>= 98%)
+      if (pct >= 98) {
+        markBookAsFinished(bookId, totalPages);
+      }
 
       // Reaplicar highlights guardados após mudança de página
       annotations.filter(a => a.type === "highlight" && a.cfiRange).forEach((hl) => {
