@@ -7,7 +7,9 @@ import {
   BookOpen,
   Check,
   X,
-  UserPlus
+  UserPlus,
+  Lock,
+  Globe
 } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
@@ -23,6 +25,7 @@ interface Club {
   current_goal: string | null;
   member_count: number;
   created_by: string;
+  is_public?: boolean;
   is_member?: boolean;
 }
 
@@ -50,6 +53,7 @@ export default function Community() {
   const [clubName, setClubName] = useState("");
   const [clubDesc, setClubDesc] = useState("");
   const [clubGoal, setClubGoal] = useState("");
+  const [clubIsPublic, setClubIsPublic] = useState(true);
   const [submittingClub, setSubmittingClub] = useState(false);
 
   // Estados do Modal: Nova Discussão
@@ -68,10 +72,10 @@ export default function Community() {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) setCurrentUserId(user.id);
 
-        // Clubes públicos
+        // Clubes públicos e privados
         const { data: clubsData } = await supabase
           .from("clubs")
-          .select("id, name, description, cover_url, current_goal, member_count, created_by")
+          .select("id, name, description, cover_url, current_goal, member_count, created_by, is_public")
           .order("member_count", { ascending: false });
 
         // Membrzias do utilizador
@@ -202,7 +206,7 @@ export default function Community() {
           current_goal: clubGoal.trim() || null,
           created_by: currentUserId,
           member_count: 1,
-          is_public: true,
+          is_public: clubIsPublic,
         })
         .select()
         .single();
@@ -418,8 +422,23 @@ export default function Community() {
                 >
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <h3 className="font-bold text-base leading-tight group-hover:underline">{club.name}</h3>
-                      <span className="text-[11px] text-gray-400 font-medium flex items-center gap-1">
+                      <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                        <h3 className="font-bold text-base leading-tight group-hover:underline truncate">{club.name}</h3>
+                        <span className="shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 bg-gray-100 dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700">
+                          {club.is_public !== false ? (
+                            <>
+                              <Globe className="w-2.5 h-2.5" />
+                              <span>Pública</span>
+                            </>
+                          ) : (
+                            <>
+                              <Lock className="w-2.5 h-2.5" />
+                              <span>Privada</span>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-gray-400 font-medium flex items-center gap-1 shrink-0">
                         <Users className="w-3.5 h-3.5" />
                         {club.member_count} {club.member_count === 1 ? "membro" : "membros"}
                       </span>
@@ -443,7 +462,11 @@ export default function Community() {
 
                   <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
                     <span className="text-[11px] text-gray-400">
-                      {club.is_member ? "Já és membro deste clube" : "Aberto à comunidade"}
+                      {club.is_member
+                        ? "Já és membro deste clube"
+                        : club.is_public !== false
+                        ? "Aberto à comunidade"
+                        : "Requer aprovação do admin"}
                     </span>
                     <div className="flex items-center gap-2">
                       <button
@@ -455,21 +478,29 @@ export default function Community() {
                         className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-black dark:text-white transition-all flex items-center gap-1.5"
                       >
                         <MessageSquare className="w-3.5 h-3.5" />
-                        <span>Entrar no Clube</span>
+                        <span>Entrar</span>
                       </button>
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleToggleJoinClub(club.id, !!club.is_member);
+                          if (club.is_public === false && !club.is_member) {
+                            navigate(`/club/${club.id}`);
+                          } else {
+                            handleToggleJoinClub(club.id, !!club.is_member);
+                          }
                         }}
                         className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
                           club.is_member
-                            ? "bg-transparent text-gray-400 hover:text-red-500"
+                            ? "bg-transparent text-gray-500 hover:text-black dark:hover:text-white"
                             : "bg-black dark:bg-white text-white dark:text-black shadow-xs"
                         }`}
                       >
-                        {club.is_member ? "Sair" : "Participar"}
+                        {club.is_member
+                          ? "Sair"
+                          : club.is_public !== false
+                          ? "Participar"
+                          : "Pedir Entrada"}
                       </button>
                     </div>
                   </div>
@@ -508,9 +539,9 @@ export default function Community() {
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <h3 className="font-bold text-base leading-tight group-hover:underline">{club.name}</h3>
-                      <span className="text-[11px] text-emerald-500 font-medium flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" />
-                        Membro
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center gap-1 shadow-xs">
+                        <Check className="w-3 h-3 stroke-[2.5]" />
+                        <span>Membro</span>
                       </span>
                     </div>
 
@@ -546,7 +577,7 @@ export default function Community() {
                         e.stopPropagation();
                         handleToggleJoinClub(club.id, true);
                       }}
-                      className="text-xs text-red-500 hover:underline font-medium"
+                      className="text-xs text-gray-500 hover:text-black dark:hover:text-white font-semibold transition-colors"
                     >
                       Sair do Clube
                     </button>
@@ -666,6 +697,50 @@ export default function Community() {
                   placeholder="Ex: Terra Sonâmbula - Mia Couto"
                   className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
                 />
+              </div>
+
+              {/* Seletor de Privacidade Pública vs Privada */}
+              <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200 dark:border-gray-700">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+                  Privacidade da Comunidade
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setClubIsPublic(true)}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      clubIsPublic
+                        ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white shadow-xs font-bold"
+                        : "bg-white dark:bg-black border-gray-200 dark:border-gray-700 text-gray-500 font-medium"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs mb-0.5">
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>Pública</span>
+                    </div>
+                    <span className="text-[10px] block opacity-80 leading-tight">
+                      Entrada livre para todos os leitores.
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setClubIsPublic(false)}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      !clubIsPublic
+                        ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white shadow-xs font-bold"
+                        : "bg-white dark:bg-black border-gray-200 dark:border-gray-700 text-gray-500 font-medium"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs mb-0.5">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Privada</span>
+                    </div>
+                    <span className="text-[10px] block opacity-80 leading-tight">
+                      Requer aprovação do administrador.
+                    </span>
+                  </button>
+                </div>
               </div>
 
               <div className="flex gap-2 justify-end pt-2">
