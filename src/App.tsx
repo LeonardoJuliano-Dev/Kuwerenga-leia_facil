@@ -13,6 +13,8 @@ import DonateBook from "./pages/DonateBook";
 import BookDetails from "./pages/BookDetails";
 import Community from "./pages/Community";
 import ClubDetails from "./pages/ClubDetails";
+import Settings from "./pages/Settings";
+import Support from "./pages/Support";
 
 import { isGuestMode, disableGuestMode } from "./lib/guestMode";
 
@@ -120,6 +122,8 @@ function AuthRouter() {
       <Route path="/book/:id" element={<BookDetails />} />
       <Route path="/community" element={<Community />} />
       <Route path="/club/:id" element={<ClubDetails />} />
+      <Route path="/settings" element={<Settings />} />
+      <Route path="/support" element={<Support />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

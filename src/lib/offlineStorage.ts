@@ -206,3 +206,26 @@ export async function markAnnotationSynced(id: string) {
     }
   };
 }
+
+export async function getAllAnnotationsOffline(): Promise<OfflineAnnotation[]> {
+  const db = await openDB();
+  const tx = db.transaction('annotations', 'readonly');
+  const store = tx.objectStore('annotations');
+  const request = store.getAll();
+
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function deleteAnnotationOffline(id: string): Promise<void> {
+  const db = await openDB();
+  const tx = db.transaction('annotations', 'readwrite');
+  tx.objectStore('annotations').delete(id);
+
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
