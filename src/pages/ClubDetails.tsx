@@ -1038,8 +1038,13 @@ export default function ClubDetails() {
                       isMe ? "flex-row-reverse" : "flex-row"
                     }`}
                   >
-                    {/* 1. Avatar Redondo do Remetente (Estilo Telegram) */}
-                    <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+                    {/* 1. Avatar Redondo do Remetente (Estilo Telegram) - Clicável para ver Perfil */}
+                    <button
+                      type="button"
+                      onClick={() => navigate(isMe ? "/profile" : `/profile/${msg.user_id}`)}
+                      className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-900 flex items-center justify-center cursor-pointer hover:opacity-80 active:scale-95 transition-all"
+                      title={isMe ? "Ver o meu perfil" : `Ver perfil de ${msg.user_name}`}
+                    >
                       {msg.user_avatar ? (
                         <img
                           src={msg.user_avatar}
@@ -1051,16 +1056,20 @@ export default function ClubDetails() {
                           {msg.user_name.substring(0, 2)}
                         </span>
                       )}
-                    </div>
+                    </button>
 
                     {/* 2. Balão da Mensagem */}
                     <div className={`max-w-[82%] sm:max-w-md flex flex-col ${isMe ? "items-end" : "items-start"}`}>
                       
-                      {/* Nome do Remetente e Selo de Admin */}
+                      {/* Nome do Remetente e Selo de Admin - Clicável */}
                       <div className="flex items-center gap-1.5 mb-1 px-1">
-                        <span className="text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                        <button
+                          type="button"
+                          onClick={() => navigate(isMe ? "/profile" : `/profile/${msg.user_id}`)}
+                          className="text-[11px] font-bold text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors cursor-pointer text-left"
+                        >
                           {isMe ? "Tu" : msg.user_name}
-                        </span>
+                        </button>
                         {isMsgAdmin && (
                           <span className="px-1.5 py-0.2 rounded text-[8px] font-black bg-black text-white dark:bg-white dark:text-black tracking-wider uppercase">
                             Admin

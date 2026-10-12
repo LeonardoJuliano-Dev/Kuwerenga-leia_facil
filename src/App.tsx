@@ -124,6 +124,7 @@ function AuthRouter() {
       <Route path="/explore" element={<Explore />} />
       <Route path="/library" element={<Library />} />
       <Route path="/profile" element={<Profile />} />
+      <Route path="/profile/:userId" element={<Profile />} />
       <Route path="/reader" element={<Reader />} />
       <Route path="/donate-book" element={<DonateBook />} />
       <Route path="/book/:id" element={<BookDetails />} />
