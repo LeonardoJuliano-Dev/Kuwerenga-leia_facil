@@ -105,3 +105,10 @@ create policy "Admins can remove members or members can leave"
       ))
     )
   );
+
+-- 6. Garantir que todas as comunidades (públicas e privadas) são visíveis para os leitores poderem solicitar adesão
+drop policy if exists "Public clubs are viewable by everyone" on public.clubs;
+drop policy if exists "Clubs are viewable by everyone" on public.clubs;
+create policy "Clubs are viewable by everyone"
+  on public.clubs for select using (true);
+
