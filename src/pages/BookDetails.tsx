@@ -7,9 +7,11 @@ import {
   Bookmark,
   BookmarkCheck,
   Send,
-  Trash2
+  Trash2,
+  Phone
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { buildWhatsAppLink, getLocalStoreBooks } from "../lib/storeService";
 
 interface BookData {
   id: string;
@@ -18,12 +20,17 @@ interface BookData {
   description: string | null;
   cover_url: string | null;
   file_url: string;
-  file_type: "pdf" | "epub";
+  file_type: "pdf" | "epub" | "physical";
   total_pages: number;
   avg_rating: number;
   total_ratings: number;
   category: { name: string } | null;
   created_at: string;
+  is_for_sale?: boolean;
+  price?: number;
+  currency?: string;
+  stock_status?: "available" | "out_of_stock";
+  seller_whatsapp?: string;
 }
 
 interface Review {
@@ -78,13 +85,33 @@ export default function BookDetails() {
             avg_rating,
             total_ratings,
             created_at,
+            is_for_sale,
+            price,
+            currency,
+            stock_status,
+            seller_whatsapp,
             category:categories(name)
           `)
           .eq("id", id)
-          .single();
+          .maybeSingle();
 
-        if (bookErr) throw bookErr;
-        setBook(bookRecord as any);
+        if (bookRecord) {
+          setBook(bookRecord as any);
+        } else {
+          // Fallback para livros de loja locais
+          const localMatch = getLocalStoreBooks().find((b) => b.id === id);
+          if (localMatch) {
+            setBook({
+              ...localMatch,
+              total_pages: localMatch.total_pages || 0,
+              avg_rating: 5,
+              total_ratings: 1,
+              category: null,
+            } as any);
+          } else if (bookErr) {
+            throw bookErr;
+          }
+        }
 
         // 2. Verificar se está na biblioteca do utilizador
         if (user) {
@@ -341,14 +368,76 @@ export default function BookDetails() {
             <span className="text-xs text-gray-400">({book.total_ratings} avaliações)</span>
           </div>
 
-          {/* Botão de Leitura Direta */}
-          <Link
-            to={`/reader?bookId=${book.id}`}
-            className="w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-2xl font-bold text-sm shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2"
-          >
-            <BookOpen className="w-5 h-5" />
-            <span>Começar a Ler Agora</span>
-          </Link>
+          {/* Botão de Leitura Direta ou Compra via WhatsApp */}
+          {book.is_for_sale ? (
+            <div className="w-full space-y-3">
+              {/* Preço e Stock */}
+              <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 block font-semibold">Preço</span>
+                  <span className="text-2xl font-black text-emerald-700 dark:text-emerald-300">
+                    {book.price ? `${book.price} ${book.currency || "MT"}` : "Sob consulta"}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 block font-semibold">Disponibilidade</span>
+                  <span
+                    className={`inline-block text-xs font-bold px-2.5 py-1 rounded-full ${
+                      book.stock_status === "out_of_stock"
+                        ? "bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-400"
+                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
+                    }`}
+                  >
+                    {book.stock_status === "out_of_stock" ? "🔴 Esgotado" : "🟢 Em Stock"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Botão de Ação WhatsApp */}
+              <a
+                href={buildWhatsAppLink({
+                  title: book.title,
+                  price: book.price,
+                  currency: book.currency,
+                  seller_whatsapp: book.seller_whatsapp || "258840000000",
+                  stock_status: book.stock_status || "available",
+                })}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`w-full py-4 rounded-2xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 text-white ${
+                  book.stock_status === "out_of_stock"
+                    ? "bg-amber-600 hover:bg-amber-700"
+                    : "bg-emerald-600 hover:bg-emerald-700"
+                }`}
+              >
+                <Phone className="w-5 h-5 fill-current" />
+                <span>
+                  {book.stock_status === "out_of_stock"
+                    ? "Pedir Reserva via WhatsApp"
+                    : "Comprar Agora via WhatsApp"}
+                </span>
+              </a>
+
+              {/* Se tiver amostra digital */}
+              {book.file_url && book.file_type !== "physical" && (
+                <Link
+                  to={`/reader?bookId=${book.id}`}
+                  className="w-full py-3 rounded-2xl font-semibold text-xs border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors flex items-center justify-center gap-2"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span>Ler Amostra Digital Grátis</span>
+                </Link>
+              )}
+            </div>
+          ) : (
+            <Link
+              to={`/reader?bookId=${book.id}`}
+              className="w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-2xl font-bold text-sm shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2"
+            >
+              <BookOpen className="w-5 h-5" />
+              <span>Começar a Ler Agora</span>
+            </Link>
+          )}
         </div>
 
         {/* Sinopse */}

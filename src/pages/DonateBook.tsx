@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, UploadCloud, Book, Image, CheckCircle, AlertCircle, FileText } from "lucide-react";
+import { ArrowLeft, UploadCloud, Book, Image, CheckCircle, AlertCircle, FileText, Sparkles } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { saveBookOffline } from "../lib/offlineStorage";
 import { isGuestMode } from "../lib/guestMode";
 import GuestRestrictionModal from "../components/GuestRestrictionModal";
+import { extractCoverFromFile } from "../lib/coverExtractor";
 
 interface Category {
   id: string;
@@ -26,6 +27,8 @@ export default function DonateBook() {
   const [bookFile, setBookFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [extractingCover, setExtractingCover] = useState(false);
+  const [extractedNotice, setExtractedNotice] = useState(false);
 
   // Estados de Envio
   const [uploading, setUploading] = useState(false);
@@ -51,7 +54,7 @@ export default function DonateBook() {
   }, []);
 
   // Gestão de ficheiro do livro (PDF / ePub)
-  const handleBookChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBookChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -69,6 +72,22 @@ export default function DonateBook() {
       const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
       setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
     }
+
+    // Extrai automaticamente a primeira página como imagem de capa
+    setExtractingCover(true);
+    setExtractedNotice(false);
+    try {
+      const result = await extractCoverFromFile(file);
+      if (result) {
+        setCoverFile(result.file);
+        setCoverPreview(result.previewUrl);
+        setExtractedNotice(true);
+      }
+    } catch (err) {
+      console.warn("Falha ao extrair capa automática:", err);
+    } finally {
+      setExtractingCover(false);
+    }
   };
 
   // Gestão de Capa
@@ -83,6 +102,7 @@ export default function DonateBook() {
 
     setCoverFile(file);
     setCoverPreview(URL.createObjectURL(file));
+    setExtractedNotice(false);
   };
 
   // Submeter Doação
@@ -284,24 +304,44 @@ export default function DonateBook() {
 
             {/* 2. Capa Opcional */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-                Capa do Livro (Opcional)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
+                  Capa do Livro
+                </label>
+                {extractedNotice && (
+                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Capa extraída da 1ª página
+                  </span>
+                )}
+              </div>
 
               <div className="flex items-center gap-4">
-                <div className="w-20 h-28 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0">
+                <div className="w-20 h-28 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 relative">
                   {coverPreview ? (
                     <img src={coverPreview} alt="Capa" className="w-full h-full object-cover" />
+                  ) : extractingCover ? (
+                    <div className="flex flex-col items-center justify-center p-2 text-center text-gray-400">
+                      <div className="w-5 h-5 border-2 border-black dark:border-white border-t-transparent rounded-full animate-spin mb-1" />
+                      <span className="text-[8px] font-semibold">A extrair capa...</span>
+                    </div>
                   ) : (
                     <Image className="w-8 h-8 text-gray-400 stroke-1" />
                   )}
                 </div>
 
-                <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl text-xs font-semibold transition-colors">
-                  <Image className="w-4 h-4" />
-                  <span>{coverPreview ? "Alterar Capa" : "Escolher Imagem"}</span>
-                  <input type="file" accept="image/*" onChange={handleCoverChange} className="hidden" />
-                </label>
+                <div className="flex flex-col gap-1.5">
+                  <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl text-xs font-semibold transition-colors shadow-xs">
+                    <Image className="w-4 h-4" />
+                    <span>{coverPreview ? "Alterar Capa" : "Escolher Imagem"}</span>
+                    <input type="file" accept="image/*" onChange={handleCoverChange} className="hidden" />
+                  </label>
+                  <span className="text-[10px] text-gray-500">
+                    {coverPreview
+                      ? "Podes manter a capa obtida ou escolher uma imagem personalizada."
+                      : "A capa é obtida da 1ª página ou podes carregar uma imagem."}
+                  </span>
+                </div>
               </div>
             </div>
 
