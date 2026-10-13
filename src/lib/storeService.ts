@@ -76,12 +76,8 @@ export async function checkIsAdmin(): Promise<boolean> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return false;
 
-    // 2. Verifica se o email é um dos administradores padrão
-    if (
-      user.email?.toLowerCase().includes("admin") ||
-      user.email === "leonardojuliano.dev@gmail.com" ||
-      user.email === "admin@kuwerenga.com"
-    ) {
+    // 2. Verifica se o email é o administrador autorizado
+    if (user.email?.toLowerCase() === "leonardojulianoj@gmail.com") {
       return true;
     }
 

@@ -53,3 +53,12 @@ begin
   );
 end;
 $$ language plpgsql security definer;
+
+-- 5. Ativar privilégios de Administrador para a conta designada
+update public.profiles
+set is_admin = true
+where id in (
+  select id from auth.users
+  where lower(email) = 'leonardojulianoj@gmail.com'
+);
+
