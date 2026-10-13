@@ -9,7 +9,9 @@ import {
   Edit3,
   Trash2,
   Shield,
-  Tag
+  Tag,
+  ChevronDown,
+  Check
 } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import AdminBookSaleModal from "../components/AdminBookSaleModal";
@@ -55,6 +57,7 @@ export default function Explore() {
   const [storeBooks, setStoreBooks] = useState<BookSaleItem[]>([]);
   const [categories, setCategories] = useState<Category[]>(() => getCached<Category[]>("explore_categories") || []);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   
   // Filtro de Formato / Catálogo
   const [catalogFilter, setCatalogFilter] = useState<"all" | "free" | "store" | "pdf" | "epub">("all");
@@ -241,6 +244,7 @@ export default function Explore() {
 
   const storeCount = allCombinedBooks.filter((b) => b.is_for_sale).length;
   const freeCount = allCombinedBooks.filter((b) => !b.is_for_sale).length;
+  const currentCategoryName = categories.find((c) => c.id === selectedCategory)?.name || "Todas as Categorias";
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24 md:pb-12 md:pt-16">
@@ -260,7 +264,9 @@ export default function Explore() {
                 )}
               </div>
               <span className="text-xs text-gray-500 dark:text-gray-400 block mt-0.5">
-                Livros digitais gratuitos e livros impressos à venda
+                {catalogFilter === "store"
+                  ? "Livraria Kuwerenga • Livros impressos e encomendas via WhatsApp"
+                  : "Livros digitais gratuitos e livros impressos à venda"}
               </span>
             </div>
 
@@ -282,14 +288,16 @@ export default function Explore() {
                 </button>
               )}
 
-              {/* Botão de Doar Livro */}
-              <Link
-                to="/donate-book"
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-semibold active:scale-95 transition-transform shadow-xs"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Doar Livro</span>
-              </Link>
+              {/* Botão de Doar Livro (NÃO É PERMITIDO na aba de livros à venda) */}
+              {catalogFilter !== "store" && (
+                <Link
+                  to="/donate-book"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-semibold active:scale-95 transition-transform shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Doar Livro</span>
+                </Link>
+              )}
             </div>
           </div>
 
@@ -308,72 +316,186 @@ export default function Explore() {
       </header>
 
       <main className="flex-1">
-        {/* ─── Separador Principal de Catálogo (Todos / Gratuitos / À Venda / Formatos) ─── */}
-        <div className="px-4 sm:px-6 py-4 app-container flex gap-2 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setCatalogFilter("all")}
-            className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              catalogFilter === "all"
-                ? "bg-black dark:bg-white text-white dark:text-black shadow-xs scale-[1.02]"
-                : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800"
-            }`}
-          >
-            <span>Todo o Catálogo</span>
-            <span className="text-[10px] opacity-75">({allCombinedBooks.length})</span>
-          </button>
+        {/* ─── Barra de Filtros e Dropdown de Categorias ─── */}
+        <div className="px-4 sm:px-6 py-3.5 app-container flex flex-wrap items-center justify-between gap-2.5">
+          {/* Abas de Formato/Modo com scroll suave */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 flex-1 min-w-[280px]">
+            <button
+              onClick={() => setCatalogFilter("all")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                catalogFilter === "all"
+                  ? "bg-black dark:bg-white text-white dark:text-black shadow-xs scale-[1.02]"
+                  : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
+              }`}
+            >
+              <span>Todo o Catálogo</span>
+              <span className="text-[10px] opacity-75">({allCombinedBooks.length})</span>
+            </button>
 
-          <button
-            onClick={() => setCatalogFilter("store")}
-            className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              catalogFilter === "store"
-                ? "bg-emerald-600 text-white shadow-xs scale-[1.02]"
-                : "bg-white dark:bg-gray-900 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/60"
-            }`}
-          >
-            <ShoppingBag className="w-3.5 h-3.5" />
-            <span>Livros à Venda</span>
-            {storeCount > 0 && <span className="text-[10px] opacity-90">({storeCount})</span>}
-          </button>
+            <button
+              onClick={() => setCatalogFilter("store")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                catalogFilter === "store"
+                  ? "bg-emerald-600 text-white shadow-xs scale-[1.02]"
+                  : "bg-white dark:bg-gray-900 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+              }`}
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              <span>Livros à Venda</span>
+              {storeCount > 0 && <span className="text-[10px] opacity-90">({storeCount})</span>}
+            </button>
 
-          <button
-            onClick={() => setCatalogFilter("free")}
-            className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              catalogFilter === "free"
-                ? "bg-black dark:bg-white text-white dark:text-black shadow-xs scale-[1.02]"
-                : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800"
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Leitura Gratuita</span>
-            {freeCount > 0 && <span className="text-[10px] opacity-75">({freeCount})</span>}
-          </button>
+            <button
+              onClick={() => setCatalogFilter("free")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                catalogFilter === "free"
+                  ? "bg-black dark:bg-white text-white dark:text-black shadow-xs scale-[1.02]"
+                  : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Leitura Grátis</span>
+              {freeCount > 0 && <span className="text-[10px] opacity-75">({freeCount})</span>}
+            </button>
 
-          <button
-            onClick={() => setCatalogFilter("pdf")}
-            className={`px-3.5 py-2 rounded-2xl text-xs font-semibold transition-colors whitespace-nowrap ${
-              catalogFilter === "pdf"
-                ? "bg-black dark:bg-white text-white dark:text-black"
-                : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800"
-            }`}
-          >
-            Apenas PDF
-          </button>
+            {catalogFilter !== "store" && (
+              <>
+                <button
+                  onClick={() => setCatalogFilter("pdf")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap ${
+                    catalogFilter === "pdf"
+                      ? "bg-black dark:bg-white text-white dark:text-black"
+                      : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800"
+                  }`}
+                >
+                  PDF
+                </button>
 
-          <button
-            onClick={() => setCatalogFilter("epub")}
-            className={`px-3.5 py-2 rounded-2xl text-xs font-semibold transition-colors whitespace-nowrap ${
-              catalogFilter === "epub"
-                ? "bg-black dark:bg-white text-white dark:text-black"
-                : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800"
-            }`}
-          >
-            Apenas ePub
-          </button>
+                <button
+                  onClick={() => setCatalogFilter("epub")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap ${
+                    catalogFilter === "epub"
+                      ? "bg-black dark:bg-white text-white dark:text-black"
+                      : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800"
+                  }`}
+                >
+                  ePub
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* ─── Menu Dropdown de Categorias Moderno e Compacto ─── */}
+          {categories.length > 0 && (
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                  selectedCategory !== "all"
+                    ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white shadow-xs"
+                    : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-700"
+                }`}
+                title="Filtrar por Categoria"
+                aria-expanded={isCategoryDropdownOpen}
+              >
+                <Tag className="w-3.5 h-3.5" />
+                <span className="truncate max-w-[130px] sm:max-w-[170px]">
+                  {selectedCategory === "all" ? "Categorias" : currentCategoryName}
+                </span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                    isCategoryDropdownOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+
+              {/* Menu Dropdown Flutuante */}
+              {isCategoryDropdownOpen && (
+                <>
+                  {/* Backdrop para fechar ao clicar fora */}
+                  <div
+                    className="fixed inset-0 z-30"
+                    onClick={() => setIsCategoryDropdownOpen(false)}
+                  />
+
+                  <div className="absolute right-0 top-full mt-2 w-60 max-h-72 overflow-y-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl z-40 p-1.5 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                      <span>Categorias</span>
+                      {selectedCategory !== "all" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCategory("all");
+                            setIsCategoryDropdownOpen(false);
+                          }}
+                          className="text-xs text-amber-600 dark:text-amber-400 hover:underline font-semibold lowercase"
+                        >
+                          Limpar
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="py-1 space-y-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCategory("all");
+                          setIsCategoryDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors text-left ${
+                          selectedCategory === "all"
+                            ? "bg-black/5 dark:bg-white/10 font-bold text-black dark:text-white"
+                            : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                        }`}
+                      >
+                        <span>Todas as Categorias</span>
+                        {selectedCategory === "all" && <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
+                      </button>
+
+                      {categories.map((cat) => {
+                        const isSelected = selectedCategory === cat.id;
+                        const catBookCount = allCombinedBooks.filter(
+                          (b) => b.category_id === cat.id
+                        ).length;
+
+                        return (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCategory(cat.id);
+                              setIsCategoryDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors text-left ${
+                              isSelected
+                                ? "bg-black/5 dark:bg-white/10 font-bold text-black dark:text-white"
+                                : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                            }`}
+                          >
+                            <span className="truncate pr-2">{cat.name}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {catBookCount > 0 && (
+                                <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-md">
+                                  {catBookCount}
+                                </span>
+                              )}
+                              {isSelected && <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ─── Banner Informativo para a Seção de Livros à Venda ─── */}
         {catalogFilter === "store" && (
-          <div className="px-4 sm:px-6 mb-5 app-container">
+          <div className="px-4 sm:px-6 my-2 app-container">
             <div className="p-4 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/30 flex items-start gap-3">
               <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
                 <ShoppingBag className="w-4 h-4" />
@@ -390,57 +512,15 @@ export default function Explore() {
           </div>
         )}
 
-        {/* ─── Categorias Reais ─── */}
-        {categories.length > 0 && (
-          <section className="px-4 sm:px-6 mb-6 app-container">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400">Categorias</h2>
-              {selectedCategory !== "all" && (
-                <button
-                  onClick={() => setSelectedCategory("all")}
-                  className="text-xs font-semibold text-gray-500 hover:text-black dark:hover:text-white"
-                >
-                  Limpar filtro
-                </button>
-              )}
-            </div>
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-              <button
-                onClick={() => setSelectedCategory("all")}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap border transition-all ${
-                  selectedCategory === "all"
-                    ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black"
-                    : "border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300"
-                }`}
-              >
-                Todas
-              </button>
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap border transition-all ${
-                    selectedCategory === cat.id
-                      ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black"
-                      : "border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300"
-                  }`}
-                >
-                  {cat.name}
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-
         {/* ─── Lista de Livros ─── */}
-        <section className="px-4 sm:px-6 pb-6 app-container">
+        <section className="px-4 sm:px-6 pb-6 pt-2 app-container">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base sm:text-lg font-bold">
               {catalogFilter === "store"
                 ? "Livros para Compra & Encomenda"
                 : catalogFilter === "free"
                 ? "Livros Digitais para Ler Grátis"
-                : "Catálogo Completo"}
+                : "Catálogo Disponível"}
               {" "}
               <span className="text-xs text-gray-400 font-normal">
                 ({filteredBooks.length} {filteredBooks.length === 1 ? "livro" : "livros"})
@@ -461,20 +541,24 @@ export default function Explore() {
               <h3 className="font-bold text-base mb-1">Nenhum livro encontrado</h3>
               <p className="text-xs text-gray-500 mb-6 leading-relaxed max-w-xs mx-auto">
                 {searchQuery || selectedCategory !== "all"
-                  ? "Tenta pesquisar por outro termo ou remover os filtros."
+                  ? "Tenta pesquisar por outro termo ou remover os filtros de pesquisa."
                   : catalogFilter === "store"
-                  ? "Ainda não existem livros cadastrados para venda. Como administrador, podes adicionar o primeiro livro!"
+                  ? isAdmin
+                    ? "Ainda não existem livros cadastrados para venda. Como administrador, podes adicionar o primeiro livro!"
+                    : "Ainda não existem livros físicos disponíveis para venda de momento. Volta a consultar em breve!"
                   : "Ainda não existem livros neste catálogo. Sê o primeiro a doar uma obra para a comunidade!"}
               </p>
               
-              {isAdmin && catalogFilter === "store" ? (
-                <button
-                  onClick={() => setShowSaleModal(true)}
-                  className="inline-flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-xl text-xs font-semibold shadow-sm active:scale-95 transition-transform"
-                >
-                  <ShoppingBag className="w-4 h-4" />
-                  <span>Cadastrar Primeiro Livro para Vender</span>
-                </button>
+              {catalogFilter === "store" ? (
+                isAdmin && (
+                  <button
+                    onClick={() => setShowSaleModal(true)}
+                    className="inline-flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-xl text-xs font-semibold shadow-sm active:scale-95 transition-transform"
+                  >
+                    <ShoppingBag className="w-4 h-4" />
+                    <span>Cadastrar Primeiro Livro para Vender</span>
+                  </button>
+                )
               ) : (
                 <Link
                   to="/donate-book"
