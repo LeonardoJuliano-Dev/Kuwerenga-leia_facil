@@ -1,9 +1,21 @@
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Compass, Library, Users, CircleUser, Plus } from "lucide-react";
+import { Home, Compass, Library, Users, CircleUser, Plus, Bell } from "lucide-react";
+import NotificationsModal from "./NotificationsModal";
+import { subscribeToNotifications, getUnreadNotificationsCount } from "../lib/notificationService";
 
 export default function BottomNav() {
   const location = useLocation();
   const currentPath = location.pathname;
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadNotifs, setUnreadNotifs] = useState(() => getUnreadNotificationsCount());
+
+  useEffect(() => {
+    const unsub = subscribeToNotifications(() => {
+      setUnreadNotifs(getUnreadNotificationsCount());
+    });
+    return () => unsub();
+  }, []);
 
   const navItems = [
     {
@@ -77,6 +89,21 @@ export default function BottomNav() {
 
           {/* Ações Desktop */}
           <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setShowNotifications(true)}
+              className="relative p-2 rounded-xl border border-gray-200 dark:border-gray-800 text-gray-500 hover:text-black dark:hover:text-white hover:border-gray-300 dark:hover:border-gray-700 transition-all touch-target"
+              title="Notificações"
+              aria-label="Abrir notificações"
+            >
+              <Bell className="w-4.5 h-4.5 stroke-[1.8]" />
+              {unreadNotifs > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-amber-500 text-black font-bold text-[10px] rounded-full flex items-center justify-center border-2 border-white dark:border-black animate-pulse">
+                  {unreadNotifs > 9 ? "9+" : unreadNotifs}
+                </span>
+              )}
+            </button>
+
             <Link
               to="/donate-book"
               className="flex items-center gap-1.5 px-3.5 py-2 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold shadow-xs hover:opacity-90 active:scale-95 transition-all"
@@ -151,6 +178,12 @@ export default function BottomNav() {
           })}
         </div>
       </nav>
+
+      {/* Central de Notificações Desktop */}
+      <NotificationsModal
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+      />
     </>
   );
 }

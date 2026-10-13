@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, Compass, Users, Library, Bell, BookOpen, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import BottomNav from "../components/BottomNav";
+import NotificationsModal from "../components/NotificationsModal";
+import { subscribeToNotifications, getUnreadNotificationsCount } from "../lib/notificationService";
 import { supabase } from "../lib/supabase";
 import { getCached, setCached } from "../lib/cache";
 import { getLocalCustomBooks } from "../lib/bookshelfService";
@@ -32,6 +34,15 @@ export default function Home() {
   const [loading, setLoading] = useState(() => !getCached<Book[]>("home_featured_books"));
   const sliderRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadNotifs, setUnreadNotifs] = useState(() => getUnreadNotificationsCount());
+
+  useEffect(() => {
+    const unsubscribe = subscribeToNotifications(() => {
+      setUnreadNotifs(getUnreadNotificationsCount());
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     async function loadHomeData() {
@@ -141,8 +152,18 @@ export default function Home() {
               <span className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400 font-semibold block mt-0.5">Leia Fácil</span>
             </div>
           </div>
-          <button className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 touch-target">
+          <button 
+            type="button"
+            onClick={() => setShowNotifications(true)}
+            aria-label="Abrir notificações"
+            className="w-10 h-10 relative flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 touch-target hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
+          >
             <Bell className="w-5 h-5" />
+            {unreadNotifs > 0 && (
+              <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 bg-amber-500 text-black font-bold text-[10px] rounded-full flex items-center justify-center border-2 border-white dark:border-black animate-pulse">
+                {unreadNotifs > 9 ? "9+" : unreadNotifs}
+              </span>
+            )}
           </button>
         </div>
       </header>
@@ -394,6 +415,12 @@ export default function Home() {
 
       {/* Bottom Navigation */}
       <BottomNav />
+
+      {/* Central de Notificações */}
+      <NotificationsModal
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+      />
     </div>
   );
 }

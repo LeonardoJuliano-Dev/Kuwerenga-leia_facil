@@ -18,11 +18,14 @@ import {
   Trash2,
   Clock,
   Check,
-  Globe
+  Globe,
+  Bell,
+  BellOff
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { isGuestMode } from "../lib/guestMode";
 import GuestRestrictionModal from "../components/GuestRestrictionModal";
+import { isClubMuted, toggleMuteClub } from "../lib/notificationService";
 import {
   determineActiveClubAdmin,
   loadClubMembers,
@@ -85,6 +88,7 @@ export default function ClubDetails() {
   const [isMember, setIsMember] = useState(true);
   const [joining, setJoining] = useState(false);
   const [showGuestModal, setShowGuestModal] = useState(false);
+  const [isMuted, setIsMuted] = useState(() => isClubMuted(clubId || ""));
 
   // Estados de Administrador e Gestão de Comunidade
   const [activeAdminId, setActiveAdminId] = useState<string | null>(null);
@@ -901,6 +905,28 @@ export default function ClubDetails() {
             {/* Ações de Cabeçalho */}
             <div className="flex items-center gap-1.5 shrink-0">
               
+              {/* Botão de Silenciar / Reativar Notificações da Comunidade */}
+              {(isMember || isAdmin) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeClubId) {
+                      const next = toggleMuteClub(activeClubId);
+                      setIsMuted(next);
+                    }
+                  }}
+                  className={`p-2 rounded-full border transition-all touch-target ${
+                    isMuted
+                      ? "bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400"
+                      : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white"
+                  }`}
+                  title={isMuted ? "Notificações silenciadas nesta comunidade. Clica para reativar." : "Silenciar notificações desta comunidade"}
+                  aria-label={isMuted ? "Reativar notificações da comunidade" : "Silenciar notificações da comunidade"}
+                >
+                  {isMuted ? <BellOff className="w-4 h-4 stroke-[2.2]" /> : <Bell className="w-4 h-4 stroke-[1.8]" />}
+                </button>
+              )}
+
               {/* Botão de Painel do Administrador (apenas para o admin da comunidade) */}
               {isAdmin && (
                 <button

@@ -16,6 +16,11 @@ import ClubDetails from "./pages/ClubDetails";
 import Settings from "./pages/Settings";
 import Support from "./pages/Support";
 import { initThemeListener } from "./lib/theme";
+import {
+  initCommunityNotificationsListener,
+  checkIdleBooksNotifications,
+  checkDailyReadingReminder
+} from "./lib/notificationService";
 
 import { isGuestMode, disableGuestMode } from "./lib/guestMode";
 
@@ -66,8 +71,16 @@ function AuthRouter() {
   };
 
   useEffect(() => {
-    // 0. Inicializa ouvinte de tema
+    // 0. Inicializa ouvinte de tema e notificações globais
     const cleanupTheme = initThemeListener();
+    const cleanupNotifications = initCommunityNotificationsListener();
+
+    const handleFocus = () => {
+      checkIdleBooksNotifications();
+      checkDailyReadingReminder();
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
 
     // 1. Check existing session in localStorage
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -103,6 +116,9 @@ function AuthRouter() {
 
     return () => {
       cleanupTheme();
+      cleanupNotifications();
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
       subscription.unsubscribe();
     };
   }, [navigate]);
