@@ -615,10 +615,10 @@ export default function Profile() {
   const favBooks = profile?.favorite_books || [];
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#fcfbfa] dark:bg-black text-black dark:text-white pb-24 md:pb-12 md:pt-16 select-none">
+    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24 md:pb-12 md:pt-16 select-none">
       
       {/* ─── Top Header da Página (Título e Abas) ─── */}
-      <header className="px-4 sm:px-6 pt-safe bg-[#fcfbfa] dark:bg-black border-b border-gray-200/80 dark:border-gray-900 sticky top-0 z-30">
+      <header className="px-4 sm:px-6 pt-safe bg-gray-50 dark:bg-black border-b border-gray-200/80 dark:border-gray-900 sticky top-0 z-30">
         <div className="app-container pt-4 pb-2">
           
           <div className="flex items-center justify-between mb-3">

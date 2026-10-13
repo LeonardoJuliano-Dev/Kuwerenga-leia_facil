@@ -5,30 +5,100 @@
 @theme {
   --font-sans: "Inter", system-ui, sans-serif;
   
-  /* Black and white aesthetic */
-  --color-bw-50: #f9f9f9;
-  --color-bw-100: #f0f0f0;
-  --color-bw-200: #e4e4e4;
-  --color-bw-300: #d1d1d1;
-  --color-bw-400: #b0b0b0;
-  --color-bw-500: #8c8c8c;
-  --color-bw-600: #6b6b6b;
-  --color-bw-700: #4d4d4d;
-  --color-bw-800: #333333;
-  --color-bw-900: #1a1a1a;
-  --color-bw-950: #0a0a0a;
+  /* ─── Paleta Sépia para o Tema Claro (Conforto Ocular & Leitura Acolhedora) ─── */
+  --color-white: #fdfbf7;
+  --color-black: #1f1710;
+
+  --color-gray-50: #f7f3e8;
+  --color-gray-100: #eee6d6;
+  --color-gray-200: #dfd5c2;
+  --color-gray-300: #cebeaa;
+  --color-gray-400: #a3927e;
+  --color-gray-500: #81705c;
+  --color-gray-600: #655442;
+  --color-gray-700: #4e3f2f;
+  --color-gray-800: #382c1f;
+  --color-gray-900: #251b12;
+  --color-gray-950: #140e08;
+
+  /* Escala Monocromática Sépia */
+  --color-bw-50: #fdfbf7;
+  --color-bw-100: #f7f3e8;
+  --color-bw-200: #eee6d6;
+  --color-bw-300: #dfd5c2;
+  --color-bw-400: #a3927e;
+  --color-bw-500: #81705c;
+  --color-bw-600: #655442;
+  --color-bw-700: #4e3f2f;
+  --color-bw-800: #382c1f;
+  --color-bw-900: #251b12;
+  --color-bw-950: #140e08;
 }
 
 @layer base {
   :root {
-    --background: #fbfbfb;
-    --foreground: #09090b;
+    --background: #f7f3e8;
+    --foreground: #1f1710;
+
+    --color-white: #fdfbf7;
+    --color-black: #1f1710;
+
+    --color-gray-50: #f7f3e8;
+    --color-gray-100: #eee6d6;
+    --color-gray-200: #dfd5c2;
+    --color-gray-300: #cebeaa;
+    --color-gray-400: #a3927e;
+    --color-gray-500: #81705c;
+    --color-gray-600: #655442;
+    --color-gray-700: #4e3f2f;
+    --color-gray-800: #382c1f;
+    --color-gray-900: #251b12;
+    --color-gray-950: #140e08;
+
+    --color-bw-50: #fdfbf7;
+    --color-bw-100: #f7f3e8;
+    --color-bw-200: #eee6d6;
+    --color-bw-300: #dfd5c2;
+    --color-bw-400: #a3927e;
+    --color-bw-500: #81705c;
+    --color-bw-600: #655442;
+    --color-bw-700: #4e3f2f;
+    --color-bw-800: #382c1f;
+    --color-bw-900: #251b12;
+    --color-bw-950: #140e08;
   }
   
   :root.dark,
   .dark {
     --background: #000000;
     --foreground: #ffffff;
+
+    --color-white: #ffffff;
+    --color-black: #000000;
+
+    --color-gray-50: oklch(98.5% .002 247.839);
+    --color-gray-100: oklch(96.7% .003 264.542);
+    --color-gray-200: oklch(92.8% .006 264.531);
+    --color-gray-300: oklch(87.2% .01 258.338);
+    --color-gray-400: oklch(70.7% .022 261.325);
+    --color-gray-500: oklch(55.1% .027 264.364);
+    --color-gray-600: oklch(44.6% .03 256.802);
+    --color-gray-700: oklch(37.3% .034 259.733);
+    --color-gray-800: oklch(27.8% .033 256.848);
+    --color-gray-900: oklch(21% .034 264.665);
+    --color-gray-950: oklch(13% .028 261.692);
+
+    --color-bw-50: #f9f9f9;
+    --color-bw-100: #f0f0f0;
+    --color-bw-200: #e4e4e4;
+    --color-bw-300: #d1d1d1;
+    --color-bw-400: #b0b0b0;
+    --color-bw-500: #8c8c8c;
+    --color-bw-600: #6b6b6b;
+    --color-bw-700: #4d4d4d;
+    --color-bw-800: #333333;
+    --color-bw-900: #1a1a1a;
+    --color-bw-950: #0a0a0a;
   }
 
   html {
@@ -38,7 +108,7 @@
   }
 
   body {
-    @apply bg-[var(--background)] text-[var(--foreground)] antialiased selection:bg-black selection:text-white dark:selection:bg-white dark:selection:text-black;
+    @apply bg-[var(--background)] text-[var(--foreground)] antialiased selection:bg-[#dfd1b8] selection:text-[#1f1710] dark:selection:bg-white dark:selection:text-black;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overscroll-behavior-y: contain;
@@ -146,14 +216,13 @@
   }
 
   /* ─── Efeito de Prateleira de Biblioteca (Bookshelf Aesthetic) ─── */
-  /* ─── Efeito de Prateleira de Biblioteca (Design Monocromático Padrão) ─── */
   .bookshelf-shelf {
     position: relative;
     border-radius: 4px;
-    background: #e5e5e5;
-    border-top: 1px solid #d4d4d4;
-    border-bottom: 2px solid #a3a3a3;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+    background: #ded4c0;
+    border-top: 1px solid #ede5d5;
+    border-bottom: 2px solid #b8a78e;
+    box-shadow: 0 4px 6px -1px rgba(45, 30, 15, 0.08);
   }
 
   :is(.dark .bookshelf-shelf) {

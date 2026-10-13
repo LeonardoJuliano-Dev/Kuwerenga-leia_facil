@@ -188,7 +188,7 @@ export default function Settings() {
             <button
               type="button"
               onClick={() => handleSelectTheme("light")}
-              className={`p-3.5 rounded-xl border flex flex-col items-center gap-2 transition-all ${
+              className={`p-3.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
                 currentTheme === "light"
                   ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black font-bold shadow-xs scale-[1.02]"
                   : "border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40 text-gray-600 dark:text-gray-400 hover:border-black dark:hover:border-white"
@@ -196,12 +196,13 @@ export default function Settings() {
             >
               <Sun className="w-5 h-5 stroke-[2]" />
               <span className="text-xs">Claro</span>
+              <span className="text-[9px] font-semibold opacity-70 uppercase tracking-wider">Sépia</span>
             </button>
 
             <button
               type="button"
               onClick={() => handleSelectTheme("dark")}
-              className={`p-3.5 rounded-xl border flex flex-col items-center gap-2 transition-all ${
+              className={`p-3.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
                 currentTheme === "dark"
                   ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black font-bold shadow-xs scale-[1.02]"
                   : "border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40 text-gray-600 dark:text-gray-400 hover:border-black dark:hover:border-white"
@@ -209,12 +210,13 @@ export default function Settings() {
             >
               <Moon className="w-5 h-5 stroke-[2]" />
               <span className="text-xs">Escuro</span>
+              <span className="text-[9px] font-semibold opacity-70 uppercase tracking-wider">Puro</span>
             </button>
 
             <button
               type="button"
               onClick={() => handleSelectTheme("system")}
-              className={`p-3.5 rounded-xl border flex flex-col items-center gap-2 transition-all ${
+              className={`p-3.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
                 currentTheme === "system"
                   ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black font-bold shadow-xs scale-[1.02]"
                   : "border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40 text-gray-600 dark:text-gray-400 hover:border-black dark:hover:border-white"
@@ -222,8 +224,12 @@ export default function Settings() {
             >
               <Laptop className="w-5 h-5 stroke-[2]" />
               <span className="text-xs">Sistema</span>
+              <span className="text-[9px] font-semibold opacity-70 uppercase tracking-wider">Auto</span>
             </button>
           </div>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-3 leading-relaxed">
+            O modo claro utiliza uma tonalidade sépia quente inspirada em papel nobre de livro, reduzindo o brilho ofuscante e protegendo a visão em leituras prolongadas.
+          </p>
         </div>
 
         {/* ─── 2. Idioma da Aplicação ─── */}

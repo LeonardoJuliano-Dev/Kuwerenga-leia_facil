@@ -11,7 +11,9 @@
     content="Leia PDFs e ePubs, faça anotações, participe de clubes de leitura e acompanhe o seu progresso." />
 
   <!-- PWA Meta -->
-  <meta name="theme-color" content="#000000" />
+  <meta name="theme-color" content="#f7f3e8" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f7f3e8" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Kuwerenga" />
@@ -23,7 +25,7 @@
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://fonts.gstatic.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
   <!-- Script de Inicialização Instantânea do Tema -->
@@ -38,6 +40,10 @@
         } else {
           document.documentElement.classList.remove("dark");
           document.documentElement.style.colorScheme = "light";
+        }
+        var meta = document.querySelector('meta[name="theme-color"]:not([media])');
+        if (meta) {
+          meta.setAttribute("content", isDark ? "#000000" : "#f7f3e8");
         }
       } catch (e) {}
     })();

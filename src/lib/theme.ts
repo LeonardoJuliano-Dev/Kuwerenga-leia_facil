@@ -35,6 +35,14 @@ export function applyTheme(theme: AppTheme) {
     root.classList.remove("dark");
     root.style.colorScheme = "light";
   }
+
+  // Atualiza a meta tag theme-color para a barra de estado móvel
+  try {
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute("content", isDark ? "#000000" : "#f7f3e8");
+    }
+  } catch {}
 }
 
 export function initThemeListener(): () => void {
