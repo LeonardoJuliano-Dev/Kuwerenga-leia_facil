@@ -17,12 +17,14 @@ import {
   BellOff,
   BookOpen,
   Users,
-  Smartphone
+  Smartphone,
+  Shield
 } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
 import { isGuestMode } from "../lib/guestMode";
 import { applyTheme as setGlobalTheme, getStoredTheme, type AppTheme } from "../lib/theme";
+import { checkIsAdmin, setLocalAdminMode } from "../lib/storeService";
 import {
   getNotificationSettings,
   saveNotificationSettings,
@@ -37,6 +39,17 @@ export default function Settings() {
 
   // ─── 1. Tema ───
   const [currentTheme, setCurrentTheme] = useState<AppTheme>(getStoredTheme);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    checkIsAdmin().then((res) => setIsAdmin(res));
+  }, []);
+
+  const handleToggleAdminMode = () => {
+    const next = !isAdmin;
+    setLocalAdminMode(next);
+    setIsAdmin(next);
+  };
 
   const handleSelectTheme = (theme: AppTheme) => {
     setCurrentTheme(theme);
@@ -527,7 +540,54 @@ export default function Settings() {
           </Link>
         </div>
 
-        {/* ─── 4. Gestão da Conta: Apagar Conta com Período de 7 dias ─── */}
+        {/* ─── 4. Privilégios de Administrador (Vendas & Moderação) ─── */}
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                Acesso & Modo Administrador
+              </h2>
+            </div>
+            <span
+              className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                isAdmin
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                  : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+              }`}
+            >
+              {isAdmin ? "Admin Ativo" : "Utilizador"}
+            </span>
+          </div>
+
+          <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+            Como administrador, tens acesso exclusivo para cadastrar, editar e remover livros à venda, bem como moderar qualquer livro do catálogo no ecrã de <strong>Explorar</strong>.
+          </p>
+
+          <div className="pt-1 flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800">
+            <div>
+              <span className="font-semibold text-xs block text-black dark:text-white">
+                {isAdmin ? "Desativar privilégios de Admin" : "Ativar privilégios de Admin"}
+              </span>
+              <span className="text-[10px] text-gray-500 block">
+                Alternar permissões administrativas neste dispositivo
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleAdminMode}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 ${
+                isAdmin
+                  ? "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-900 hover:bg-red-100"
+                  : "bg-black dark:bg-white text-white dark:text-black hover:opacity-90"
+              }`}
+            >
+              {isAdmin ? "Desativar" : "Ativar Modo Admin"}
+            </button>
+          </div>
+        </div>
+
+        {/* ─── 5. Gestão da Conta: Apagar Conta com Período de 7 dias ─── */}
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-xs space-y-3">
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-gray-400" />
