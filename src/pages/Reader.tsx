@@ -20,7 +20,10 @@ import {
   Copy,
   Check,
   Search,
-  Highlighter
+  Highlighter,
+  Sun,
+  Moon,
+  Laptop
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import "pdfjs-dist/web/pdf_viewer.css";
@@ -42,6 +45,7 @@ import { getTermDefinition, type DefinitionResult } from "../lib/dictionaryServi
 import { isGuestMode } from "../lib/guestMode";
 import GuestRestrictionModal from "../components/GuestRestrictionModal";
 import { markBookAsFinished, markBookAsReading } from "../lib/bookshelfService";
+import { applyTheme } from "../lib/theme";
 
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -71,23 +75,17 @@ async function detectBookFormat(blob: Blob): Promise<"pdf" | "epub" | "invalid">
   return "invalid";
 }
 
-/**
- * Determina o tema inicial de leitura:
- * Quando o sistema/aplicação se encontra em modo claro, abre por defeito no tema 'sepia' (conforto visual).
- * Caso esteja em modo escuro, abre em 'dark'.
- */
-function getInitialReaderTheme(): "light" | "sepia" | "dark" {
-  if (typeof window === "undefined") return "sepia";
-  try {
-    const isDark =
-      document.documentElement.classList.contains("dark") ||
-      document.body.classList.contains("dark") ||
-      (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+type ReaderThemeOption = "system" | "sepia" | "dark";
 
-    return isDark ? "dark" : "sepia";
-  } catch {
-    return "sepia";
-  }
+function getStoredReaderTheme(): ReaderThemeOption {
+  if (typeof window === "undefined") return "system";
+  try {
+    const saved = localStorage.getItem("kuwerenga_reader_theme");
+    if (saved === "system" || saved === "sepia" || saved === "dark") {
+      return saved;
+    }
+  } catch {}
+  return "system";
 }
 
 export default function Reader() {
@@ -113,9 +111,49 @@ export default function Reader() {
   const [epubProgress, setEpubProgress] = useState(0);
   const [epubChapterTitle, setEpubChapterTitle] = useState("");
 
-  // Estados de UI e Leitura
+  // Estados de UI e Leitura sincronizados com o Sistema
   const [scale, setScale] = useState(1.1);
-  const [themeMode, setThemeMode] = useState<"light" | "sepia" | "dark">(getInitialReaderTheme);
+  const [readerThemePref, setReaderThemePref] = useState<ReaderThemeOption>(getStoredReaderTheme);
+  const [systemIsDark, setSystemIsDark] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return document.documentElement.classList.contains("dark");
+  });
+
+  // Ouve mudanças no tema do sistema/aplicação em tempo real
+  useEffect(() => {
+    const checkDark = () => {
+      setSystemIsDark(document.documentElement.classList.contains("dark"));
+    };
+
+    const observer = new MutationObserver(checkDark);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    mediaQuery.addEventListener("change", checkDark);
+
+    return () => {
+      observer.disconnect();
+      mediaQuery.removeEventListener("change", checkDark);
+    };
+  }, []);
+
+  // Tema efetivo aplicado na leitura (sépia acolhedor ou escuro puro)
+  const isDark = readerThemePref === "dark" || (readerThemePref === "system" && systemIsDark);
+  const themeMode: "dark" | "sepia" = isDark ? "dark" : "sepia";
+
+  const handleThemeModeChange = (pref: ReaderThemeOption) => {
+    setReaderThemePref(pref);
+    try {
+      localStorage.setItem("kuwerenga_reader_theme", pref);
+      if (pref === "system") {
+        applyTheme("system");
+      } else if (pref === "sepia") {
+        applyTheme("light");
+      } else if (pref === "dark") {
+        applyTheme("dark");
+      }
+    } catch {}
+  };
   const [showSettings, setShowSettings] = useState(false);
   const [showAnnotationsDrawer, setShowAnnotationsDrawer] = useState(false);
   const [showAddNoteModal, setShowAddNoteModal] = useState(false);
@@ -558,25 +596,23 @@ export default function Reader() {
       spread: "none",
     });
 
-    // Registar temas de cor
+    // Registar temas de cor alinhados com o sistema (sépia suave ou escuro puro)
     rendition.themes.register("dark", {
       body: { "background-color": "#000000 !important", "color": "#ffffff !important" }
     });
     rendition.themes.register("light", {
-      body: { "background-color": "#ffffff !important", "color": "#000000 !important" }
+      body: { "background-color": "#f7f3e8 !important", "color": "#1f1710 !important" }
     });
     rendition.themes.register("sepia", {
-      body: { "background-color": "#fbf0d9 !important", "color": "#433422 !important" }
+      body: { "background-color": "#f7f3e8 !important", "color": "#1f1710 !important" }
     });
     rendition.themes.select(themeMode);
     rendition.themes.fontSize(`${Math.round(scale * 100)}%`);
 
     // Injetar regras de estilo que garantem visibilidade perfeita de qualquer EPUB
     rendition.hooks.content.register((contents: any) => {
-      const isDark = themeMode === "dark";
-      const isSepia = themeMode === "sepia";
-      const textColor = isDark ? "#ffffff" : isSepia ? "#433422" : "#000000";
-      const bgColor = isDark ? "#000000" : isSepia ? "#fbf0d9" : "#ffffff";
+      const textColor = isDark ? "#ffffff" : "#1f1710";
+      const bgColor = isDark ? "#000000" : "#f7f3e8";
 
       contents.addStylesheetRules({
         "body": {
@@ -806,15 +842,13 @@ export default function Reader() {
     }
   }, [scale, fileType]);
 
-  // Actualizar tema do EPUB quando themeMode muda
+  // Actualizar tema do EPUB quando themeMode ou isDark muda
   useEffect(() => {
     if (fileType === "epub" && epubRenditionRef.current) {
       epubRenditionRef.current.themes.select(themeMode);
       try {
-        const isDark = themeMode === "dark";
-        const isSepia = themeMode === "sepia";
-        const textColor = isDark ? "#ffffff" : isSepia ? "#433422" : "#000000";
-        const bgColor = isDark ? "#000000" : isSepia ? "#fbf0d9" : "#ffffff";
+        const textColor = isDark ? "#ffffff" : "#1f1710";
+        const bgColor = isDark ? "#000000" : "#f7f3e8";
         const iframes = epubContainerRef.current?.querySelectorAll("iframe");
         iframes?.forEach((iframe) => {
           const doc = iframe.contentDocument;
@@ -825,7 +859,7 @@ export default function Reader() {
         });
       } catch {}
     }
-  }, [themeMode, fileType]);
+  }, [themeMode, isDark, fileType]);
 
   // Navegação por teclado global
   useEffect(() => {
@@ -1330,41 +1364,26 @@ export default function Reader() {
     };
   }, []);
 
-  // Classes de tema
-  const themeClasses = {
-    dark: "bg-black text-white",
-    light: "bg-white text-black",
-    sepia: "bg-[#fbf0d9] text-[#433422]"
-  };
-
   // Texto de página / progresso
   const pageLabel = fileType === "epub"
     ? `${epubChapterTitle || "Posição " + currentPage} • ${epubProgress}%`
     : `Página ${currentPage} de ${totalPages || 1}`;
 
   return (
-    <div className={`flex flex-col min-h-screen ${themeClasses[themeMode]} transition-colors duration-200 select-none`}>
+    <div className={`flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white transition-colors duration-200 select-none ${isDark ? "dark" : ""}`}>
       
       {/* Barra de Navegação Superior */}
-      <header className={`px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between sticky top-0 backdrop-blur-md z-20 transition-colors ${
-        themeMode === "sepia"
-          ? "border-b border-[#dfceaa] bg-[#fbf0d9]/95 text-[#433422]"
-          : "border-b border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-black/90"
-      }`}>
+      <header className="px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between sticky top-0 backdrop-blur-md z-20 transition-colors border-b border-gray-200/80 dark:border-gray-800/80 bg-white/90 dark:bg-black/90">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
           <Link
             to="/home"
-            className={`p-1.5 sm:p-2 -ml-1 sm:-ml-2 rounded-full transition-colors shrink-0 ${
-              themeMode === "sepia"
-                ? "hover:bg-[#433422]/10 text-[#433422]"
-                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-inherit"
-            }`}
+            className="p-1.5 sm:p-2 -ml-1 sm:-ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="min-w-0 flex-1">
             <h1 className="font-semibold text-xs sm:text-sm truncate">{bookTitle}</h1>
-            <span className={`text-[10px] sm:text-[11px] block truncate ${themeMode === "sepia" ? "text-[#7a6449]" : "text-gray-500"}`}>
+            <span className="text-[10px] sm:text-[11px] block truncate text-gray-500 dark:text-gray-400">
               {pageLabel}
             </span>
           </div>
@@ -1378,8 +1397,6 @@ export default function Reader() {
             className={`p-1.5 sm:p-2 rounded-full transition-colors ${
               isOfflineSaved
                 ? "text-emerald-500 cursor-default"
-                : themeMode === "sepia"
-                ? "text-[#7a6449] hover:bg-[#433422]/10 hover:text-[#433422]"
                 : "text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800"
             }`}
             title={isOfflineSaved ? "Livro guardado para ler sem internet" : "Guardar offline"}
@@ -1390,17 +1407,13 @@ export default function Reader() {
           {/* Marcador de Página */}
           <button
             onClick={toggleBookmark}
-            className={`p-1.5 sm:p-2 rounded-full transition-colors ${
-              themeMode === "sepia"
-                ? "hover:bg-[#433422]/10"
-                : "hover:bg-gray-100 dark:hover:bg-gray-800"
-            }`}
+            className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-black dark:hover:text-white transition-colors"
             title="Marcar página"
           >
             {isCurrentPageBookmarked ? (
-              <BookmarkCheck className={`w-4.5 h-4.5 sm:w-5 sm:h-5 fill-current ${themeMode === "sepia" ? "text-[#433422]" : "text-black dark:text-white"}`} />
+              <BookmarkCheck className="w-4.5 h-4.5 sm:w-5 sm:h-5 fill-current text-black dark:text-white" />
             ) : (
-              <Bookmark className={`w-4.5 h-4.5 sm:w-5 sm:h-5 ${themeMode === "sepia" ? "text-[#7a6449]" : "text-gray-500"}`} />
+              <Bookmark className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-gray-400 dark:text-gray-500" />
             )}
           </button>
 
@@ -1413,11 +1426,7 @@ export default function Reader() {
                 setShowAddNoteModal(true);
               }
             }}
-            className={`hidden min-[400px]:flex p-1.5 sm:p-2 rounded-full transition-colors ${
-              themeMode === "sepia"
-                ? "hover:bg-[#433422]/10 text-[#7a6449] hover:text-[#433422]"
-                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-black dark:hover:text-white"
-            }`}
+            className="hidden min-[400px]:flex p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-black dark:hover:text-white transition-colors"
             title="Adicionar nota"
           >
             <MessageSquarePlus className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
@@ -1426,11 +1435,7 @@ export default function Reader() {
           {/* Lista de Anotações / Marcadores */}
           <button
             onClick={() => setShowAnnotationsDrawer(true)}
-            className={`p-1.5 sm:p-2 rounded-full transition-colors ${
-              themeMode === "sepia"
-                ? "hover:bg-[#433422]/10 text-[#7a6449] hover:text-[#433422]"
-                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-black dark:hover:text-white"
-            }`}
+            className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-black dark:hover:text-white transition-colors"
             title="Ver anotações"
           >
             <List className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
@@ -1444,11 +1449,7 @@ export default function Reader() {
                 handleLookupDefinition(selectedText);
               }
             }}
-            className={`p-1.5 sm:p-2 rounded-full transition-colors ${
-              themeMode === "sepia"
-                ? "hover:bg-[#433422]/10 text-[#7a6449] hover:text-[#433422]"
-                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-black dark:hover:text-white"
-            }`}
+            className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-black dark:hover:text-white transition-colors"
             title="Dicionário e Definições"
           >
             <BookA className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
@@ -1457,11 +1458,7 @@ export default function Reader() {
           {/* Preferências / Configurações */}
           <button
             onClick={() => setShowSettings(!showSettings)}
-            className={`p-1.5 sm:p-2 rounded-full transition-colors ${
-              themeMode === "sepia"
-                ? "hover:bg-[#433422]/10 text-[#7a6449] hover:text-[#433422]"
-                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-black dark:hover:text-white"
-            }`}
+            className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-black dark:hover:text-white transition-colors"
             title="Definições"
           >
             <Settings2 className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
@@ -1485,31 +1482,51 @@ export default function Reader() {
             
             {/* Escolha de Tema */}
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Tema</span>
-              <div className="flex gap-2">
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Tema</span>
+                <span className="text-[10px] text-gray-400">
+                  {readerThemePref === "system" ? "Sincronizado com o sistema" : readerThemePref === "sepia" ? "Tema claro sépia" : "Tema escuro"}
+                </span>
+              </div>
+              <div className="flex gap-1.5">
                 <button
-                  onClick={() => setThemeMode("light")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                    themeMode === "light" ? "border-black bg-gray-100 text-black" : "border-gray-300 text-gray-600"
+                  type="button"
+                  onClick={() => handleThemeModeChange("system")}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition-all ${
+                    readerThemePref === "system"
+                      ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black font-semibold shadow-xs"
+                      : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400"
                   }`}
+                  title="Seguir o tema do sistema / telemóvel"
                 >
-                  Claro
+                  <Laptop className="w-3.5 h-3.5" />
+                  <span>Sistema</span>
                 </button>
                 <button
-                  onClick={() => setThemeMode("sepia")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border bg-[#fbf0d9] text-[#433422] ${
-                    themeMode === "sepia" ? "border-[#433422] ring-2 ring-[#433422]" : "border-transparent"
+                  type="button"
+                  onClick={() => handleThemeModeChange("sepia")}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition-all ${
+                    readerThemePref === "sepia"
+                      ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black font-semibold shadow-xs"
+                      : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400"
                   }`}
+                  title="Tema claro com conforto sépia"
                 >
-                  Sépia
+                  <Sun className="w-3.5 h-3.5" />
+                  <span>Sépia</span>
                 </button>
                 <button
-                  onClick={() => setThemeMode("dark")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border bg-black text-white ${
-                    themeMode === "dark" ? "border-white ring-2 ring-white" : "border-transparent"
+                  type="button"
+                  onClick={() => handleThemeModeChange("dark")}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition-all ${
+                    readerThemePref === "dark"
+                      ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black font-semibold shadow-xs"
+                      : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-gray-400"
                   }`}
+                  title="Tema escuro"
                 >
-                  Escuro
+                  <Moon className="w-3.5 h-3.5" />
+                  <span>Escuro</span>
                 </button>
               </div>
             </div>
@@ -1615,10 +1632,9 @@ export default function Reader() {
               style={{
                 width: pdfDimensions.w ? `${pdfDimensions.w}px` : undefined,
                 height: pdfDimensions.h ? `${pdfDimensions.h}px` : undefined,
-                filter:
-                  themeMode === "sepia"
-                    ? "sepia(0.25) contrast(0.96)"
-                    : undefined,
+                filter: isDark
+                  ? "invert(0.9) hue-rotate(180deg) brightness(0.95) contrast(0.95)"
+                  : "sepia(0.18) contrast(0.98)",
               }}
             />
             <div
@@ -1666,11 +1682,7 @@ export default function Reader() {
               onClick={() => setShowJumpPopover(false)}
             />
             <div
-              className={`absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-30 p-3 rounded-2xl shadow-2xl backdrop-blur-xl border animate-in zoom-in-95 duration-150 min-w-[210px] sm:min-w-[230px] ${
-                themeMode === "sepia"
-                  ? "bg-[#fbf0d9] text-[#433422] border-[#dfceaa] shadow-[#433422]/15"
-                  : "bg-white/95 dark:bg-gray-900/95 text-black dark:text-white border-gray-200 dark:border-gray-800 shadow-xl"
-              }`}
+              className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-30 p-3 rounded-2xl shadow-2xl backdrop-blur-xl border animate-in zoom-in-95 duration-150 min-w-[210px] sm:min-w-[230px] bg-white/95 dark:bg-gray-900/95 text-black dark:text-white border-gray-200 dark:border-gray-800 shadow-xl"
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-bold tracking-tight uppercase opacity-75">
@@ -1694,19 +1706,11 @@ export default function Reader() {
                   onChange={(e) => setJumpInputValue(e.target.value)}
                   placeholder={fileType === "epub" && totalPages === 0 ? "0 - 100" : `1 - ${totalPages || 1}`}
                   autoFocus
-                  className={`flex-1 min-w-0 px-2.5 py-1.5 text-xs font-semibold rounded-xl border focus:outline-none focus:ring-2 text-center transition-all ${
-                    themeMode === "sepia"
-                      ? "bg-[#f5e7c8] border-[#dfceaa] text-[#433422] focus:ring-[#433422]"
-                      : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-black dark:text-white focus:ring-black dark:focus:ring-white"
-                  }`}
+                  className="flex-1 min-w-0 px-2.5 py-1.5 text-xs font-semibold rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white text-center transition-all"
                 />
                 <button
                   type="submit"
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold active:scale-95 transition-transform flex items-center gap-1 shrink-0 ${
-                    themeMode === "sepia"
-                      ? "bg-[#433422] text-[#fbf0d9]"
-                      : "bg-black dark:bg-white text-white dark:text-black"
-                  }`}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold active:scale-95 transition-transform flex items-center gap-1 shrink-0 bg-black dark:bg-white text-white dark:text-black shadow-xs"
                 >
                   <span>Ir</span>
                   <ArrowRight className="w-3 h-3 stroke-[2.5]" />
@@ -1725,20 +1729,12 @@ export default function Reader() {
         )}
 
         <div
-          className={`flex items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-full backdrop-blur-md shadow-xl border transition-all select-none ${
-            themeMode === "sepia"
-              ? "bg-[#f5e7c8]/95 text-[#433422] border-[#dfceaa] shadow-[#433422]/10"
-              : "bg-white/90 dark:bg-gray-900/90 text-black dark:text-white border-gray-200/80 dark:border-gray-800/80 shadow-black/10 dark:shadow-white/5"
-          }`}
+          className="flex items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-full backdrop-blur-md shadow-xl border border-gray-200/80 dark:border-gray-800/80 bg-white/90 dark:bg-gray-900/90 text-black dark:text-white shadow-black/10 dark:shadow-white/5 transition-all select-none"
         >
           <button
             onClick={goToPrevPage}
             disabled={fileType === "pdf" && currentPage <= 1}
-            className={`w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none active:scale-95 transition-all ${
-              themeMode === "sepia"
-                ? "hover:bg-[#433422]/10"
-                : "hover:bg-black/10 dark:hover:bg-white/10"
-            }`}
+            className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none active:scale-95 transition-all hover:bg-black/10 dark:hover:bg-white/10"
             title="Página Anterior"
             aria-label="Página Anterior"
           >
@@ -1757,11 +1753,7 @@ export default function Reader() {
               );
               setShowJumpPopover(!showJumpPopover);
             }}
-            className={`text-xs font-bold tracking-tight px-2.5 py-1 rounded-full min-w-[56px] text-center whitespace-nowrap transition-all active:scale-95 ${
-              themeMode === "sepia"
-                ? "hover:bg-[#433422]/10 text-[#433422]"
-                : "hover:bg-black/10 dark:hover:bg-white/10"
-            } ${showJumpPopover ? "ring-2 ring-current" : ""}`}
+            className={`text-xs font-bold tracking-tight px-2.5 py-1 rounded-full min-w-[56px] text-center whitespace-nowrap transition-all active:scale-95 hover:bg-black/10 dark:hover:bg-white/10 ${showJumpPopover ? "ring-2 ring-current" : ""}`}
             title="Tocar para saltar para uma página específica"
             aria-label="Saltar para uma página específica"
           >
@@ -1774,11 +1766,7 @@ export default function Reader() {
           <button
             onClick={goToNextPage}
             disabled={fileType === "pdf" && currentPage >= totalPages}
-            className={`w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none active:scale-95 transition-all ${
-              themeMode === "sepia"
-                ? "hover:bg-[#433422]/10"
-                : "hover:bg-black/10 dark:hover:bg-white/10"
-            }`}
+            className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none active:scale-95 transition-all hover:bg-black/10 dark:hover:bg-white/10"
             title="Página Seguinte"
             aria-label="Página Seguinte"
           >
