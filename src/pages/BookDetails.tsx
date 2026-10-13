@@ -382,13 +382,14 @@ export default function BookDetails() {
                 <div className="text-right">
                   <span className="text-xs text-gray-500 dark:text-gray-400 block font-semibold">Disponibilidade</span>
                   <span
-                    className={`inline-block text-xs font-bold px-2.5 py-1 rounded-full ${
+                    className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${
                       book.stock_status === "out_of_stock"
                         ? "bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-400"
                         : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
                     }`}
                   >
-                    {book.stock_status === "out_of_stock" ? "🔴 Esgotado" : "🟢 Em Stock"}
+                    <span className={`w-1.5 h-1.5 rounded-full ${book.stock_status === "out_of_stock" ? "bg-red-500" : "bg-emerald-500"}`} />
+                    <span>{book.stock_status === "out_of_stock" ? "Esgotado" : "Em Stock"}</span>
                   </span>
                 </div>
               </div>

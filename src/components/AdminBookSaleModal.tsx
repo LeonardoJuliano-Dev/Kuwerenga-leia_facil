@@ -214,53 +214,54 @@ export default function AdminBookSaleModal({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 md:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden text-black dark:text-white animate-in zoom-in-95 duration-200"
+        className="w-full max-w-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl max-h-[94vh] flex flex-col overflow-hidden text-black dark:text-white animate-in zoom-in-95 duration-200"
       >
         {/* Header */}
-        <div className="px-6 py-4.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs">
-              <DollarSign className="w-5 h-5 stroke-[2.5]" />
+        <div className="px-4 py-3.5 sm:px-6 sm:py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md">
+          <div className="flex items-center gap-2.5 min-w-0 pr-2">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs shrink-0">
+              <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
             </div>
-            <div>
-              <h2 className="font-bold text-base leading-tight">
+            <div className="min-w-0">
+              <h2 className="font-bold text-sm sm:text-base leading-tight truncate">
                 {bookToEdit ? "Editar Livro para Venda" : "Cadastrar Livro para Venda"}
               </h2>
-              <span className="text-[11px] text-gray-500 dark:text-gray-400 block mt-0.5">
+              <span className="text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400 block truncate mt-0.5">
                 Painel do Administrador • Vendas via WhatsApp
               </span>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="p-1.5 sm:p-2 rounded-xl text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Formulário com scroll */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+        {/* Formulário com scroll suave */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
           {error && (
-            <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
+            <div className="p-3 sm:p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {/* ─── Secção da Capa e Ficheiro ─── */}
-          <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500 block">
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-3">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 block">
               Capa & Arquivo do Livro
             </span>
 
-            <div className="flex gap-4 items-start">
+            <div className="flex flex-col sm:flex-row gap-3.5 sm:gap-4 items-center sm:items-start">
               {/* Preview da Capa */}
-              <div className="w-24 h-32 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col items-center justify-center overflow-hidden shrink-0 relative shadow-xs">
+              <div className="w-24 h-32 sm:w-28 sm:h-36 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col items-center justify-center overflow-hidden shrink-0 relative shadow-xs">
                 {coverPreview ? (
                   <img
                     src={coverPreview}
@@ -281,11 +282,11 @@ export default function AdminBookSaleModal({
               </div>
 
               {/* Botões de Ação para Capa */}
-              <div className="flex-1 space-y-2">
+              <div className="flex-1 w-full space-y-2">
                 {extractedNotice && (
                   <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
                     <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                    <span>Capa extraída da 1ª página com sucesso!</span>
+                    <span>Capa extraída da 1ª página com sucesso</span>
                   </div>
                 )}
 
@@ -301,10 +302,10 @@ export default function AdminBookSaleModal({
                   <button
                     type="button"
                     onClick={() => bookInputRef.current?.click()}
-                    className="w-full py-2 px-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs font-semibold flex items-center justify-center gap-1.5 hover:border-black dark:hover:border-white transition-all shadow-xs"
+                    className="w-full py-2.5 px-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs font-semibold flex items-center justify-center gap-1.5 hover:border-black dark:hover:border-white transition-all shadow-xs"
                   >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    <span>{bookFile ? "Trocar Ficheiro (PDF/EPUB)" : "Anexar PDF / EPUB (Extrai Capa)"}</span>
+                    <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{bookFile ? "Trocar Ficheiro (PDF/ePub)" : "Anexar PDF / ePub (Extrai Capa)"}</span>
                   </button>
                 </div>
 
@@ -320,10 +321,10 @@ export default function AdminBookSaleModal({
                   <button
                     type="button"
                     onClick={() => coverInputRef.current?.click()}
-                    className="w-full py-2 px-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-medium flex items-center justify-center gap-1.5 hover:text-black dark:hover:text-white transition-colors"
+                    className="w-full py-2.5 px-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-medium flex items-center justify-center gap-1.5 hover:text-black dark:hover:text-white transition-colors"
                   >
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>{coverPreview ? "Alterar Capa Manualmente" : "Carregar Foto da Capa"}</span>
+                    <Upload className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{coverPreview ? "Substituir Capa Manualmente" : "Carregar Imagem de Capa"}</span>
                   </button>
                 </div>
               </div>
@@ -340,8 +341,8 @@ export default function AdminBookSaleModal({
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ex: O Alquimista"
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+              placeholder="Ex: Terra Sonâmbula"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
             />
           </div>
 
@@ -355,13 +356,13 @@ export default function AdminBookSaleModal({
               required
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
-              placeholder="Ex: Paulo Coelho"
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+              placeholder="Ex: Mia Couto"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
             />
           </div>
 
-          {/* Preço e Moeda */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Preço e Stock (Responsivo 1 col em mobile, 2 col em desktop) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
                 Preço de Venda *
@@ -375,15 +376,15 @@ export default function AdminBookSaleModal({
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   placeholder="Ex: 500"
-                  className="w-full pl-3 pr-12 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-semibold focus:outline-none focus:border-black dark:focus:border-white"
+                  className="w-full pl-3.5 pr-12 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-semibold focus:outline-none focus:border-black dark:focus:border-white"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">
                   {currency}
                 </span>
               </div>
             </div>
 
-            {/* Estado do Stock */}
+            {/* Estado do Stock (Zero Emojis) */}
             <div>
               <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
                 Estado do Stock *
@@ -391,10 +392,10 @@ export default function AdminBookSaleModal({
               <select
                 value={stockStatus}
                 onChange={(e) => setStockStatus(e.target.value as any)}
-                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-semibold focus:outline-none focus:border-black dark:focus:border-white"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-semibold focus:outline-none focus:border-black dark:focus:border-white"
               >
-                <option value="available">🟢 Disponível / Em Stock</option>
-                <option value="out_of_stock">🔴 Esgotado (Aceita Reservas)</option>
+                <option value="available">Disponível (Em Stock)</option>
+                <option value="out_of_stock">Esgotado (Aceita Reservas)</option>
               </select>
             </div>
           </div>
@@ -420,8 +421,8 @@ export default function AdminBookSaleModal({
             </span>
           </div>
 
-          {/* Categoria e Formato */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Categoria e Formato (Responsivo 1 col em mobile, 2 col em desktop; Zero Emojis) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
                 Categoria
@@ -429,7 +430,7 @@ export default function AdminBookSaleModal({
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
               >
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -446,11 +447,11 @@ export default function AdminBookSaleModal({
               <select
                 value={bookType}
                 onChange={(e) => setBookType(e.target.value as any)}
-                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
               >
-                <option value="physical">📖 Livro Físico (Impresso)</option>
-                <option value="pdf">📄 Ficheiro PDF</option>
-                <option value="epub">📱 Ficheiro ePub</option>
+                <option value="physical">Livro Físico (Impresso)</option>
+                <option value="pdf">Ficheiro PDF</option>
+                <option value="epub">Ficheiro ePub</option>
               </select>
             </div>
           </div>
@@ -465,24 +466,24 @@ export default function AdminBookSaleModal({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Descreve brevemente o livro, edição, estado de conservação..."
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white resize-none"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white resize-none"
             />
           </div>
 
-          {/* Botões de Ação */}
-          <div className="pt-2 flex gap-3">
+          {/* Botões de Ação Responsivos */}
+          <div className="pt-2 flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="w-full sm:flex-1 py-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-3 rounded-xl bg-black dark:bg-white text-white dark:text-black text-xs font-bold active:scale-95 transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full sm:flex-1 py-3 rounded-xl bg-black dark:bg-white text-white dark:text-black text-xs font-bold active:scale-95 transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {loading ? (
                 <>

@@ -249,13 +249,13 @@ export default function Explore() {
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24 md:pb-12 md:pt-16">
       
-      {/* Header */}
-      <header className="px-4 sm:px-6 pt-safe sticky top-0 md:static z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
-        <div className="app-container pt-6 sm:pt-8 pb-4">
-          <div className="flex items-center justify-between mb-4">
+      {/* Header Responsivo */}
+      <header className="px-3 sm:px-6 pt-safe sticky top-0 md:static z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
+        <div className="app-container pt-4 sm:pt-7 pb-3.5 sm:pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 sm:mb-4">
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold tracking-tight">Explorar Catálogo</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Explorar Catálogo</h1>
                 {isAdmin && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-black dark:bg-white text-white dark:text-black flex items-center gap-1 shadow-xs">
                     <Shield className="w-3 h-3 stroke-[2.5]" />
@@ -263,15 +263,15 @@ export default function Explore() {
                   </span>
                 )}
               </div>
-              <span className="text-xs text-gray-500 dark:text-gray-400 block mt-0.5">
+              <span className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 block mt-0.5">
                 {catalogFilter === "store"
                   ? "Livraria Kuwerenga • Livros impressos e encomendas via WhatsApp"
                   : "Livros digitais gratuitos e livros impressos à venda"}
               </span>
             </div>
 
-            {/* Ações de Topo */}
-            <div className="flex items-center gap-2">
+            {/* Ações de Topo (Responsivas com quebra harmoniosa) */}
+            <div className="flex items-center gap-2 flex-wrap">
               {/* Botão de Administrador: Cadastrar Livro para Vender */}
               {isAdmin && (
                 <button
@@ -303,26 +303,26 @@ export default function Explore() {
 
           {/* Barra de Pesquisa */}
           <div className="relative">
-            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search className="w-4.5 h-4.5 absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Pesquisar livros, autores, preços ou temas..."
-              className="w-full pl-12 pr-4 py-3 bg-gray-100 dark:bg-gray-900 rounded-2xl focus:outline-none text-sm font-medium transition-all"
+              className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3 bg-gray-100 dark:bg-gray-900 rounded-2xl focus:outline-none text-xs sm:text-sm font-medium transition-all"
             />
           </div>
         </div>
       </header>
 
       <main className="flex-1">
-        {/* ─── Barra de Filtros e Dropdown de Categorias ─── */}
-        <div className="px-4 sm:px-6 py-3.5 app-container flex flex-wrap items-center justify-between gap-2.5">
-          {/* Abas de Formato/Modo com scroll suave */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 flex-1 min-w-[280px]">
+        {/* ─── Barra de Filtros e Dropdown de Categorias Responsiva ─── */}
+        <div className="px-3 sm:px-6 py-3 app-container flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          {/* Abas de Formato/Modo com scroll suave em mobile */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 w-full sm:w-auto -mx-1 px-1">
             <button
               onClick={() => setCatalogFilter("all")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
                 catalogFilter === "all"
                   ? "bg-black dark:bg-white text-white dark:text-black shadow-xs scale-[1.02]"
                   : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
@@ -334,7 +334,7 @@ export default function Explore() {
 
             <button
               onClick={() => setCatalogFilter("store")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
                 catalogFilter === "store"
                   ? "bg-emerald-600 text-white shadow-xs scale-[1.02]"
                   : "bg-white dark:bg-gray-900 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
@@ -347,7 +347,7 @@ export default function Explore() {
 
             <button
               onClick={() => setCatalogFilter("free")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
                 catalogFilter === "free"
                   ? "bg-black dark:bg-white text-white dark:text-black shadow-xs scale-[1.02]"
                   : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
@@ -362,7 +362,7 @@ export default function Explore() {
               <>
                 <button
                   onClick={() => setCatalogFilter("pdf")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
                     catalogFilter === "pdf"
                       ? "bg-black dark:bg-white text-white dark:text-black"
                       : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800"
@@ -373,7 +373,7 @@ export default function Explore() {
 
                 <button
                   onClick={() => setCatalogFilter("epub")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
                     catalogFilter === "epub"
                       ? "bg-black dark:bg-white text-white dark:text-black"
                       : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800"
@@ -385,9 +385,9 @@ export default function Explore() {
             )}
           </div>
 
-          {/* ─── Menu Dropdown de Categorias Moderno e Compacto ─── */}
+          {/* ─── Menu Dropdown de Categorias (Zero Emojis, Totalmente Responsivo) ─── */}
           {categories.length > 0 && (
-            <div className="relative shrink-0">
+            <div className="relative self-start sm:self-auto shrink-0">
               <button
                 type="button"
                 onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
@@ -495,8 +495,8 @@ export default function Explore() {
 
         {/* ─── Banner Informativo para a Seção de Livros à Venda ─── */}
         {catalogFilter === "store" && (
-          <div className="px-4 sm:px-6 my-2 app-container">
-            <div className="p-4 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/30 flex items-start gap-3">
+          <div className="px-3 sm:px-6 my-2 app-container">
+            <div className="p-3.5 sm:p-4 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/30 flex items-start gap-3">
               <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
                 <ShoppingBag className="w-4 h-4" />
               </div>
@@ -513,7 +513,7 @@ export default function Explore() {
         )}
 
         {/* ─── Lista de Livros ─── */}
-        <section className="px-4 sm:px-6 pb-6 pt-2 app-container">
+        <section className="px-3 sm:px-6 pb-6 pt-2 app-container">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base sm:text-lg font-bold">
               {catalogFilter === "store"
@@ -570,7 +570,7 @@ export default function Explore() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
               {filteredBooks.map((book) => {
                 const isSale = Boolean(book.is_for_sale);
                 const isOutOfStock = book.stock_status === "out_of_stock";
@@ -579,14 +579,14 @@ export default function Explore() {
                   <div
                     key={book.id}
                     onClick={() => handleCardClick(book)}
-                    className={`bg-white dark:bg-gray-900 border rounded-2xl p-4 flex gap-4 transition-all cursor-pointer group shadow-xs relative ${
+                    className={`bg-white dark:bg-gray-900 border rounded-2xl p-3 sm:p-4 flex gap-3 sm:gap-4 transition-all cursor-pointer group shadow-xs relative ${
                       isSale
                         ? "border-emerald-200/80 dark:border-emerald-900/50 hover:border-emerald-600 dark:hover:border-emerald-500"
                         : "border-gray-100 dark:border-gray-800 hover:border-black dark:hover:border-white"
                     }`}
                   >
                     {/* Capa */}
-                    <div className="w-22 h-32 bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center relative border border-gray-200 dark:border-gray-700 shadow-xs">
+                    <div className="w-20 h-28 sm:w-22 sm:h-32 bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center relative border border-gray-200 dark:border-gray-700 shadow-xs">
                       {book.cover_url ? (
                         <img
                           src={book.cover_url}
@@ -609,7 +609,7 @@ export default function Explore() {
 
                       {/* Badge sobre a capa para livros à venda */}
                       {isSale && (
-                        <div className="absolute top-1.5 left-1.5">
+                        <div className="absolute top-1 left-1 sm:top-1.5 sm:left-1.5">
                           <span className="px-1.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider bg-black/85 text-white backdrop-blur-xs flex items-center gap-1 shadow-xs">
                             <Tag className="w-2.5 h-2.5 text-emerald-400" />
                             {book.price ? `${book.price} ${book.currency || "MT"}` : "À Venda"}
@@ -621,18 +621,19 @@ export default function Explore() {
                     {/* Informações */}
                     <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
                       <div>
-                        {/* Tags e Estado do Livro */}
-                        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                        {/* Tags e Estado do Livro (Zero Emojis - Ícones / Pontos SVG) */}
+                        <div className="flex items-center gap-1.5 mb-1 sm:mb-1.5 flex-wrap">
                           {isSale ? (
                             <>
                               <span
-                                className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md flex items-center gap-1 ${
+                                className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-md flex items-center gap-1.5 ${
                                   isOutOfStock
                                     ? "bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900"
                                     : "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
                                 }`}
                               >
-                                {isOutOfStock ? "🔴 Esgotado" : "🟢 Em Stock"}
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isOutOfStock ? "bg-red-500" : "bg-emerald-500"}`} />
+                                <span>{isOutOfStock ? "Esgotado" : "Em Stock"}</span>
                               </span>
                               <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500">
                                 {book.file_type === "physical" ? "Físico" : book.file_type}
@@ -645,22 +646,22 @@ export default function Explore() {
                           )}
                         </div>
 
-                        <h3 className="font-bold text-sm leading-tight mb-1 line-clamp-2 group-hover:underline">
+                        <h3 className="font-bold text-xs sm:text-sm leading-tight mb-1 line-clamp-2 group-hover:underline">
                           {book.title}
                         </h3>
-                        <p className="text-xs text-gray-500 truncate mb-1.5">
+                        <p className="text-[11px] sm:text-xs text-gray-500 truncate mb-1">
                           {book.author}
                         </p>
 
                         {book.description && (
-                          <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
+                          <p className="text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
                             {book.description}
                           </p>
                         )}
                       </div>
 
-                      {/* Rodapé do Card: Ação de Compra ou Leitura & Botões de Admin */}
-                      <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2 mt-2">
+                      {/* Rodapé do Card Responsivo: WhatsApp + Ações de Admin */}
+                      <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-wrap items-center justify-between gap-1.5 mt-2">
                         {isSale ? (
                           <button
                             type="button"
@@ -668,27 +669,27 @@ export default function Explore() {
                               e.stopPropagation();
                               handleBuyViaWhatsApp(book);
                             }}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs shrink-0 active:scale-95 ${
+                            className={`flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-xs active:scale-95 flex-1 sm:flex-initial min-w-[120px] ${
                               isOutOfStock
                                 ? "bg-amber-600 hover:bg-amber-700 text-white"
                                 : "bg-emerald-600 hover:bg-emerald-700 text-white"
                             }`}
                           >
-                            <Phone className="w-3.5 h-3.5 fill-current" />
-                            <span>{isOutOfStock ? "Reservar via WhatsApp" : "Comprar via WhatsApp"}</span>
+                            <Phone className="w-3.5 h-3.5 fill-current shrink-0" />
+                            <span className="truncate">{isOutOfStock ? "Pedir Reserva no WhatsApp" : "Comprar no WhatsApp"}</span>
                           </button>
                         ) : (
-                          <div className="flex items-center justify-between w-full text-xs">
-                            <span className="text-gray-400 font-medium">
+                          <div className="flex items-center justify-between flex-1 text-xs">
+                            <span className="text-gray-400 font-medium text-[11px]">
                               {book.total_pages ? `${book.total_pages} págs.` : "Disponível"}
                             </span>
-                            <span className="font-semibold text-black dark:text-white flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                            <span className="font-semibold text-black dark:text-white flex items-center gap-1 group-hover:translate-x-1 transition-transform text-[11px]">
                               Ler agora →
                             </span>
                           </div>
                         )}
 
-                        {/* Botões de Ação para o Administrador */}
+                        {/* Botões de Ação para o Administrador (Sempre alinhados à direita) */}
                         {isAdmin && (
                           <div className="flex items-center gap-1 shrink-0 ml-auto" onClick={(e) => e.stopPropagation()}>
                             {isSale && (
@@ -697,6 +698,7 @@ export default function Explore() {
                                 onClick={(e) => handleEditSaleBook(e, book)}
                                 className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors"
                                 title="Editar livro para venda"
+                                aria-label="Editar livro"
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
@@ -707,6 +709,7 @@ export default function Explore() {
                               onClick={(e) => handleDeleteBook(e, book)}
                               className="p-1.5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100 transition-colors"
                               title="Eliminar livro (Admin)"
+                              aria-label="Eliminar livro"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
