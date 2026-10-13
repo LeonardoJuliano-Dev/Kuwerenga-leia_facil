@@ -11,12 +11,14 @@ import {
   Shield,
   Tag,
   ChevronDown,
-  Check
+  Check,
+  X
 } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import AdminBookSaleModal from "../components/AdminBookSaleModal";
 import { supabase } from "../lib/supabase";
 import { getCached, setCached } from "../lib/cache";
+import { EXPANDED_CATEGORIES, type AppCategory } from "../lib/categoryData";
 import {
   checkIsAdmin,
   fetchBooksForSale,
@@ -47,17 +49,13 @@ interface Book {
   uploaded_by?: string;
 }
 
-interface Category {
-  id: string;
-  name: string;
-}
-
 export default function Explore() {
   const [books, setBooks] = useState<Book[]>(() => getCached<Book[]>("explore_books") || []);
   const [storeBooks, setStoreBooks] = useState<BookSaleItem[]>([]);
-  const [categories, setCategories] = useState<Category[]>(() => getCached<Category[]>("explore_categories") || []);
+  const [categories, setCategories] = useState<AppCategory[]>(() => getCached<AppCategory[]>("explore_categories") || EXPANDED_CATEGORIES);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [categorySearchQuery, setCategorySearchQuery] = useState("");
   
   // Filtro de Formato / Catálogo
   const [catalogFilter, setCatalogFilter] = useState<"all" | "free" | "store" | "pdf" | "epub">("all");
@@ -79,11 +77,19 @@ export default function Explore() {
         const adminStatus = await checkIsAdmin();
         setIsAdmin(adminStatus);
 
-        // 2. Categorias reais
+        // 2. Categorias: Mescla categorias do Supabase com a lista expandida rica
         const { data: cats } = await supabase.from("categories").select("id, name").order("name");
-        if (cats) {
-          setCategories(cats);
-          setCached("explore_categories", cats);
+        if (cats && cats.length > 0) {
+          const dbCatNames = new Set(cats.map((c: any) => c.name.toLowerCase().trim()));
+          const extraCategories = EXPANDED_CATEGORIES.filter(
+            (ec) => !dbCatNames.has(ec.name.toLowerCase().trim())
+          );
+          const mergedCategories: AppCategory[] = [...cats, ...extraCategories];
+          setCategories(mergedCategories);
+          setCached("explore_categories", mergedCategories);
+        } else {
+          setCategories(EXPANDED_CATEGORIES);
+          setCached("explore_categories", EXPANDED_CATEGORIES);
         }
 
         // 3. Livros digitais gratuitos / doados
@@ -144,7 +150,7 @@ export default function Explore() {
     );
   })();
 
-  // Filtragem
+  // Filtragem dos livros
   const filteredBooks = allCombinedBooks.filter((b) => {
     const matchesSearch =
       b.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -245,6 +251,11 @@ export default function Explore() {
   const storeCount = allCombinedBooks.filter((b) => b.is_for_sale).length;
   const freeCount = allCombinedBooks.filter((b) => !b.is_for_sale).length;
   const currentCategoryName = categories.find((c) => c.id === selectedCategory)?.name || "Todas as Categorias";
+
+  // Categorias filtradas pela barra de pesquisa interna do seletor
+  const filteredCategoryList = categories.filter((c) =>
+    c.name.toLowerCase().includes(categorySearchQuery.toLowerCase())
+  );
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24 md:pb-12 md:pt-16">
@@ -385,112 +396,31 @@ export default function Explore() {
             )}
           </div>
 
-          {/* ─── Menu Dropdown de Categorias (Zero Emojis, Totalmente Responsivo) ─── */}
-          {categories.length > 0 && (
-            <div className="relative self-start sm:self-auto shrink-0">
-              <button
-                type="button"
-                onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                  selectedCategory !== "all"
-                    ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white shadow-xs"
-                    : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-700"
-                }`}
-                title="Filtrar por Categoria"
-                aria-expanded={isCategoryDropdownOpen}
-              >
-                <Tag className="w-3.5 h-3.5" />
-                <span className="truncate max-w-[130px] sm:max-w-[170px]">
-                  {selectedCategory === "all" ? "Categorias" : currentCategoryName}
+          {/* ─── Botão do Seletor de Categorias Aumentado e Mais Visível ─── */}
+          <div className="self-start sm:self-auto shrink-0 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => {
+                setCategorySearchQuery("");
+                setIsCategoryDropdownOpen(true);
+              }}
+              className={`w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                selectedCategory !== "all"
+                  ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white shadow-xs font-bold"
+                  : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-600"
+              }`}
+              title="Filtrar por Categoria"
+              aria-expanded={isCategoryDropdownOpen}
+            >
+              <div className="flex items-center gap-2 truncate">
+                <Tag className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">
+                  {selectedCategory === "all" ? "Todas as Categorias" : currentCategoryName}
                 </span>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                    isCategoryDropdownOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-
-              {/* Menu Dropdown Flutuante */}
-              {isCategoryDropdownOpen && (
-                <>
-                  {/* Backdrop para fechar ao clicar fora */}
-                  <div
-                    className="fixed inset-0 z-30"
-                    onClick={() => setIsCategoryDropdownOpen(false)}
-                  />
-
-                  <div className="absolute right-0 top-full mt-2 w-60 max-h-72 overflow-y-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl z-40 p-1.5 animate-in fade-in zoom-in-95 duration-150">
-                    <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                      <span>Categorias</span>
-                      {selectedCategory !== "all" && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCategory("all");
-                            setIsCategoryDropdownOpen(false);
-                          }}
-                          className="text-xs text-amber-600 dark:text-amber-400 hover:underline font-semibold lowercase"
-                        >
-                          Limpar
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="py-1 space-y-0.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedCategory("all");
-                          setIsCategoryDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors text-left ${
-                          selectedCategory === "all"
-                            ? "bg-black/5 dark:bg-white/10 font-bold text-black dark:text-white"
-                            : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
-                        }`}
-                      >
-                        <span>Todas as Categorias</span>
-                        {selectedCategory === "all" && <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
-                      </button>
-
-                      {categories.map((cat) => {
-                        const isSelected = selectedCategory === cat.id;
-                        const catBookCount = allCombinedBooks.filter(
-                          (b) => b.category_id === cat.id
-                        ).length;
-
-                        return (
-                          <button
-                            key={cat.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedCategory(cat.id);
-                              setIsCategoryDropdownOpen(false);
-                            }}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors text-left ${
-                              isSelected
-                                ? "bg-black/5 dark:bg-white/10 font-bold text-black dark:text-white"
-                                : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
-                            }`}
-                          >
-                            <span className="truncate pr-2">{cat.name}</span>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {catBookCount > 0 && (
-                                <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-md">
-                                  {catBookCount}
-                                </span>
-                              )}
-                              {isSelected && <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+              </div>
+              <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+            </button>
+          </div>
         </div>
 
         {/* ─── Banner Informativo para a Seção de Livros à Venda ─── */}
@@ -724,6 +654,141 @@ export default function Explore() {
           )}
         </section>
       </main>
+
+      {/* ─── Modal / Dialog de Seleção de Categorias Completo (NUNCA É CORTADO) ─── */}
+      {isCategoryDropdownOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => setIsCategoryDropdownOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-white dark:bg-gray-900 border-t sm:border border-gray-200 dark:border-gray-800 rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[85vh] sm:max-h-[80vh] flex flex-col overflow-hidden text-black dark:text-white animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-200"
+          >
+            {/* Header do Seletor */}
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center">
+                  <Tag className="w-4 h-4 stroke-[2.2]" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm leading-tight">Filtrar por Categoria</h3>
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                    {categories.length} categorias disponíveis
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {selectedCategory !== "all" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory("all");
+                      setIsCategoryDropdownOpen(false);
+                    }}
+                    className="text-xs font-semibold text-amber-600 dark:text-amber-400 px-2 py-1 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors"
+                  >
+                    Limpar
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryDropdownOpen(false)}
+                  className="p-1.5 rounded-xl text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  aria-label="Fechar seletor de categorias"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Barra de Pesquisa de Categorias */}
+            <div className="p-3.5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={categorySearchQuery}
+                  onChange={(e) => setCategorySearchQuery(e.target.value)}
+                  placeholder="Pesquisar entre as categorias..."
+                  className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white transition-all"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Lista com Scroll Suave das Categorias Expandidas */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-1">
+              {/* Opção "Todas as Categorias" */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCategory("all");
+                  setIsCategoryDropdownOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
+                  selectedCategory === "all"
+                    ? "bg-black text-white dark:bg-white dark:text-black font-bold shadow-xs scale-[1.01]"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+              >
+                <span>Todas as Categorias</span>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${
+                    selectedCategory === "all" ? "bg-white/20 dark:bg-black/20" : "bg-gray-100 dark:bg-gray-800 text-gray-400"
+                  }`}>
+                    {allCombinedBooks.length}
+                  </span>
+                  {selectedCategory === "all" && <Check className="w-4 h-4 stroke-[2.5]" />}
+                </div>
+              </button>
+
+              {/* Categorias Expandidas com Contagem de Livros */}
+              {filteredCategoryList.map((cat) => {
+                const isSelected = selectedCategory === cat.id;
+                const catBookCount = allCombinedBooks.filter(
+                  (b) => b.category_id === cat.id
+                ).length;
+
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory(cat.id);
+                      setIsCategoryDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
+                      isSelected
+                        ? "bg-black text-white dark:bg-white dark:text-black font-bold shadow-xs scale-[1.01]"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    }`}
+                  >
+                    <span className="truncate pr-2">{cat.name}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {catBookCount > 0 && (
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${
+                          isSelected ? "bg-white/20 dark:bg-black/20" : "bg-gray-100 dark:bg-gray-800 text-gray-400"
+                        }`}>
+                          {catBookCount}
+                        </span>
+                      )}
+                      {isSelected && <Check className="w-4 h-4 stroke-[2.5]" />}
+                    </div>
+                  </button>
+                );
+              })}
+
+              {filteredCategoryList.length === 0 && (
+                <div className="py-8 text-center text-gray-400 text-xs">
+                  Nenhuma categoria encontrada para "{categorySearchQuery}".
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Gestão de Venda de Livros (Admin) */}
       <AdminBookSaleModal
