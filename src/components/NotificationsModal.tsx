@@ -132,9 +132,13 @@ export default function NotificationsModal({ isOpen, onClose }: NotificationsMod
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+    >
       <div
-        className="w-full max-w-lg bg-white dark:bg-gray-900 border-t sm:border border-gray-200 dark:border-gray-800 rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[90vh] sm:max-h-[82vh] flex flex-col overflow-hidden text-black dark:text-white animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl shadow-2xl max-h-[85vh] flex flex-col overflow-hidden text-black dark:text-white animate-in zoom-in-95 duration-200"
       >
         {/* ─── Header da Central de Notificações ─── */}
         <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md">
