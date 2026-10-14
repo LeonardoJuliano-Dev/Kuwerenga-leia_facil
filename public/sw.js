@@ -99,6 +99,45 @@ self.addEventListener('message', (event) => {
       });
     });
   }
+
+  // Notificação nativa disparada via postMessage
+  if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+    const { title, options } = event.data;
+    if (self.registration && 'showNotification' in self.registration) {
+      self.registration.showNotification(title, {
+        icon: '/favicon.svg',
+        badge: '/favicon.svg',
+        vibrate: [200, 100, 200],
+        ...options,
+      });
+    }
+  }
+});
+
+// Suporte a Web Push Notifications nativas
+self.addEventListener('push', (event) => {
+  if (event.data) {
+    try {
+      const data = event.data.json();
+      event.waitUntil(
+        self.registration.showNotification(data.title || 'Kuwerenga', {
+          icon: '/favicon.svg',
+          badge: '/favicon.svg',
+          vibrate: [200, 100, 200],
+          body: data.body || data.message || '',
+          data: { url: data.link || data.url || '/' },
+        })
+      );
+    } catch {
+      event.waitUntil(
+        self.registration.showNotification('Kuwerenga • Nova Notificação', {
+          icon: '/favicon.svg',
+          body: event.data.text(),
+          data: { url: '/' },
+        })
+      );
+    }
+  }
 });
 
 // Abertura e foco ao clicar em notificações no telemóvel/computador

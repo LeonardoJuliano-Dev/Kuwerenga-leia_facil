@@ -1,16 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, UploadCloud, Book, Image, CheckCircle, AlertCircle, FileText, Sparkles } from "lucide-react";
+import { ArrowLeft, UploadCloud, Book, Image, CheckCircle, AlertCircle, FileText, Sparkles, Clock, Check } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { saveBookOffline } from "../lib/offlineStorage";
 import { isGuestMode } from "../lib/guestMode";
 import GuestRestrictionModal from "../components/GuestRestrictionModal";
 import { extractCoverFromFile } from "../lib/coverExtractor";
-
-interface Category {
-  id: string;
-  name: string;
-}
+import { loadAndSyncCategories, type AppCategory } from "../lib/categoryData";
+import { analyzeBookWithAI } from "../lib/aiBookAnalyzer";
+import { notifyAdminNewDonatedBook } from "../lib/notificationService";
 
 export default function DonateBook() {
   const navigate = useNavigate();
@@ -20,15 +18,19 @@ export default function DonateBook() {
   const [author, setAuthor] = useState("");
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState("");
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<AppCategory[]>([]);
   const [showGuestModal, setShowGuestModal] = useState(false);
 
-  // Ficheiros
+  // Ficheiros e Extração
   const [bookFile, setBookFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [extractingCover, setExtractingCover] = useState(false);
   const [extractedNotice, setExtractedNotice] = useState(false);
+
+  // Estados de IA
+  const [analyzingAI, setAnalyzingAI] = useState(false);
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
 
   // Estados de Envio
   const [uploading, setUploading] = useState(false);
@@ -36,7 +38,7 @@ export default function DonateBook() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  // Carregar categorias existentes e verificar modo convidado
+  // Carregar as 24 categorias completas e verificar modo convidado
   useEffect(() => {
     if (isGuestMode()) {
       setShowGuestModal(true);
@@ -44,7 +46,7 @@ export default function DonateBook() {
     }
 
     async function fetchCategories() {
-      const { data } = await supabase.from("categories").select("id, name").order("name");
+      const data = await loadAndSyncCategories();
       if (data && data.length > 0) {
         setCategories(data);
         setCategoryId(data[0].id);
@@ -53,7 +55,7 @@ export default function DonateBook() {
     fetchCategories();
   }, []);
 
-  // Gestão de ficheiro do livro (PDF / ePub)
+  // Gestão de ficheiro do livro (PDF / ePub) com Extração Automática por IA
   const handleBookChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -66,31 +68,62 @@ export default function DonateBook() {
 
     setBookFile(file);
     setError("");
-
-    // Sugere o título a partir do nome do ficheiro se estiver vazio
-    if (!title) {
-      const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
-      setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
-    }
-
-    // Extrai automaticamente a primeira página como imagem de capa
-    setExtractingCover(true);
     setExtractedNotice(false);
+    setAiNotice(null);
+
+    // 1. Extrai automaticamente a primeira página como imagem de capa
+    setExtractingCover(true);
+    extractCoverFromFile(file)
+      .then((result) => {
+        if (result) {
+          setCoverFile(result.file);
+          setCoverPreview(result.previewUrl);
+          setExtractedNotice(true);
+        }
+      })
+      .catch((err) => {
+        console.warn("Falha ao extrair capa automática:", err);
+      })
+      .finally(() => {
+        setExtractingCover(false);
+      });
+
+    // 2. Análise Inteligente com IA (deduz título, autor, sinopse e categoria)
+    setAnalyzingAI(true);
     try {
-      const result = await extractCoverFromFile(file);
-      if (result) {
-        setCoverFile(result.file);
-        setCoverPreview(result.previewUrl);
-        setExtractedNotice(true);
+      const currentCats = categories.length > 0 ? categories : await loadAndSyncCategories();
+      const aiResult = await analyzeBookWithAI(file, currentCats);
+
+      if (aiResult.title) {
+        setTitle(aiResult.title);
+      }
+      if (aiResult.author) {
+        setAuthor(aiResult.author);
+      }
+      if (aiResult.synopsis) {
+        setDescription(aiResult.synopsis);
+      }
+      if (aiResult.suggestedCategoryId) {
+        setCategoryId(aiResult.suggestedCategoryId);
+      }
+
+      const filledCount = [aiResult.title, aiResult.author, aiResult.synopsis].filter(Boolean).length;
+      if (filledCount > 0) {
+        setAiNotice(`Campos e sinopse sugeridos com IA. Podes revê-los ou editar livremente.`);
       }
     } catch (err) {
-      console.warn("Falha ao extrair capa automática:", err);
+      console.warn("Falha ao analisar metadados com IA:", err);
+      // Fallback básico: limpa nome do ficheiro para título
+      if (!title) {
+        const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
+        setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
+      }
     } finally {
-      setExtractingCover(false);
+      setAnalyzingAI(false);
     }
   };
 
-  // Gestão de Capa
+  // Gestão manual da Capa (substituição)
   const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -105,7 +138,7 @@ export default function DonateBook() {
     setExtractedNotice(false);
   };
 
-  // Submeter Doação
+  // Submeter Doação (entra como pendente de aprovação)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bookFile || !title.trim() || !author.trim()) {
@@ -154,15 +187,41 @@ export default function DonateBook() {
 
       if (bookUploadErr) {
         console.warn("Storage upload aviso:", bookUploadErr.message);
-        // Se o bucket 'books' for privado ou der erro, usamos URL gerada
         uploadedFileUrl = `https://storage.googleapis.com/leitura-mz/books/${bookPath}`;
       } else {
         const { data: bookUrlData } = supabase.storage.from("books").getPublicUrl(bookPath);
         uploadedFileUrl = bookUrlData.publicUrl;
       }
 
-      // 3. Registar o Livro na Base de Dados
-      setUploadProgress("A registar livro no catálogo...");
+      // 3. Resolução segura de UUID da Categoria (suporte a categorias expandidas)
+      let resolvedCategoryId: string | null = null;
+      if (categoryId && !categoryId.startsWith("cat-")) {
+        resolvedCategoryId = categoryId;
+      } else if (categoryId) {
+        const selectedCat = categories.find((c) => c.id === categoryId);
+        if (selectedCat) {
+          const { data: found } = await supabase
+            .from("categories")
+            .select("id")
+            .ilike("name", selectedCat.name)
+            .maybeSingle();
+
+          if (found?.id) {
+            resolvedCategoryId = found.id;
+          } else {
+            const { data: created } = await supabase
+              .from("categories")
+              .insert({ name: selectedCat.name })
+              .select("id")
+              .maybeSingle();
+
+            if (created?.id) resolvedCategoryId = created.id;
+          }
+        }
+      }
+
+      // 4. Registar o Livro na Base de Dados (is_approved: false para moderação do admin)
+      setUploadProgress("A registar livro para moderação...");
       const newBook = {
         title: title.trim(),
         author: author.trim(),
@@ -171,9 +230,9 @@ export default function DonateBook() {
         file_type: fileExt as "pdf" | "epub",
         file_size: bookFile.size,
         cover_url: uploadedCoverUrl || null,
-        category_id: categoryId || null,
+        category_id: resolvedCategoryId,
         uploaded_by: user.id,
-        is_approved: true, // Disponibiliza imediatamente
+        is_approved: false, // Obrigatório aprovação prévia pelo administrador
       };
 
       const { data: insertedBook, error: dbErr } = await supabase
@@ -184,13 +243,13 @@ export default function DonateBook() {
 
       if (dbErr) throw dbErr;
 
-      // 4. Salvar também no IndexedDB para leitura offline imediata
+      // 5. Salvar no IndexedDB local para que o doador possa ler de imediato na sua biblioteca
       if (insertedBook?.id) {
         await saveBookOffline(insertedBook.id, bookFile, {
           title: insertedBook.title,
           author: insertedBook.author,
           cover_url: uploadedCoverUrl,
-          file_type: fileExt
+          file_type: fileExt,
         });
 
         // Adiciona à biblioteca pessoal do utilizador
@@ -198,7 +257,14 @@ export default function DonateBook() {
           user_id: user.id,
           book_id: insertedBook.id,
           status: "reading",
-          is_downloaded: true
+          is_downloaded: true,
+        });
+
+        // Notifica o Administrador (leonardojulianoj@gmail.com) sobre o novo livro para aprovação
+        notifyAdminNewDonatedBook({
+          id: insertedBook.id,
+          title: insertedBook.title,
+          author: insertedBook.author,
         });
       }
 
@@ -209,7 +275,7 @@ export default function DonateBook() {
         } else {
           navigate("/home");
         }
-      }, 1500);
+      }, 2500);
 
     } catch (err: any) {
       console.error("Erro ao doar livro:", err);
@@ -225,15 +291,18 @@ export default function DonateBook() {
       {/* Header */}
       <header className="px-4 sm:px-6 pt-safe bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900 sticky top-0 z-10">
         <div className="app-container pt-6 sm:pt-8 pb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link
-            to="/home"
-            className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <h1 className="text-xl font-bold">Doar um Livro</h1>
-        </div>
+          <div className="flex items-center gap-3">
+            <Link
+              to="/home"
+              className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold">Doar um Livro</h1>
+              <span className="text-xs text-gray-500 block">Contribui para a biblioteca comunitária</span>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -241,15 +310,18 @@ export default function DonateBook() {
       <main className="flex-1 w-full max-w-xl mx-auto p-4 sm:p-6 pb-24">
         
         {success ? (
-          <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 text-center shadow-sm animate-in zoom-in-95 duration-300 my-10">
-            <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 text-center shadow-sm animate-in zoom-in-95 duration-300 my-10 space-y-4">
+            <div className="w-16 h-16 bg-blue-50 dark:bg-blue-950/40 text-blue-500 rounded-full flex items-center justify-center mx-auto">
               <CheckCircle className="w-8 h-8" />
             </div>
-            <h2 className="text-xl font-bold mb-2">Livro Doado com Sucesso!</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-              Obrigado pela tua contribuição! O livro foi adicionado à biblioteca comunitária e está pronto para ler.
+            <h2 className="text-xl font-bold">Livro Submetido para Aprovação</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto leading-relaxed">
+              Obrigado pela tua contribuição! O livro foi submetido e ficará visível para toda a comunidade assim que for aprovado pelo administrador. Podes começar a lê-lo já na tua biblioteca pessoal.
             </p>
-            <span className="text-xs text-gray-400">A abrir o leitor...</span>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-full text-xs text-gray-500">
+              <Clock className="w-3.5 h-3.5 text-amber-500" />
+              <span>A aguardar moderação • A abrir o leitor...</span>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -261,6 +333,14 @@ export default function DonateBook() {
                 <span>{error}</span>
               </div>
             )}
+
+            {/* Aviso Informativo de Moderação Prévia */}
+            <div className="p-3.5 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 rounded-2xl flex items-start gap-3 text-blue-900 dark:text-blue-300 text-xs leading-relaxed">
+              <Clock className="w-4 h-4 flex-shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
+              <span>
+                Para manter a alta qualidade do catálogo, cada livro doado é revisto e aprovado pelo administrador antes de ser disponibilizado publicamente a todos os utilizadores.
+              </span>
+            </div>
 
             {/* 1. Upload do Ficheiro do Livro */}
             <div>
@@ -284,7 +364,10 @@ export default function DonateBook() {
                         {(bookFile.size / (1024 * 1024)).toFixed(2)} MB
                       </p>
                     </div>
-                    <span className="text-xs font-medium text-emerald-500">Pronto</span>
+                    <span className="text-xs font-medium text-emerald-500 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" />
+                      Pronto
+                    </span>
                   </div>
                 ) : (
                   <>
@@ -300,6 +383,21 @@ export default function DonateBook() {
                   className="hidden"
                 />
               </label>
+
+              {/* Indicador de Processamento de IA */}
+              {analyzingAI && (
+                <div className="mt-2.5 p-3 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900 rounded-xl flex items-center gap-2.5 text-purple-700 dark:text-purple-300 text-xs animate-pulse">
+                  <div className="w-4 h-4 border-2 border-purple-600 dark:border-purple-400 border-t-transparent rounded-full animate-spin" />
+                  <span>A analisar o livro com Inteligência Artificial (metadados e sinopse)...</span>
+                </div>
+              )}
+
+              {aiNotice && !analyzingAI && (
+                <div className="mt-2.5 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded-xl flex items-center gap-2 text-emerald-700 dark:text-emerald-300 text-xs">
+                  <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>{aiNotice}</span>
+                </div>
+              )}
             </div>
 
             {/* 2. Capa Opcional */}
@@ -311,7 +409,7 @@ export default function DonateBook() {
                 {extractedNotice && (
                   <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                     <Sparkles className="w-3.5 h-3.5" />
-                    Capa extraída da 1ª página
+                    Capa obtida da 1ª página
                   </span>
                 )}
               </div>
@@ -347,9 +445,14 @@ export default function DonateBook() {
 
             {/* 3. Título do Livro */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-                Título do Livro *
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
+                  Título do Livro *
+                </label>
+                {title && (
+                  <span className="text-[10px] text-gray-400">Sugerido por IA ou editável</span>
+                )}
+              </div>
               <div className="relative">
                 <Book className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
@@ -365,9 +468,16 @@ export default function DonateBook() {
 
             {/* 4. Autor */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-                Autor(a) *
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
+                  Autor(a) *
+                </label>
+                {author ? (
+                  <span className="text-[10px] text-gray-400">Identificado por IA</span>
+                ) : (
+                  <span className="text-[10px] text-gray-400">Deixado em branco para digitação</span>
+                )}
+              </div>
               <div className="relative">
                 <FileText className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
@@ -381,11 +491,11 @@ export default function DonateBook() {
               </div>
             </div>
 
-            {/* 5. Categoria */}
+            {/* 5. Categoria (Todas as 24 categorias) */}
             {categories.length > 0 && (
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-                  Categoria / Género
+                  Categoria / Género Literário ({categories.length} Categorias)
                 </label>
                 <select
                   value={categoryId}
@@ -401,16 +511,21 @@ export default function DonateBook() {
               </div>
             )}
 
-            {/* 6. Sinopse / Descrição */}
+            {/* 6. Sinopse / Resumo */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-                Sinopse ou Descrição (Opcional)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
+                  Sinopse ou Descrição
+                </label>
+                <span className="text-[10px] text-gray-400">
+                  {description ? "Sintetizada com IA" : "Opcional • Digita se desejares"}
+                </span>
+              </div>
               <textarea
-                rows={3}
+                rows={4}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Breve resumo da obra para outros leitores..."
+                placeholder="Breve resumo da obra gerado por IA ou redigido manualmente..."
                 className="w-full p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-all resize-none"
               />
             </div>
@@ -429,7 +544,7 @@ export default function DonateBook() {
               ) : (
                 <>
                   <UploadCloud className="w-5 h-5" />
-                  <span>Concluir Doação do Livro</span>
+                  <span>Submeter Livro para Moderação</span>
                 </>
               )}
             </button>

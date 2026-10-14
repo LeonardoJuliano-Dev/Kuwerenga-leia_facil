@@ -3,7 +3,7 @@ import { getLocalCustomBooks } from "./bookshelfService";
 
 export interface AppNotification {
   id: string;
-  type: "community_message" | "book_idle" | "reading_reminder" | "system";
+  type: "community_message" | "book_idle" | "reading_reminder" | "system" | "admin_approval";
   title: string;
   message: string;
   timestamp: string;
@@ -111,7 +111,7 @@ export function toggleMuteClub(clubId: string): boolean {
 }
 
 /** Solicita permissão de Notificações do Navegador / Telemóvel */
-export async function requestBrowserNotificationPermission(): Promise<boolean> {
+export async function requestBrowserNotificationPermission(sendTestNotification = true): Promise<boolean> {
   if (typeof window === "undefined" || !("Notification" in window)) {
     return false;
   }
@@ -120,6 +120,14 @@ export async function requestBrowserNotificationPermission(): Promise<boolean> {
     const perm = await Notification.requestPermission();
     const granted = perm === "granted";
     saveNotificationSettings({ browserNotifications: granted });
+
+    if (granted && sendTestNotification) {
+      sendBrowserNotification("Kuwerenga • Notificações Ativas", {
+        body: "As notificações do Kuwerenga estão agora ativas no teu telemóvel!",
+        link: "/home",
+      });
+    }
+
     return granted;
   } catch (err) {
     console.warn("Erro ao solicitar permissão de notificações:", err);
@@ -135,35 +143,33 @@ export function sendBrowserNotification(title: string, options?: NotificationOpt
   const settings = getNotificationSettings();
   if (settings.muteAll) return;
 
+  const payload: any = {
+    icon: "/favicon.svg",
+    badge: "/favicon.svg",
+    vibrate: [200, 100, 200],
+    data: { url: options?.link || "/" },
+    ...options,
+  };
+
   try {
-    // Tenta utilizar o Service Worker registration para suporte PWA mobile
-    if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.ready.then((reg) => {
-        (reg as any).showNotification(title, {
-          icon: "/favicon.svg",
-          badge: "/favicon.svg",
-          vibrate: [100, 50, 100],
-          data: { url: options?.link || "/" },
-          ...options,
+    // 1. Em primeiro lugar, tenta sempre via Service Worker Registration (essencial para telemóveis Android, iOS PWA e navegadores móveis)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.ready
+        .then((reg) => {
+          return reg.showNotification(title, payload);
+        })
+        .catch(() => {
+          if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+              type: "SHOW_NOTIFICATION",
+              title,
+              options: payload,
+            });
+          }
         });
-      }).catch(() => {
-        // Fallback para construtor direto
-        const notif = new Notification(title, {
-          icon: "/favicon.svg",
-          ...options,
-        });
-        if (options?.link) {
-          notif.onclick = () => {
-            window.focus();
-            window.location.href = options.link!;
-          };
-        }
-      });
     } else {
-      const notif = new Notification(title, {
-        icon: "/favicon.svg",
-        ...options,
-      });
+      // 2. Fallback para desktop com construtor direto
+      const notif = new Notification(title, payload);
       if (options?.link) {
         notif.onclick = () => {
           window.focus();
@@ -581,7 +587,31 @@ export function initCommunityNotificationsListener(): () => void {
             });
           }
         )
-        .subscribe();
+      // 2. Se for o administrador do sistema, escuta novos livros doados pendentes de aprovação
+      if (user.email === "leonardojulianoj@gmail.com") {
+        supabase
+          .channel("admin_book_approvals_listener")
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "books",
+            },
+            (payload) => {
+              if (isCleanedUp) return;
+              const newBook: any = payload.new;
+              if (newBook && newBook.is_approved === false) {
+                notifyAdminNewDonatedBook({
+                  id: newBook.id,
+                  title: newBook.title,
+                  author: newBook.author,
+                });
+              }
+            }
+          )
+          .subscribe();
+      }
     } catch (err) {
       console.warn("Erro ao configurar ouvinte de notificações comunitárias:", err);
     }
@@ -600,4 +630,21 @@ export function initCommunityNotificationsListener(): () => void {
       globalCommunityChannel = null;
     }
   };
+}
+
+/**
+ * Notifica o administrador quando um novo livro doado aguarda aprovação
+ */
+export function notifyAdminNewDonatedBook(book: { id: string; title: string; author: string }) {
+  addNotification({
+    type: "admin_approval",
+    title: "Novo Livro Doado para Aprovação",
+    message: `"${book.title}" por ${book.author} aguarda a tua aprovação para entrar no catálogo.`,
+    link: "/explore?tab=admin_approvals",
+    metadata: {
+      bookId: book.id,
+      bookTitle: book.title,
+      authorName: book.author,
+    },
+  });
 }

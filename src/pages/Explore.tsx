@@ -12,13 +12,14 @@ import {
   Tag,
   ChevronDown,
   Check,
-  X
+  X,
+  Clock
 } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import AdminBookSaleModal from "../components/AdminBookSaleModal";
 import { supabase } from "../lib/supabase";
 import { getCached, setCached } from "../lib/cache";
-import { EXPANDED_CATEGORIES, type AppCategory } from "../lib/categoryData";
+import { EXPANDED_CATEGORIES, loadAndSyncCategories, type AppCategory } from "../lib/categoryData";
 import {
   checkIsAdmin,
   fetchBooksForSale,
@@ -40,6 +41,8 @@ interface Book {
   avg_rating?: number;
   total_ratings?: number;
   created_at: string;
+  // Moderação
+  is_approved?: boolean;
   // Campos de venda
   is_for_sale?: boolean;
   price?: number;
@@ -58,7 +61,7 @@ export default function Explore() {
   const [categorySearchQuery, setCategorySearchQuery] = useState("");
   
   // Filtro de Formato / Catálogo
-  const [catalogFilter, setCatalogFilter] = useState<"all" | "free" | "store" | "pdf" | "epub">("all");
+  const [catalogFilter, setCatalogFilter] = useState<"all" | "free" | "store" | "pdf" | "epub" | "pending_approval">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(() => !getCached<Book[]>("explore_books"));
   const [isAdmin, setIsAdmin] = useState(false);
@@ -69,6 +72,14 @@ export default function Explore() {
 
   const navigate = useNavigate();
 
+  // Verifica se a URL solicita a aba de aprovações
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tab") === "admin_approvals") {
+      setCatalogFilter("pending_approval");
+    }
+  }, []);
+
   // Carregar dados reais do Supabase & Livros para Venda
   useEffect(() => {
     async function loadData() {
@@ -77,25 +88,15 @@ export default function Explore() {
         const adminStatus = await checkIsAdmin();
         setIsAdmin(adminStatus);
 
-        // 2. Categorias: Mescla categorias do Supabase com a lista expandida rica
-        const { data: cats } = await supabase.from("categories").select("id, name").order("name");
-        if (cats && cats.length > 0) {
-          const dbCatNames = new Set(cats.map((c: any) => c.name.toLowerCase().trim()));
-          const extraCategories = EXPANDED_CATEGORIES.filter(
-            (ec) => !dbCatNames.has(ec.name.toLowerCase().trim())
-          );
-          const mergedCategories: AppCategory[] = [...cats, ...extraCategories];
-          setCategories(mergedCategories);
-          setCached("explore_categories", mergedCategories);
-        } else {
-          setCategories(EXPANDED_CATEGORIES);
-          setCached("explore_categories", EXPANDED_CATEGORIES);
-        }
+        // 2. Categorias: Carrega as 24 categorias literárias sincronizadas
+        const mergedCategories = await loadAndSyncCategories();
+        setCategories(mergedCategories);
+        setCached("explore_categories", mergedCategories);
 
-        // 3. Livros digitais gratuitos / doados
+        // 3. Livros digitais gratuitos / doados (incluindo status de aprovação)
         const { data: bookList, error } = await supabase
           .from("books")
-          .select("id, title, author, description, cover_url, file_url, file_type, total_pages, category_id, avg_rating, total_ratings, created_at, is_for_sale, price, currency, stock_status, seller_whatsapp, uploaded_by")
+          .select("id, title, author, description, cover_url, file_url, file_type, total_pages, category_id, avg_rating, total_ratings, created_at, is_for_sale, price, currency, stock_status, seller_whatsapp, uploaded_by, is_approved")
           .order("created_at", { ascending: false });
 
         if (!error && bookList) {
@@ -142,6 +143,7 @@ export default function Explore() {
         stock_status: sb.stock_status,
         seller_whatsapp: sb.seller_whatsapp,
         uploaded_by: sb.uploaded_by,
+        is_approved: true, // Livros da loja adicionados pelo admin são aprovados
       });
     });
 
@@ -149,6 +151,9 @@ export default function Explore() {
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
   })();
+
+  // Contagem de livros pendentes de aprovação
+  const pendingCount = books.filter((b) => b.is_approved === false).length;
 
   // Filtragem dos livros
   const filteredBooks = allCombinedBooks.filter((b) => {
@@ -159,14 +164,44 @@ export default function Explore() {
 
     const matchesCategory = selectedCategory === "all" || b.category_id === selectedCategory;
 
+    // 1. Se estiver na aba de moderação (Admin), mostra apenas pendentes
+    if (catalogFilter === "pending_approval") {
+      return matchesSearch && matchesCategory && b.is_approved === false;
+    }
+
+    // 2. Se o utilizador NÃO for admin, oculta qualquer livro doado pendente de moderação
+    if (!isAdmin && b.is_approved === false) {
+      return false;
+    }
+
     let matchesFilter = true;
-    if (catalogFilter === "free") matchesFilter = !b.is_for_sale;
+    if (catalogFilter === "free") matchesFilter = !b.is_for_sale && b.is_approved !== false;
     else if (catalogFilter === "store") matchesFilter = Boolean(b.is_for_sale);
-    else if (catalogFilter === "pdf") matchesFilter = b.file_type === "pdf" && !b.is_for_sale;
-    else if (catalogFilter === "epub") matchesFilter = b.file_type === "epub" && !b.is_for_sale;
+    else if (catalogFilter === "pdf") matchesFilter = b.file_type === "pdf" && !b.is_for_sale && b.is_approved !== false;
+    else if (catalogFilter === "epub") matchesFilter = b.file_type === "epub" && !b.is_for_sale && b.is_approved !== false;
 
     return matchesSearch && matchesCategory && matchesFilter;
   });
+
+  // Ações de Administrador: Aprovar Livro Doado
+  const handleApproveBook = async (e: React.MouseEvent, book: Book) => {
+    e.stopPropagation();
+    try {
+      const { error } = await supabase
+        .from("books")
+        .update({ is_approved: true })
+        .eq("id", book.id);
+
+      if (error) throw error;
+
+      setBooks((prev) =>
+        prev.map((b) => (b.id === book.id ? { ...b, is_approved: true } : b))
+      );
+    } catch (err) {
+      console.error("Erro ao aprovar livro:", err);
+      alert("Não foi possível aprovar o livro. Tenta novamente.");
+    }
+  };
 
   // Ações de Administrador: Editar Livro à Venda
   const handleEditSaleBook = (e: React.MouseEvent, book: Book) => {
@@ -206,7 +241,6 @@ export default function Explore() {
       await deleteBookAsAdmin(book.id);
       setBooks((prev) => prev.filter((b) => b.id !== book.id));
       setStoreBooks((prev) => prev.filter((b) => b.id !== book.id));
-      alert("Livro removido do catálogo com sucesso.");
     } catch (err) {
       console.error("Erro ao apagar livro:", err);
       alert("Não foi possível apagar o livro.");
@@ -394,6 +428,26 @@ export default function Explore() {
                 </button>
               </>
             )}
+
+            {/* Aba de Moderação exclusiva para o Administrador */}
+            {isAdmin && (
+              <button
+                onClick={() => setCatalogFilter("pending_approval")}
+                className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
+                  catalogFilter === "pending_approval"
+                    ? "bg-amber-600 text-white shadow-xs scale-[1.02]"
+                    : "bg-white dark:bg-gray-900 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/60 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Moderação</span>
+                {pendingCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
 
           {/* ─── Botão do Seletor de Categorias Aumentado e Mais Visível ─── */}
@@ -422,6 +476,25 @@ export default function Explore() {
             </button>
           </div>
         </div>
+
+        {/* ─── Banner Informativo para a Seção de Moderação (Admin) ─── */}
+        {catalogFilter === "pending_approval" && (
+          <div className="px-3 sm:px-6 my-2 app-container">
+            <div className="p-3.5 sm:p-4 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/30 flex items-start gap-3">
+              <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-xs sm:text-sm text-amber-900 dark:text-amber-300">
+                  Moderação de Livros Doados ({pendingCount} pendente{pendingCount === 1 ? "" : "s"})
+                </h3>
+                <p className="text-[11px] text-amber-800/80 dark:text-amber-400/80 mt-0.5 leading-relaxed">
+                  Estes livros foram enviados pela comunidade e aguardam a tua aprovação. Clica em "Aprovar" para que fiquem disponíveis para todos os leitores do Kuwerenga.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ─── Banner Informativo para a Seção de Livros à Venda ─── */}
         {catalogFilter === "store" && (
@@ -472,6 +545,8 @@ export default function Explore() {
               <p className="text-xs text-gray-500 mb-6 leading-relaxed max-w-xs mx-auto">
                 {searchQuery || selectedCategory !== "all"
                   ? "Tenta pesquisar por outro termo ou remover os filtros de pesquisa."
+                  : catalogFilter === "pending_approval"
+                  ? "Não existem livros pendentes de moderação neste momento. Todas as doações estão revistas e aprovadas."
                   : catalogFilter === "store"
                   ? isAdmin
                     ? "Ainda não existem livros cadastrados para venda. Como administrador, podes adicionar o primeiro livro!"
@@ -479,7 +554,7 @@ export default function Explore() {
                   : "Ainda não existem livros neste catálogo. Sê o primeiro a doar uma obra para a comunidade!"}
               </p>
               
-              {catalogFilter === "store" ? (
+              {catalogFilter === "pending_approval" ? null : catalogFilter === "store" ? (
                 isAdmin && (
                   <button
                     onClick={() => setShowSaleModal(true)}
@@ -569,6 +644,11 @@ export default function Explore() {
                                 {book.file_type === "physical" ? "Físico" : book.file_type}
                               </span>
                             </>
+                          ) : book.is_approved === false ? (
+                            <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-md flex items-center gap-1.5 bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                              <span>Aguardando Aprovação</span>
+                            </span>
                           ) : (
                             <span className="inline-block uppercase tracking-wider text-[9px] font-bold px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
                               {book.file_type} • Grátis
@@ -621,7 +701,21 @@ export default function Explore() {
 
                         {/* Botões de Ação para o Administrador (Sempre alinhados à direita) */}
                         {isAdmin && (
-                          <div className="flex items-center gap-1 shrink-0 ml-auto" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1.5 shrink-0 ml-auto" onClick={(e) => e.stopPropagation()}>
+                            {/* Botão de Aprovação Imediata se estiver pendente */}
+                            {book.is_approved === false && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleApproveBook(e, book)}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition-all shadow-xs active:scale-95"
+                                title="Aprovar livro para o catálogo público"
+                                aria-label="Aprovar livro"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Aprovar</span>
+                              </button>
+                            )}
+
                             {isSale && (
                               <button
                                 type="button"
@@ -638,7 +732,7 @@ export default function Explore() {
                               type="button"
                               onClick={(e) => handleDeleteBook(e, book)}
                               className="p-1.5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100 transition-colors"
-                              title="Eliminar livro (Admin)"
+                              title={book.is_approved === false ? "Rejeitar e remover livro" : "Eliminar livro (Admin)"}
                               aria-label="Eliminar livro"
                             >
                               <Trash2 className="w-3.5 h-3.5" />

@@ -17,6 +17,7 @@ import {
   formatWhatsAppNumber,
   type BookSaleItem
 } from "../lib/storeService";
+import { analyzeBookWithAI } from "../lib/aiBookAnalyzer";
 
 interface AdminBookSaleModalProps {
   isOpen: boolean;
@@ -111,18 +112,32 @@ export default function AdminBookSaleModal({
     // Extrai automaticamente a primeira página como imagem de capa
     setExtractingCover(true);
     setExtractedNotice(false);
-    try {
-      const result = await extractCoverFromFile(file);
-      if (result) {
-        setCoverFile(result.file);
-        setCoverPreview(result.previewUrl);
-        setExtractedNotice(true);
-      }
-    } catch (err) {
-      console.warn("Falha ao extrair capa automática:", err);
-    } finally {
-      setExtractingCover(false);
-    }
+    extractCoverFromFile(file)
+      .then((result) => {
+        if (result) {
+          setCoverFile(result.file);
+          setCoverPreview(result.previewUrl);
+          setExtractedNotice(true);
+        }
+      })
+      .catch((err) => {
+        console.warn("Falha ao extrair capa automática:", err);
+      })
+      .finally(() => {
+        setExtractingCover(false);
+      });
+
+    // Análise Inteligente de Metadados e Sinopse por IA
+    analyzeBookWithAI(file, categories as any)
+      .then((aiResult) => {
+        if (aiResult.title && !title.trim()) setTitle(aiResult.title);
+        if (aiResult.author && !author.trim()) setAuthor(aiResult.author);
+        if (aiResult.synopsis && !description.trim()) setDescription(aiResult.synopsis);
+        if (aiResult.suggestedCategoryId && !categoryId) setCategoryId(aiResult.suggestedCategoryId);
+      })
+      .catch((err) => {
+        console.warn("Falha ao analisar metadados com IA:", err);
+      });
   };
 
   // Ao selecionar uma imagem de capa manualmente (substituição)

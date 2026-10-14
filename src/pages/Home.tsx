@@ -109,10 +109,11 @@ export default function Home() {
           setCached("home_reading_list", activeItems);
         }
 
-        // 2. Livros em destaque reais
+        // 2. Livros em destaque reais (apenas livros aprovados ou da loja)
         const { data: books } = await supabase
           .from("books")
-          .select("id, title, author, cover_url, file_type, total_pages")
+          .select("id, title, author, cover_url, file_type, total_pages, is_approved, is_for_sale")
+          .or("is_approved.eq.true,is_for_sale.eq.true")
           .order("created_at", { ascending: false })
           .limit(8);
 

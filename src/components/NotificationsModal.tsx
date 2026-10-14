@@ -126,6 +126,8 @@ export default function NotificationsModal({ isOpen, onClose }: NotificationsMod
         return <BookOpen className="w-4 h-4 text-amber-600 dark:text-amber-400" />;
       case "reading_reminder":
         return <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />;
+      case "admin_approval":
+        return <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />;
       default:
         return <Bell className="w-4 h-4 text-purple-600 dark:text-purple-400" />;
     }
@@ -275,6 +277,28 @@ export default function NotificationsModal({ isOpen, onClose }: NotificationsMod
               className="font-bold underline text-[11px] hover:opacity-80 shrink-0 ml-2"
             >
               Reativar
+            </button>
+          </div>
+        )}
+
+        {/* ─── Banner de Ativação no Telemóvel se permissão pendente ─── */}
+        {typeof window !== "undefined" && "Notification" in window && Notification.permission !== "granted" && (
+          <div className="px-5 py-3 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-emerald-500/10 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between gap-3 text-xs shrink-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Bell className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-bold text-xs truncate">Receber no Telemóvel</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                  Ativa as notificações nativas para receber lembretes e mensagens
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleRequestBrowserPerm}
+              className="px-3.5 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-bold shrink-0 hover:opacity-90 active:scale-95 transition-all shadow-xs"
+            >
+              Ativar no Telemóvel
             </button>
           </div>
         )}
