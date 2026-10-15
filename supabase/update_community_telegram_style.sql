@@ -8,13 +8,14 @@
 ALTER TABLE public.clubs ADD COLUMN IF NOT EXISTS avatar_url text;
 ALTER TABLE public.clubs ADD COLUMN IF NOT EXISTS cover_url text;
 
--- 2. Garantir que os administradores possam atualizar avatar_url e cover_url
+-- 2. Garantir que quem cria a comunidade (e administradores do grupo) possa atualizar avatar_url, cover_url e detalhes
 DROP POLICY IF EXISTS "Admins can update their clubs" ON public.clubs;
-CREATE POLICY "Admins can update their clubs"
+DROP POLICY IF EXISTS "Creators can update their clubs" ON public.clubs;
+
+CREATE POLICY "Creators can update their clubs"
   ON public.clubs FOR UPDATE
   USING (
     auth.uid() = created_by
-    OR auth.jwt() ->> 'email' = 'leonardojulianoj@gmail.com'
     OR EXISTS (
       SELECT 1 FROM public.club_members cm
       WHERE cm.club_id = clubs.id AND cm.user_id = auth.uid() AND cm.role = 'admin'

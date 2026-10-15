@@ -80,7 +80,6 @@ export default function Community() {
   const [submittingDiscussion, setSubmittingDiscussion] = useState(false);
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [showGuestRestriction, setShowGuestRestriction] = useState(false);
 
   const createAvatarInputRef = useRef<HTMLInputElement>(null);
@@ -93,7 +92,6 @@ export default function Community() {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           setCurrentUserId(user.id);
-          setCurrentUserEmail(user.email || null);
         }
 
         // Clubes públicos e privados
@@ -375,11 +373,9 @@ export default function Community() {
     );
   };
 
+  // Quem cria a comunidade é o administrador do grupo
   const isClubAdmin = (club: Club) => {
-    return (
-      (currentUserId && club.created_by === currentUserId) ||
-      currentUserEmail === "leonardojulianoj@gmail.com"
-    );
+    return Boolean(currentUserId && club.created_by === currentUserId);
   };
 
   // Filtragem dos clubes
