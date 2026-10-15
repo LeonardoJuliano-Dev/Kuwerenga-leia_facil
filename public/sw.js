@@ -1,8 +1,12 @@
-const CACHE_NAME = 'kuwerenga-v2';
+const CACHE_NAME = 'kuwerenga-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/badge-96.png',
+  '/favicon.svg'
 ];
 
 // Install: faz cache do shell essencial
@@ -156,8 +160,8 @@ async function runBackgroundReadingChecks() {
             await self.registration.showNotification(
               `Continua a tua leitura: "${book.title}"`,
               {
-                icon: '/favicon.svg',
-                badge: '/favicon.svg',
+                icon: '/icon-192.png',
+                badge: '/badge-96.png',
                 vibrate: [200, 100, 200],
                 body: `Já passaram ${daysIdle} dias desde a tua última leitura. Que tal avançar mais algumas páginas hoje?`,
                 tag: `book_idle_${book.id}`,
@@ -186,8 +190,8 @@ async function runBackgroundReadingChecks() {
         const randomMsg = motivationalMessages[Math.floor(Math.random() * motivationalMessages.length)];
 
         await self.registration.showNotification('Hora da Leitura • Kuwerenga', {
-          icon: '/favicon.svg',
-          badge: '/favicon.svg',
+          icon: '/icon-192.png',
+          badge: '/badge-96.png',
           vibrate: [200, 100, 200],
           body: randomMsg,
           tag: `daily_reminder_${todayStr}`,
@@ -244,8 +248,8 @@ self.addEventListener('message', (event) => {
     const { title, options } = event.data;
     if (self.registration && 'showNotification' in self.registration) {
       self.registration.showNotification(title, {
-        icon: '/favicon.svg',
-        badge: '/favicon.svg',
+        icon: '/icon-192.png',
+        badge: '/badge-96.png',
         vibrate: [200, 100, 200],
         ...options,
       });
@@ -279,8 +283,8 @@ self.addEventListener('push', (event) => {
       const data = event.data.json();
       event.waitUntil(
         self.registration.showNotification(data.title || 'Kuwerenga', {
-          icon: '/favicon.svg',
-          badge: '/favicon.svg',
+          icon: '/icon-192.png',
+          badge: '/badge-96.png',
           vibrate: [200, 100, 200],
           body: data.body || data.message || '',
           tag: data.tag || `push_${Date.now()}`,
@@ -290,8 +294,8 @@ self.addEventListener('push', (event) => {
     } catch {
       event.waitUntil(
         self.registration.showNotification('Kuwerenga • Nova Notificação', {
-          icon: '/favicon.svg',
-          badge: '/favicon.svg',
+          icon: '/icon-192.png',
+          badge: '/badge-96.png',
           body: event.data.text(),
           data: { url: '/' },
         })

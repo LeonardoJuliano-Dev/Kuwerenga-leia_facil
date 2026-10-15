@@ -24,6 +24,7 @@ import {
 } from "./lib/notificationService";
 
 import { isGuestMode, disableGuestMode } from "./lib/guestMode";
+import InAppNotificationToast from "./components/InAppNotificationToast";
 
 function AuthRouter() {
   const navigate = useNavigate();
@@ -145,24 +146,27 @@ function AuthRouter() {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<Onboarding />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/setup-profile" element={<SetupProfile />} />
-      <Route path="/home" element={<Home />} />
-      <Route path="/explore" element={<Explore />} />
-      <Route path="/library" element={<Library />} />
-      <Route path="/profile" element={<Profile />} />
-      <Route path="/profile/:userId" element={<Profile />} />
-      <Route path="/reader" element={<Reader />} />
-      <Route path="/donate-book" element={<DonateBook />} />
-      <Route path="/book/:id" element={<BookDetails />} />
-      <Route path="/community" element={<Community />} />
-      <Route path="/club/:id" element={<ClubDetails />} />
-      <Route path="/settings" element={<Settings />} />
-      <Route path="/support" element={<Support />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <InAppNotificationToast />
+      <Routes>
+        <Route path="/" element={<Onboarding />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/setup-profile" element={<SetupProfile />} />
+        <Route path="/home" element={<Home />} />
+        <Route path="/explore" element={<Explore />} />
+        <Route path="/library" element={<Library />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/profile/:userId" element={<Profile />} />
+        <Route path="/reader" element={<Reader />} />
+        <Route path="/donate-book" element={<DonateBook />} />
+        <Route path="/book/:id" element={<BookDetails />} />
+        <Route path="/community" element={<Community />} />
+        <Route path="/club/:id" element={<ClubDetails />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/support" element={<Support />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
 

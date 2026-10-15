@@ -152,6 +152,12 @@ export default function BottomNav() {
                       isActive ? "stroke-[2.3]" : "stroke-[1.8] group-hover:scale-105"
                     }`}
                   />
+                  {/* Indicador de notificações não lidas no Início */}
+                  {item.path === "/home" && unreadNotifs > 0 && (
+                    <span className="absolute -top-0.5 right-1 min-w-[16px] h-4 px-1 bg-amber-500 text-black font-bold text-[9px] rounded-full flex items-center justify-center border border-white dark:border-black shadow-xs animate-pulse">
+                      {unreadNotifs > 9 ? "9+" : unreadNotifs}
+                    </span>
+                  )}
                 </div>
 
                 {/* Texto / Etiqueta da Aba */}
@@ -178,6 +184,23 @@ export default function BottomNav() {
           })}
         </div>
       </nav>
+
+      {/* ─── Botão Flutuante de Notificações em Mobile para páginas secundárias ─── */}
+      {currentPath !== "/home" && !currentPath.startsWith("/reader") && (
+        <button
+          type="button"
+          onClick={() => setShowNotifications(true)}
+          className="md:hidden fixed top-3 right-3 z-40 w-9 h-9 rounded-full bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border border-gray-200/80 dark:border-gray-800/80 flex items-center justify-center text-gray-700 dark:text-gray-300 shadow-sm touch-target active:scale-95 transition-all"
+          aria-label="Abrir notificações"
+        >
+          <Bell className="w-4.5 h-4.5 stroke-[1.8]" />
+          {unreadNotifs > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 bg-amber-500 text-black font-bold text-[9px] rounded-full flex items-center justify-center border-2 border-white dark:border-gray-900 animate-pulse">
+              {unreadNotifs > 9 ? "9+" : unreadNotifs}
+            </span>
+          )}
+        </button>
+      )}
 
       {/* Central de Notificações Desktop */}
       <NotificationsModal

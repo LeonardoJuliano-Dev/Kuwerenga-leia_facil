@@ -55,6 +55,27 @@ function notifyListeners(list: AppNotification[]) {
   });
 }
 
+// Listeners de Notificação em Tempo Real (Toast In-App quando entra)
+type InAppToastListener = (notification: AppNotification) => void;
+const toastListeners = new Set<InAppToastListener>();
+
+export function subscribeToInAppToast(callback: InAppToastListener): () => void {
+  toastListeners.add(callback);
+  return () => {
+    toastListeners.delete(callback);
+  };
+}
+
+function notifyToastListeners(notification: AppNotification) {
+  toastListeners.forEach((fn) => {
+    try {
+      fn(notification);
+    } catch (e) {
+      console.warn("Erro no listener de toast:", e);
+    }
+  });
+}
+
 /** Obtém as configurações de notificação */
 export function getNotificationSettings(): NotificationSettings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS;
@@ -144,8 +165,8 @@ export function sendBrowserNotification(title: string, options?: NotificationOpt
   if (settings.muteAll) return;
 
   const payload: any = {
-    icon: "/favicon.svg",
-    badge: "/favicon.svg",
+    icon: "/icon-192.png",
+    badge: "/badge-96.png",
     vibrate: [200, 100, 200],
     data: { url: options?.link || "/" },
     ...options,
@@ -253,6 +274,9 @@ export function addNotification(
     body: newNotif.message,
     link: newNotif.link,
   });
+
+  // Emite toast visual imediato in-app
+  notifyToastListeners(newNotif);
 
   return newNotif;
 }
