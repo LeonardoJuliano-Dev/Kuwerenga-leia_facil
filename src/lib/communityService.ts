@@ -232,22 +232,44 @@ export async function updateClubPrivacy(clubId: string, isPublic: boolean): Prom
   }
 }
 
-/** Atualiza dados da comunidade (nome, descrição, meta) */
+/** Atualiza dados da comunidade (nome, descrição, meta, foto de perfil e fundo) */
 export async function updateClubDetails(
   clubId: string,
-  data: { name: string; description?: string; current_goal?: string }
+  data: {
+    name: string;
+    description?: string;
+    current_goal?: string;
+    avatar_url?: string | null;
+    cover_url?: string | null;
+    is_public?: boolean;
+  }
 ): Promise<boolean> {
   try {
+    const payload: any = {
+      name: data.name.trim(),
+      description: data.description?.trim() || null,
+      current_goal: data.current_goal?.trim() || null,
+    };
+
+    if (data.avatar_url !== undefined) payload.avatar_url = data.avatar_url;
+    if (data.cover_url !== undefined) payload.cover_url = data.cover_url;
+    if (data.is_public !== undefined) payload.is_public = data.is_public;
+
     const { error } = await supabase
       .from("clubs")
-      .update({
-        name: data.name.trim(),
-        description: data.description?.trim() || null,
-        current_goal: data.current_goal?.trim() || null,
-      })
+      .update(payload)
       .eq("id", clubId);
 
-    if (error) throw error;
+    if (error) {
+      // Fallback gracioso caso a coluna avatar_url ainda não exista na base de dados
+      if (error.message?.includes("avatar_url")) {
+        delete payload.avatar_url;
+        const { error: retryErr } = await supabase.from("clubs").update(payload).eq("id", clubId);
+        if (retryErr) throw retryErr;
+      } else {
+        throw error;
+      }
+    }
     return true;
   } catch (err) {
     console.error("Erro ao atualizar clube:", err);

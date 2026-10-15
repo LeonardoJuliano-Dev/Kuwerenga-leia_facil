@@ -20,7 +20,8 @@ import {
   Check,
   Globe,
   Bell,
-  BellOff
+  BellOff,
+  Settings
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { isGuestMode } from "../lib/guestMode";
@@ -41,12 +42,16 @@ import {
   type ClubMemberItem,
   type JoinRequestItem
 } from "../lib/communityService";
+import { getCommunityInitials, getCommunityColorPalette } from "../lib/communityStyle";
+import EditCommunityModal from "../components/EditCommunityModal";
 
 interface Club {
   id: string;
   name: string;
   description: string | null;
   current_goal: string | null;
+  cover_url?: string | null;
+  avatar_url?: string | null;
   member_count: number;
   created_by?: string;
   is_public?: boolean;
@@ -96,6 +101,7 @@ export default function ClubDetails() {
   const [joinRequests, setJoinRequests] = useState<JoinRequestItem[]>([]);
   const [myRequestPending, setMyRequestPending] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [adminTab, setAdminTab] = useState<"settings" | "requests" | "members">("settings");
 
   // Dados editáveis no painel de administração
@@ -161,7 +167,7 @@ export default function ClubDetails() {
           // Procurar clube geral ou existente
           const { data: gClubs } = await supabase
             .from("clubs")
-            .select("id, name, description, current_goal, member_count, created_by, is_public")
+            .select("id, name, description, current_goal, member_count, created_by, is_public, cover_url, avatar_url")
             .ilike("name", "%geral%")
             .limit(1);
 
@@ -171,7 +177,7 @@ export default function ClubDetails() {
           } else {
             const { data: anyClubs } = await supabase
               .from("clubs")
-              .select("id, name, description, current_goal, member_count, created_by, is_public")
+              .select("id, name, description, current_goal, member_count, created_by, is_public, cover_url, avatar_url")
               .limit(1);
 
             if (anyClubs && anyClubs.length > 0) {
@@ -202,7 +208,7 @@ export default function ClubDetails() {
           // Clube específico por ID
           const { data: clubData } = await supabase
             .from("clubs")
-            .select("id, name, description, current_goal, member_count, created_by, is_public")
+            .select("id, name, description, current_goal, member_count, created_by, is_public, cover_url, avatar_url")
             .eq("id", clubId)
             .single();
 
@@ -871,14 +877,48 @@ export default function ClubDetails() {
               <button
                 onClick={() => navigate("/community")}
                 className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
-                title="Voltar"
+                title="Voltar às Comunidades"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
 
+              {/* Avatar do Grupo (Foto de Perfil ou Padrão Sólido Telegram com Iniciais) */}
+              <div className="relative shrink-0">
+                <div
+                  className={`w-11 h-11 rounded-full overflow-hidden flex items-center justify-center shadow-xs border border-white/20 ${
+                    club.avatar_url
+                      ? "bg-gray-100 dark:bg-gray-800"
+                      : `bg-gradient-to-tr ${getCommunityColorPalette(club.name).gradient}`
+                  }`}
+                >
+                  {club.avatar_url ? (
+                    <img
+                      src={club.avatar_url}
+                      alt={club.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="font-bold text-white text-sm tracking-wider">
+                      {getCommunityInitials(club.name)}
+                    </span>
+                  )}
+                </div>
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEditModal(true)}
+                    className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-black dark:bg-white text-white dark:text-black border border-gray-200 dark:border-gray-800 flex items-center justify-center shadow-xs hover:scale-110 transition-transform"
+                    title="Editar foto e fundo da comunidade"
+                  >
+                    <Settings className="w-2.5 h-2.5" />
+                  </button>
+                )}
+              </div>
+
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <h1 className="font-bold text-base truncate">{club.name}</h1>
+                  <h1 className="font-bold text-base truncate leading-tight">{club.name}</h1>
                   
                   {/* Badge de Privacidade */}
                   <span className="shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 bg-gray-100 dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700">
@@ -1462,6 +1502,43 @@ export default function ClubDetails() {
                     </div>
                   </div>
 
+                  {/* Foto de Perfil e Fundo da Comunidade */}
+                  <div className="p-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`w-10 h-10 rounded-full overflow-hidden flex items-center justify-center shrink-0 border border-white/20 ${
+                          club.avatar_url
+                            ? "bg-gray-100 dark:bg-gray-800"
+                            : `bg-gradient-to-tr ${getCommunityColorPalette(club.name).gradient}`
+                        }`}
+                      >
+                        {club.avatar_url ? (
+                          <img src={club.avatar_url} alt={club.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="font-bold text-white text-xs">
+                            {getCommunityInitials(club.name)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-xs font-bold block truncate">Aparência da Comunidade</span>
+                        <span className="text-[11px] text-gray-500 block truncate">
+                          Foto de perfil e imagem de fundo
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAdminModal(false);
+                        setShowEditModal(true);
+                      }}
+                      className="px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-bold active:scale-95 transition-transform shrink-0"
+                    >
+                      Personalizar
+                    </button>
+                  </div>
+
                   {/* Nome da Comunidade */}
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">
@@ -1720,6 +1797,38 @@ export default function ClubDetails() {
         feature="community"
         onClose={() => setShowGuestModal(false)}
       />
+
+      {/* Modal de Edição de Comunidade Estilo Telegram (Foto de Perfil, Fundo e Dados) */}
+      {showEditModal && club && (
+        <EditCommunityModal
+          isOpen={showEditModal}
+          club={{
+            id: club.id,
+            name: club.name,
+            description: club.description,
+            current_goal: club.current_goal,
+            avatar_url: club.avatar_url,
+            cover_url: club.cover_url,
+            is_public: club.is_public !== false,
+          }}
+          onClose={() => setShowEditModal(false)}
+          onSaved={(updated) => {
+            setClub({
+              ...club,
+              name: updated.name,
+              description: updated.description,
+              current_goal: updated.current_goal,
+              is_public: updated.is_public,
+              avatar_url: updated.avatar_url ?? null,
+              cover_url: updated.cover_url ?? null,
+            });
+            setEditName(updated.name);
+            setEditDesc(updated.description || "");
+            setEditGoal(updated.current_goal || "");
+            setEditIsPublic(updated.is_public !== false);
+          }}
+        />
+      )}
 
     </div>
   );

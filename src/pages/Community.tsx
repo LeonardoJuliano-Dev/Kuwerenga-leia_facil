@@ -1,27 +1,36 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Users,
   Plus,
   MessageSquare,
-  BookOpen,
-  Check,
+  Search,
   X,
-  UserPlus,
   Lock,
-  Globe
+  Globe,
+  Settings,
+  Camera,
+  Image as ImageIcon,
+  ChevronRight
 } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
 import { getCached, setCached } from "../lib/cache";
 import { isGuestMode } from "../lib/guestMode";
 import GuestRestrictionModal from "../components/GuestRestrictionModal";
+import EditCommunityModal, { type CommunityEditData } from "../components/EditCommunityModal";
+import {
+  getCommunityInitials,
+  getCommunityColorPalette,
+  uploadClubImage
+} from "../lib/communityStyle";
 
 interface Club {
   id: string;
   name: string;
   description: string | null;
   cover_url: string | null;
+  avatar_url?: string | null;
   current_goal: string | null;
   member_count: number;
   created_by: string;
@@ -47,14 +56,22 @@ export default function Community() {
   const [myClubIds, setMyClubIds] = useState<string[]>(() => getCached<string[]>("my_club_ids") || []);
   const [discussions, setDiscussions] = useState<Discussion[]>(() => getCached<Discussion[]>("community_discussions") || []);
   const [loading, setLoading] = useState(() => !getCached<Club[]>("community_clubs"));
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Estados do Modal: Criar Clube
+  // Estados do Modal: Criar Clube (com foto e fundo opcionais)
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [clubName, setClubName] = useState("");
   const [clubDesc, setClubDesc] = useState("");
   const [clubGoal, setClubGoal] = useState("");
   const [clubIsPublic, setClubIsPublic] = useState(true);
+  const [createAvatarFile, setCreateAvatarFile] = useState<File | null>(null);
+  const [createAvatarPreview, setCreateAvatarPreview] = useState<string | null>(null);
+  const [createCoverFile, setCreateCoverFile] = useState<File | null>(null);
+  const [createCoverPreview, setCreateCoverPreview] = useState<string | null>(null);
   const [submittingClub, setSubmittingClub] = useState(false);
+
+  // Estados do Modal: Editar Clube (Foto, Fundo, Nome, etc.)
+  const [editingClub, setEditingClub] = useState<CommunityEditData | null>(null);
 
   // Estados do Modal: Nova Discussão
   const [showNewDiscussionModal, setShowNewDiscussionModal] = useState(false);
@@ -63,22 +80,29 @@ export default function Community() {
   const [submittingDiscussion, setSubmittingDiscussion] = useState(false);
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [showGuestRestriction, setShowGuestRestriction] = useState(false);
+
+  const createAvatarInputRef = useRef<HTMLInputElement>(null);
+  const createCoverInputRef = useRef<HTMLInputElement>(null);
 
   // 1. Carregar Clubes e Discussões Reais do Supabase
   useEffect(() => {
     async function loadCommunityData() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) setCurrentUserId(user.id);
+        if (user) {
+          setCurrentUserId(user.id);
+          setCurrentUserEmail(user.email || null);
+        }
 
         // Clubes públicos e privados
         const { data: clubsData } = await supabase
           .from("clubs")
-          .select("id, name, description, cover_url, current_goal, member_count, created_by, is_public")
+          .select("id, name, description, cover_url, avatar_url, current_goal, member_count, created_by, is_public")
           .order("member_count", { ascending: false });
 
-        // Membrzias do utilizador
+        // Membresias do utilizador
         let userMemberships: string[] = [];
         if (user) {
           const { data: memberData } = await supabase
@@ -159,8 +183,8 @@ export default function Community() {
         setMyClubIds(updatedIds);
         setCached("my_club_ids", updatedIds);
 
-        setClubs(
-          clubs.map((c) =>
+        setClubs((prev) =>
+          prev.map((c) =>
             c.id === clubId
               ? { ...c, is_member: false, member_count: Math.max(1, c.member_count - 1) }
               : c
@@ -178,8 +202,8 @@ export default function Community() {
         setMyClubIds(updatedIds);
         setCached("my_club_ids", updatedIds);
 
-        setClubs(
-          clubs.map((c) =>
+        setClubs((prev) =>
+          prev.map((c) =>
             c.id === clubId
               ? { ...c, is_member: true, member_count: c.member_count + 1 }
               : c
@@ -191,30 +215,59 @@ export default function Community() {
     }
   };
 
-  // Criar Clube Real
+  // Criar Clube com Foto e Fundo opcionais
   const handleCreateClub = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clubName.trim() || !currentUserId) return;
 
     setSubmittingClub(true);
     try {
+      // 1. Inserir clube inicial
+      const payload: any = {
+        name: clubName.trim(),
+        description: clubDesc.trim() || null,
+        current_goal: clubGoal.trim() || null,
+        created_by: currentUserId,
+        member_count: 1,
+        is_public: clubIsPublic,
+      };
+
       const { data: newClub, error } = await supabase
         .from("clubs")
-        .insert({
-          name: clubName.trim(),
-          description: clubDesc.trim() || null,
-          current_goal: clubGoal.trim() || null,
-          created_by: currentUserId,
-          member_count: 1,
-          is_public: clubIsPublic,
-        })
+        .insert(payload)
         .select()
         .single();
 
       if (error) throw error;
 
       if (newClub) {
-        // Regista o criador como admin
+        let finalAvatarUrl: string | null = null;
+        let finalCoverUrl: string | null = null;
+
+        // 2. Upload da Foto de Perfil se selecionada
+        if (createAvatarFile) {
+          finalAvatarUrl = await uploadClubImage(newClub.id, createAvatarFile, "avatar");
+        }
+
+        // 3. Upload da Imagem de Fundo se selecionada
+        if (createCoverFile) {
+          finalCoverUrl = await uploadClubImage(newClub.id, createCoverFile, "cover");
+        }
+
+        // 4. Atualizar com as URLs de avatar e cover se existirem
+        if (finalAvatarUrl || finalCoverUrl) {
+          try {
+            await supabase
+              .from("clubs")
+              .update({
+                avatar_url: finalAvatarUrl,
+                cover_url: finalCoverUrl,
+              })
+              .eq("id", newClub.id);
+          } catch {}
+        }
+
+        // 5. Registar criador como admin
         await supabase.from("club_members").insert({
           club_id: newClub.id,
           user_id: currentUserId,
@@ -223,6 +276,8 @@ export default function Community() {
 
         const created: Club = {
           ...newClub,
+          avatar_url: finalAvatarUrl,
+          cover_url: finalCoverUrl,
           is_member: true,
         };
 
@@ -237,6 +292,10 @@ export default function Community() {
         setClubName("");
         setClubDesc("");
         setClubGoal("");
+        setCreateAvatarFile(null);
+        setCreateAvatarPreview(null);
+        setCreateCoverFile(null);
+        setCreateCoverPreview(null);
         setShowCreateModal(false);
       }
     } catch (err) {
@@ -297,466 +356,632 @@ export default function Community() {
     }
   };
 
+  // Atualização em tempo real após salvar no modal de edição
+  const handleClubSaved = (updated: CommunityEditData) => {
+    setClubs((prev) =>
+      prev.map((c) =>
+        c.id === updated.id
+          ? {
+              ...c,
+              name: updated.name,
+              description: updated.description,
+              current_goal: updated.current_goal,
+              avatar_url: updated.avatar_url ?? null,
+              cover_url: updated.cover_url ?? null,
+              is_public: updated.is_public !== false,
+            }
+          : c
+      )
+    );
+  };
+
+  const isClubAdmin = (club: Club) => {
+    return (
+      (currentUserId && club.created_by === currentUserId) ||
+      currentUserEmail === "leonardojulianoj@gmail.com"
+    );
+  };
+
+  // Filtragem dos clubes
   const myClubs = clubs.filter((c) => myClubIds.includes(c.id));
+  const activeClubsList = activeTab === "my_clubs" ? myClubs : clubs;
+
+  const filteredClubs = activeClubsList.filter((c) => {
+    if (!searchQuery.trim()) return true;
+    const term = searchQuery.toLowerCase();
+    return (
+      c.name.toLowerCase().includes(term) ||
+      (c.description && c.description.toLowerCase().includes(term)) ||
+      (c.current_goal && c.current_goal.toLowerCase().includes(term))
+    );
+  });
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24 md:pb-12 md:pt-16">
-      {/* Header */}
-      <header className="px-4 sm:px-6 pt-safe sticky top-0 md:static z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
-        <div className="app-container pt-6 sm:pt-8 pb-2">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold">Comunidade</h1>
-          <button
-            onClick={() => {
-              if (isGuestMode()) {
-                setShowGuestRestriction(true);
-              } else {
-                setShowCreateModal(true);
-              }
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-semibold active:scale-95 transition-transform shadow-xs"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Criar Clube</span>
-          </button>
-        </div>
+      
+      {/* Header Responsivo */}
+      <header className="px-3 sm:px-6 pt-safe sticky top-0 md:static z-10 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900">
+        <div className="app-container pt-5 sm:pt-7 pb-3">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Comunidades</h1>
+              <p className="text-xs text-gray-500 hidden sm:block">
+                Canais de leitura coletiva e grupos de debate literário
+              </p>
+            </div>
 
-        {/* Abas */}
-        <div className="flex gap-2 pb-2 text-xs">
-          <button
-            onClick={() => setActiveTab("clubs")}
-            className={`px-4 py-2 rounded-xl font-semibold transition-all ${
-              activeTab === "clubs"
-                ? "bg-black dark:bg-white text-white dark:text-black shadow-xs"
-                : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
-            }`}
-          >
-            Clubes de Leitura
-          </button>
-          <button
-            onClick={() => setActiveTab("my_clubs")}
-            className={`px-4 py-2 rounded-xl font-semibold transition-all ${
-              activeTab === "my_clubs"
-                ? "bg-black dark:bg-white text-white dark:text-black shadow-xs"
-                : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
-            }`}
-          >
-            Os Meus Clubes ({myClubs.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("discussions")}
-            className={`px-4 py-2 rounded-xl font-semibold transition-all ${
-              activeTab === "discussions"
-                ? "bg-black dark:bg-white text-white dark:text-black shadow-xs"
-                : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
-            }`}
-          >
-            Discussões
-          </button>
-        </div>
+            <button
+              onClick={() => {
+                if (isGuestMode()) {
+                  setShowGuestRestriction(true);
+                } else {
+                  setShowCreateModal(true);
+                }
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold active:scale-95 transition-transform shadow-xs"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Criar Grupo</span>
+            </button>
+          </div>
+
+          {/* Barra de Pesquisa de Canais e Grupos (Telegram Style) */}
+          <div className="relative mb-3">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Pesquisar grupos e canais..."
+              className="w-full pl-10 pr-4 py-2 bg-gray-100 dark:bg-gray-900 border border-transparent focus:border-gray-300 dark:focus:border-gray-700 rounded-2xl text-xs sm:text-sm font-medium focus:outline-none transition-all"
+            />
+          </div>
+
+          {/* Abas */}
+          <div className="flex gap-1.5 text-xs overflow-x-auto no-scrollbar py-0.5">
+            <button
+              onClick={() => setActiveTab("clubs")}
+              className={`px-4 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+                activeTab === "clubs"
+                  ? "bg-black dark:bg-white text-white dark:text-black shadow-xs scale-[1.02]"
+                  : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
+              }`}
+            >
+              Todos os Grupos ({clubs.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("my_clubs")}
+              className={`px-4 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+                activeTab === "my_clubs"
+                  ? "bg-black dark:bg-white text-white dark:text-black shadow-xs scale-[1.02]"
+                  : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
+              }`}
+            >
+              Os Meus Grupos ({myClubs.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("discussions")}
+              className={`px-4 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+                activeTab === "discussions"
+                  ? "bg-black dark:bg-white text-white dark:text-black shadow-xs scale-[1.02]"
+                  : "bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-black dark:hover:text-white"
+              }`}
+            >
+              Fórum & Discussões
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 p-4 sm:p-6 app-container">
-        {/* Banner do Chat Geral da Comunidade */}
+      <main className="flex-1 p-3 sm:p-6 app-container">
+        
+        {/* ─── Supergrupo Oficial: Chat Geral da Comunidade (Pinned no Topo) ─── */}
         <div
           onClick={() => navigate("/club/geral")}
-          className="p-5 rounded-3xl bg-black dark:bg-white text-white dark:text-black shadow-md cursor-pointer transition-all active:scale-[0.99] flex items-center justify-between gap-4 mb-6 hover:opacity-95"
+          className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-600 text-white shadow-md cursor-pointer transition-all active:scale-[0.99] flex items-center justify-between gap-3.5 mb-5 hover:opacity-95"
         >
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-white/10 dark:bg-black/10 flex items-center justify-center flex-shrink-0">
-              <MessageSquare className="w-6 h-6" />
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="w-13 h-13 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 shadow-xs border border-white/30">
+              <MessageSquare className="w-6 h-6 text-white" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm sm:text-base leading-tight">Chat Geral da Comunidade</h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20 dark:bg-black/20 uppercase tracking-wider">Aberto</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-sm sm:text-base leading-tight truncate">
+                  Chat Geral da Comunidade
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-white/25 uppercase tracking-wider">
+                  Supergrupo Oficial
+                </span>
               </div>
-              <p className="text-xs opacity-75 mt-0.5 line-clamp-1">
-                Conversa livre com chat em direto: texto, fotos e notas de voz de até 30s
+              <p className="text-xs text-white/80 mt-0.5 line-clamp-1 leading-relaxed">
+                Canal aberto para todos os leitores • Voz, imagens e mensagens ao vivo
               </p>
+              <span className="text-[11px] text-white/70 font-medium flex items-center gap-1 mt-1">
+                <Users className="w-3.5 h-3.5" />
+                <span>Todos os utilizadores do Kuwerenga</span>
+              </span>
             </div>
           </div>
-          <button className="px-4 py-2 rounded-xl bg-white text-black dark:bg-black dark:text-white text-xs font-bold whitespace-nowrap shadow-xs">
-            Abrir Chat
-          </button>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <button className="px-3.5 sm:px-4 py-2 rounded-xl bg-white text-black text-xs font-bold whitespace-nowrap shadow-xs hover:bg-gray-100 transition-colors">
+              Abrir
+            </button>
+          </div>
         </div>
 
-        {/* ABA 1: Todos os Clubes */}
-        {activeTab === "clubs" && (
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* ─── ABA 1 & ABA 2: Listagem de Grupos Estilo Telegram ─── */}
+        {(activeTab === "clubs" || activeTab === "my_clubs") && (
+          <section>
             {loading && clubs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <div className="w-8 h-8 border-2 border-black dark:border-white border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-xs text-gray-400">A carregar clubes da comunidade...</p>
+                <p className="text-xs text-gray-400">A carregar canais e grupos da comunidade...</p>
               </div>
-            ) : clubs.length === 0 ? (
-              <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 text-center my-6">
+            ) : filteredClubs.length === 0 ? (
+              <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 text-center my-4 shadow-xs">
                 <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <Users className="w-7 h-7" />
                 </div>
-                <h3 className="font-bold text-base mb-1">Nenhum clube criado ainda</h3>
-                <p className="text-xs text-gray-500 mb-6 max-w-xs mx-auto">
-                  Sê o pioneiro e cria o primeiro clube de leitura para debater obras com outros leitores!
+                <h3 className="font-bold text-base mb-1">
+                  {searchQuery ? "Nenhum grupo encontrado" : "Nenhum grupo criado ainda"}
+                </h3>
+                <p className="text-xs text-gray-500 mb-6 max-w-xs mx-auto leading-relaxed">
+                  {searchQuery
+                    ? "Tenta pesquisar por outro termo ou nome de comunidade."
+                    : activeTab === "my_clubs"
+                    ? "Ainda não participas em nenhum clube. Explora a lista de grupos para participar!"
+                    : "Sê o primeiro a criar um clube de leitura para debater obras com a comunidade!"}
                 </p>
                 <button
-                  onClick={() => {
-                    if (isGuestMode()) {
-                      setShowGuestRestriction(true);
-                    } else {
-                      setShowCreateModal(true);
-                    }
-                  }}
-                  className="px-5 py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold"
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-5 py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-bold shadow-xs active:scale-95 transition-transform"
                 >
-                  Criar o Primeiro Clube
+                  Criar Novo Grupo
                 </button>
               </div>
             ) : (
-              clubs.map((club) => (
-                <div
-                  key={club.id}
-                  onClick={() => navigate(`/club/${club.id}`)}
-                  className="p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/60 shadow-xs flex flex-col justify-between gap-4 cursor-pointer hover:border-black/30 dark:hover:border-white/30 transition-all group"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
-                        <h3 className="font-bold text-base leading-tight group-hover:underline truncate">{club.name}</h3>
-                        <span className="shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 bg-gray-100 dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700">
-                          {club.is_public !== false ? (
-                            <>
-                              <Globe className="w-2.5 h-2.5" />
-                              <span>Pública</span>
-                            </>
+              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs divide-y divide-gray-100 dark:divide-gray-800/80 overflow-hidden">
+                {filteredClubs.map((club) => {
+                  const palette = getCommunityColorPalette(club.name);
+                  const initials = getCommunityInitials(club.name);
+                  const isAdminOfClub = isClubAdmin(club);
+
+                  return (
+                    <div
+                      key={club.id}
+                      onClick={() => navigate(`/club/${club.id}`)}
+                      className="p-3.5 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors cursor-pointer flex items-center gap-3.5 group select-none"
+                    >
+                      {/* 1. Foto de Perfil do Grupo (Avatar Redondo ou Padrão Sólido Telegram) */}
+                      <div className="relative shrink-0">
+                        <div
+                          className={`w-13 h-13 rounded-full overflow-hidden flex items-center justify-center shadow-xs transition-transform group-hover:scale-105 ${
+                            club.avatar_url
+                              ? "bg-gray-100 dark:bg-gray-800"
+                              : `bg-gradient-to-tr ${palette.gradient}`
+                          }`}
+                        >
+                          {club.avatar_url ? (
+                            <img
+                              src={club.avatar_url}
+                              alt={club.name}
+                              className="w-full h-full object-cover"
+                            />
                           ) : (
-                            <>
-                              <Lock className="w-2.5 h-2.5" />
-                              <span>Privada</span>
-                            </>
+                            <span className="font-bold text-white text-base tracking-wider">
+                              {initials}
+                            </span>
                           )}
-                        </span>
+                        </div>
+
+                        {/* Indicador de Tipo de Grupo (Público / Privado) */}
+                        <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex items-center justify-center">
+                          {club.is_public !== false ? (
+                            <Globe className="w-2.5 h-2.5 text-gray-500 dark:text-gray-400" />
+                          ) : (
+                            <Lock className="w-2.5 h-2.5 text-amber-500" />
+                          )}
+                        </div>
                       </div>
-                      <span className="text-[11px] text-gray-400 font-medium flex items-center gap-1 shrink-0">
-                        <Users className="w-3.5 h-3.5" />
-                        {club.member_count} {club.member_count === 1 ? "membro" : "membros"}
-                      </span>
-                    </div>
 
-                    {club.description && (
-                      <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed mb-3">
-                        {club.description}
-                      </p>
-                    )}
+                      {/* 2. Informações Centrais da Comunidade */}
+                      <div className="flex-1 min-w-0 py-0.5">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <h3 className="font-bold text-sm sm:text-base leading-tight group-hover:underline truncate text-black dark:text-white">
+                            {club.name}
+                          </h3>
 
-                    {club.current_goal && (
-                      <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 flex items-center gap-2 text-xs">
-                        <BookOpen className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                        <span className="text-gray-500 truncate">
-                          Leitura atual: <strong className="text-black dark:text-white">{club.current_goal}</strong>
-                        </span>
+                          {isAdminOfClub && (
+                            <span className="shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold bg-black dark:bg-white text-white dark:text-black">
+                              Admin
+                            </span>
+                          )}
+
+                          {club.is_member && !isAdminOfClub && (
+                            <span className="shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                              Membro
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Descrição / Meta do Grupo */}
+                        <p className="text-xs sm:text-[13px] text-gray-500 dark:text-gray-400 line-clamp-1 leading-snug">
+                          {club.description || club.current_goal || "Comunidade de leitura aberta para partilha e debates."}
+                        </p>
+
+                        {/* Contagem de Pessoas no Grupo */}
+                        <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-400 dark:text-gray-500 font-medium">
+                          <span className="flex items-center gap-1">
+                            <Users className="w-3.5 h-3.5 shrink-0" />
+                            <span>
+                              {club.member_count} {club.member_count === 1 ? "pessoa" : "pessoas"}
+                            </span>
+                          </span>
+
+                          {club.current_goal && (
+                            <span className="hidden sm:inline-block truncate max-w-[240px] text-gray-400">
+                              • Meta: {club.current_goal}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
-                    <span className="text-[11px] text-gray-400">
-                      {club.is_member
-                        ? "Já és membro deste clube"
-                        : club.is_public !== false
-                        ? "Aberto à comunidade"
-                        : "Requer aprovação do admin"}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/club/${club.id}`);
-                        }}
-                        className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-black dark:text-white transition-all flex items-center gap-1.5"
+                      {/* 3. Ações no Lado Direito */}
+                      <div
+                        className="flex items-center gap-1.5 shrink-0"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        <span>Entrar</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (club.is_public === false && !club.is_member) {
-                            navigate(`/club/${club.id}`);
-                          } else {
-                            handleToggleJoinClub(club.id, !!club.is_member);
-                          }
-                        }}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
-                          club.is_member
-                            ? "bg-transparent text-gray-500 hover:text-black dark:hover:text-white"
-                            : "bg-black dark:bg-white text-white dark:text-black shadow-xs"
-                        }`}
-                      >
-                        {club.is_member
-                          ? "Sair"
-                          : club.is_public !== false
-                          ? "Participar"
-                          : "Pedir Entrada"}
-                      </button>
+                        {/* Botão de Edição de Foto e Fundo para Administrador */}
+                        {isAdminOfClub && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditingClub({
+                                id: club.id,
+                                name: club.name,
+                                description: club.description,
+                                current_goal: club.current_goal,
+                                avatar_url: club.avatar_url,
+                                cover_url: club.cover_url,
+                                is_public: club.is_public !== false,
+                              })
+                            }
+                            className="p-2 rounded-xl text-gray-400 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                            title="Editar foto, fundo e detalhes do grupo"
+                            aria-label="Editar comunidade"
+                          >
+                            <Settings className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        {/* Botão Entrar / Participar */}
+                        {club.is_member ? (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/club/${club.id}`)}
+                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-black dark:text-white transition-all flex items-center gap-1 shadow-xs"
+                          >
+                            <span>Abrir</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (club.is_public === false) {
+                                navigate(`/club/${club.id}`);
+                              } else {
+                                handleToggleJoinClub(club.id, false);
+                              }
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-black dark:bg-white text-white dark:text-black shadow-xs active:scale-95 transition-transform"
+                          >
+                            {club.is_public !== false ? "Entrar" : "Pedir Acesso"}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </section>
-        )}
-
-        {/* ABA 2: Os Meus Clubes */}
-        {activeTab === "my_clubs" && (
-          <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {myClubs.length === 0 ? (
-              <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 text-center my-6">
-                <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <UserPlus className="w-7 h-7" />
-                </div>
-                <h3 className="font-bold text-base mb-1">Ainda não entraste em nenhum clube</h3>
-                <p className="text-xs text-gray-500 mb-6 max-w-xs mx-auto">
-                  Participa nos clubes existentes ou cria o teu próprio grupo de leitura.
-                </p>
-                <button
-                  onClick={() => setActiveTab("clubs")}
-                  className="px-5 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold mr-2"
-                >
-                  Explorar Clubes
-                </button>
+                  );
+                })}
               </div>
-            ) : (
-              myClubs.map((club) => (
-                <div
-                  key={club.id}
-                  onClick={() => navigate(`/club/${club.id}`)}
-                  className="p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/60 shadow-xs flex flex-col justify-between gap-4 cursor-pointer hover:border-black/30 dark:hover:border-white/30 transition-all group"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <h3 className="font-bold text-base leading-tight group-hover:underline">{club.name}</h3>
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center gap-1 shadow-xs">
-                        <Check className="w-3 h-3 stroke-[2.5]" />
-                        <span>Membro</span>
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed mb-3">
-                      {club.description || "Sem descrição definida."}
-                    </p>
-
-                    {club.current_goal && (
-                      <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 flex items-center gap-2 text-xs mb-2">
-                        <BookOpen className="w-4 h-4 text-gray-500" />
-                        <span className="text-gray-500 truncate">
-                          Livro em discussão: <strong className="text-black dark:text-white">{club.current_goal}</strong>
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/club/${club.id}`);
-                      }}
-                      className="flex items-center gap-1.5 px-3.5 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold active:scale-95 transition-transform shadow-xs"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      <span>Entrar no Chat & Fórum</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleJoinClub(club.id, true);
-                      }}
-                      className="text-xs text-gray-500 hover:text-black dark:hover:text-white font-semibold transition-colors"
-                    >
-                      Sair do Clube
-                    </button>
-                  </div>
-                </div>
-              ))
             )}
           </section>
         )}
 
-        {/* ABA 3: Discussões */}
+        {/* ─── ABA 3: Discussões e Fórum ─── */}
         {activeTab === "discussions" && (
           <section className="space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">
-                Fórum da Comunidade
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
+                Tópicos do Fórum Literário
               </h2>
               <button
-                onClick={() => setShowNewDiscussionModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold active:scale-95 transition-transform"
+                onClick={() => {
+                  if (isGuestMode()) {
+                    setShowGuestRestriction(true);
+                  } else {
+                    setShowNewDiscussionModal(true);
+                  }
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold shadow-xs active:scale-95 transition-transform"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Nova Mensagem</span>
+                <span>Novo Tópico</span>
               </button>
             </div>
 
             {discussions.length === 0 ? (
-              <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 text-center my-6">
-                <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <MessageSquare className="w-7 h-7" />
-                </div>
-                <h3 className="font-bold text-base mb-1">Ainda não há discussões abertas</h3>
-                <p className="text-xs text-gray-500 mb-6 max-w-xs mx-auto">
-                  Inicia um debate sobre um livro, uma reflexão filosófica ou uma recomendação de leitura.
+              <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 text-center my-4 shadow-xs">
+                <MessageSquare className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                <h3 className="font-bold text-base mb-1">Nenhum tópico publicado</h3>
+                <p className="text-xs text-gray-500 mb-4 max-w-xs mx-auto leading-relaxed">
+                  Inicia uma nova conversa sobre autores, livros favoritos ou reflexões literárias!
                 </p>
                 <button
                   onClick={() => setShowNewDiscussionModal(true)}
-                  className="px-5 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold"
+                  className="px-5 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-bold"
                 >
-                  Iniciar Discussão
+                  Criar Primeiro Tópico
                 </button>
               </div>
             ) : (
-              discussions.map((disc) => (
-                <div
-                  key={disc.id}
-                  className="p-4 rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/60 shadow-xs"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold">{disc.profile?.full_name || "Leitor"}</span>
-                    <span className="text-[10px] text-gray-400">
-                      {new Date(disc.created_at).toLocaleDateString("pt-PT")}
-                    </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {discussions.map((disc) => (
+                  <div
+                    key={disc.id}
+                    className="p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-xs flex flex-col justify-between"
+                  >
+                    <div>
+                      <h3 className="font-bold text-base leading-snug mb-2">{disc.title}</h3>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap line-clamp-3">
+                        {disc.content}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 mt-3 border-t border-gray-100 dark:border-gray-800 text-[11px] text-gray-400">
+                      <span>Por: {disc.profile?.full_name || "Membro da Comunidade"}</span>
+                      <span>
+                        {new Date(disc.created_at).toLocaleDateString("pt-PT", {
+                          day: "2-digit",
+                          month: "short",
+                        })}
+                      </span>
+                    </div>
                   </div>
-                  <h4 className="font-bold text-sm mb-1.5">{disc.title}</h4>
-                  <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-line">
-                    {disc.content}
-                  </p>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </section>
         )}
       </main>
 
-      {/* Modal: Criar Clube */}
+      {/* ─── Modal de Criação de Clube (com Foto e Fundo opcionais) ─── */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200 text-black dark:text-white">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-base">Criar Clube de Leitura</h3>
+        <div
+          onClick={() => setShowCreateModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-black dark:text-white animate-in zoom-in-95 duration-200"
+          >
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0">
+              <h2 className="font-bold text-base">Criar Novo Grupo</h2>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="p-2 rounded-xl text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateClub} className="space-y-4">
+            <form onSubmit={handleCreateClub} className="overflow-y-auto flex-1 p-5 space-y-5">
+              {/* Pré-visualização da Aparência (Foto e Fundo Sólido Padrão) */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-                  Nome do Clube *
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+                  Aparência do Grupo (Foto e Fundo)
+                </label>
+
+                <div className="relative rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800 shadow-xs">
+                  {/* Fundo */}
+                  <div
+                    className={`w-full h-28 relative flex items-center justify-end p-3 ${
+                      createCoverPreview
+                        ? "bg-black"
+                        : `bg-gradient-to-r ${getCommunityColorPalette(clubName || "Novo Grupo").coverGradient}`
+                    }`}
+                  >
+                    {createCoverPreview ? (
+                      <img
+                        src={createCoverPreview}
+                        alt="Fundo"
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-white/40">
+                        Fundo Sólido Padrão
+                      </span>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => createCoverInputRef.current?.click()}
+                      className="relative z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black text-white backdrop-blur-md text-xs font-semibold"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5" />
+                      <span>{createCoverPreview ? "Alterar Fundo" : "Adicionar Fundo"}</span>
+                    </button>
+                    <input
+                      ref={createCoverInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setCreateCoverFile(file);
+                          setCreateCoverPreview(URL.createObjectURL(file));
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </div>
+
+                  {/* Foto de Perfil */}
+                  <div className="px-4 pb-3 pt-0 bg-white dark:bg-gray-900 flex items-end justify-between -mt-8 relative z-10">
+                    <div className="flex items-end gap-3">
+                      <div
+                        className={`w-16 h-16 rounded-full ring-4 ring-white dark:ring-gray-900 shadow-md overflow-hidden flex items-center justify-center relative group cursor-pointer ${
+                          createAvatarPreview
+                            ? "bg-black"
+                            : `bg-gradient-to-tr ${getCommunityColorPalette(clubName || "Novo Grupo").gradient}`
+                        }`}
+                        onClick={() => createAvatarInputRef.current?.click()}
+                      >
+                        {createAvatarPreview ? (
+                          <img
+                            src={createAvatarPreview}
+                            alt="Foto"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-lg font-bold text-white">
+                            {getCommunityInitials(clubName || "Novo Grupo")}
+                          </span>
+                        )}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                          <Camera className="w-4 h-4" />
+                        </div>
+                      </div>
+
+                      <div className="pb-1">
+                        <span className="text-xs font-bold block truncate max-w-[180px]">
+                          {clubName || "Nome do Grupo"}
+                        </span>
+                        <span className="text-[10px] text-gray-400">
+                          {createAvatarPreview ? "Foto personalizada" : "Vem com imagem sólida padrão"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => createAvatarInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors mb-1"
+                    >
+                      Foto do Grupo
+                    </button>
+                    <input
+                      ref={createAvatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setCreateAvatarFile(file);
+                          setCreateAvatarPreview(URL.createObjectURL(file));
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+                  Nome do Grupo *
                 </label>
                 <input
                   type="text"
                   value={clubName}
                   onChange={(e) => setClubName(e.target.value)}
-                  placeholder="Ex: Leitores de Maputo, Clube de Ficção Científica"
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
+                  placeholder="Ex: Leitores de Ficção & Fantasia"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-all"
                   required
-                  autoFocus
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-                  Descrição ou Objetivo
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+                  Descrição
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={clubDesc}
                   onChange={(e) => setClubDesc(e.target.value)}
-                  placeholder="Explica aos leitores o propósito deste clube e que tipo de livros debatem..."
-                  className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white resize-none"
+                  placeholder="Qual é o foco das leituras e debates deste grupo?"
+                  className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-all resize-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-                  Livro Atual em Foco (Opcional)
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+                  Meta ou Livro Atual
                 </label>
                 <input
                   type="text"
                   value={clubGoal}
                   onChange={(e) => setClubGoal(e.target.value)}
-                  placeholder="Ex: Terra Sonâmbula - Mia Couto"
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
+                  placeholder="Ex: Ler os primeiros 5 capítulos esta semana"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-all"
                 />
               </div>
 
-              {/* Seletor de Privacidade Pública vs Privada */}
-              <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200 dark:border-gray-700">
+              <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-                  Privacidade da Comunidade
+                  Privacidade
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => setClubIsPublic(true)}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                    className={`p-3 rounded-2xl border text-left flex items-start gap-2.5 transition-all ${
                       clubIsPublic
-                        ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white shadow-xs font-bold"
-                        : "bg-white dark:bg-black border-gray-200 dark:border-gray-700 text-gray-500 font-medium"
+                        ? "border-black dark:border-white bg-black/5 dark:bg-white/10"
+                        : "border-gray-200 dark:border-gray-800"
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 text-xs mb-0.5">
-                      <Globe className="w-3.5 h-3.5" />
-                      <span>Pública</span>
+                    <Globe className="w-4 h-4 text-black dark:text-white shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-xs block">Público</span>
+                      <span className="text-[10px] text-gray-400">Qualquer leitor pode entrar</span>
                     </div>
-                    <span className="text-[10px] block opacity-80 leading-tight">
-                      Entrada livre para todos os leitores.
-                    </span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setClubIsPublic(false)}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                    className={`p-3 rounded-2xl border text-left flex items-start gap-2.5 transition-all ${
                       !clubIsPublic
-                        ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white shadow-xs font-bold"
-                        : "bg-white dark:bg-black border-gray-200 dark:border-gray-700 text-gray-500 font-medium"
+                        ? "border-black dark:border-white bg-black/5 dark:bg-white/10"
+                        : "border-gray-200 dark:border-gray-800"
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 text-xs mb-0.5">
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>Privada</span>
+                    <Lock className="w-4 h-4 text-black dark:text-white shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-xs block">Privado</span>
+                      <span className="text-[10px] text-gray-400">Requer aprovação</span>
                     </div>
-                    <span className="text-[10px] block opacity-80 leading-tight">
-                      Requer aprovação do administrador.
-                    </span>
                   </button>
                 </div>
               </div>
 
-              <div className="flex gap-2 justify-end pt-2">
+              <div className="pt-2 flex justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2.5 text-xs font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl"
+                  className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-semibold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={submittingClub || !clubName.trim()}
-                  className="px-5 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold shadow-xs disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-xl bg-black dark:bg-white text-white dark:text-black text-xs font-bold shadow-md active:scale-95 transition-transform disabled:opacity-50"
                 >
-                  {submittingClub ? "A criar..." : "Criar Clube"}
+                  {submittingClub ? "A criar..." : "Criar Grupo"}
                 </button>
               </div>
             </form>
@@ -764,15 +989,31 @@ export default function Community() {
         </div>
       )}
 
-      {/* Modal: Nova Discussão */}
+      {/* ─── Modal de Edição de Comunidade ─── */}
+      {editingClub && (
+        <EditCommunityModal
+          isOpen={Boolean(editingClub)}
+          onClose={() => setEditingClub(null)}
+          club={editingClub}
+          onSaved={handleClubSaved}
+        />
+      )}
+
+      {/* ─── Modal de Nova Discussão ─── */}
       {showNewDiscussionModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200 text-black dark:text-white">
+        <div
+          onClick={() => setShowNewDiscussionModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-6 shadow-2xl text-black dark:text-white animate-in zoom-in-95 duration-200"
+          >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-base">Iniciar Nova Discussão</h3>
+              <h2 className="font-bold text-base">Novo Tópico de Discussão</h2>
               <button
                 onClick={() => setShowNewDiscussionModal(false)}
-                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="p-1 rounded-full text-gray-500 hover:text-black dark:hover:text-white"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -780,48 +1021,47 @@ export default function Community() {
 
             <form onSubmit={handleCreateDiscussion} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-                  Título do Debate *
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">
+                  Título do Tópico *
                 </label>
                 <input
                   type="text"
                   value={discussionTitle}
                   onChange={(e) => setDiscussionTitle(e.target.value)}
-                  placeholder="Ex: O que acharam do final do Capítulo 4?"
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
+                  placeholder="Ex: O que acharam do final do capítulo 4?"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-all"
                   required
-                  autoFocus
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-                  Mensagem / Conteúdo *
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">
+                  Conteúdo da Discussão *
                 </label>
                 <textarea
                   rows={4}
                   value={discussionContent}
                   onChange={(e) => setDiscussionContent(e.target.value)}
-                  placeholder="Partilha a tua reflexão, dúvida ou análise sobre a leitura..."
-                  className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white resize-none"
+                  placeholder="Partilha a tua perspetiva ou coloca uma questão à comunidade..."
+                  className="w-full p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-all resize-none"
                   required
                 />
               </div>
 
-              <div className="flex gap-2 justify-end pt-2">
+              <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowNewDiscussionModal(false)}
-                  className="px-4 py-2.5 text-xs font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl"
+                  className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-semibold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={submittingDiscussion || !discussionTitle.trim() || !discussionContent.trim()}
-                  className="px-5 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold shadow-xs disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl bg-black dark:bg-white text-white dark:text-black text-xs font-bold shadow-md active:scale-95 transition-transform disabled:opacity-50"
                 >
-                  {submittingDiscussion ? "A publicar..." : "Publicar Mensagem"}
+                  {submittingDiscussion ? "A publicar..." : "Publicar Tópico"}
                 </button>
               </div>
             </form>
@@ -836,7 +1076,7 @@ export default function Community() {
         onClose={() => setShowGuestRestriction(false)}
       />
 
-      {/* Bottom Navigation */}
+      {/* Navegação Inferior */}
       <BottomNav />
     </div>
   );
