@@ -23,7 +23,9 @@ import {
   Highlighter,
   Sun,
   Moon,
-  Laptop
+  Laptop,
+  Clock,
+  CheckCircle2
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import "pdfjs-dist/web/pdf_viewer.css";
@@ -44,7 +46,10 @@ import { supabase } from "../lib/supabase";
 import { getTermDefinition, type DefinitionResult } from "../lib/dictionaryService";
 import { isGuestMode } from "../lib/guestMode";
 import GuestRestrictionModal from "../components/GuestRestrictionModal";
+import BookCompletionModal from "../components/BookCompletionModal";
 import { markBookAsFinished, markBookAsReading } from "../lib/bookshelfService";
+import { recordReadingSession } from "../lib/profileService";
+import { syncWithServiceWorkerForBackground } from "../lib/notificationService";
 import { applyTheme } from "../lib/theme";
 
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -88,10 +93,26 @@ function getStoredReaderTheme(): ReaderThemeOption {
   return "system";
 }
 
+function formatSessionTime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return `${hours}h ${remMins}m`;
+}
+
 export default function Reader() {
   const [searchParams] = useSearchParams();
   const bookId = searchParams.get("bookId") || "demo-book";
   const [bookTitle, setBookTitle] = useState("Manual de Leitura");
+
+  // Estados de Tempo de Leitura e Confirmação de Livro Concluído
+  const sessionStartTimeRef = useRef<number>(Date.now());
+  const [sessionSeconds, setSessionSeconds] = useState(0);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const hasPromptedCompletionRef = useRef(false);
 
   // Tipo de ficheiro activo
   const [fileType, setFileType] = useState<"pdf" | "epub" | null>(null);
@@ -136,6 +157,42 @@ export default function Reader() {
       mediaQuery.removeEventListener("change", checkDark);
     };
   }, []);
+
+  // ─── Rastreio de Tempo de Leitura (Desde abertura até saída) ────────
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentUserId(data.user?.id || null);
+    });
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - sessionStartTimeRef.current) / 1000);
+      setSessionSeconds(elapsed);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const handleSaveReadingTime = () => {
+      const durationMs = Date.now() - sessionStartTimeRef.current;
+      // Contabiliza tempo se ficou pelo menos 15 segundos no ambiente de leitura
+      if (durationMs >= 15000) {
+        const durationMins = Math.max(1, Math.round(durationMs / 60000));
+        recordReadingSession(currentUserId, bookId, durationMins);
+        sessionStartTimeRef.current = Date.now();
+      }
+    };
+
+    window.addEventListener("beforeunload", handleSaveReadingTime);
+    window.addEventListener("pagehide", handleSaveReadingTime);
+
+    return () => {
+      handleSaveReadingTime();
+      window.removeEventListener("beforeunload", handleSaveReadingTime);
+      window.removeEventListener("pagehide", handleSaveReadingTime);
+    };
+  }, [bookId, currentUserId]);
 
   // Tema efetivo aplicado na leitura (sépia acolhedor ou escuro puro)
   const isDark = readerThemePref === "dark" || (readerThemePref === "system" && systemIsDark);
@@ -562,9 +619,13 @@ export default function Reader() {
           synced: false,
         });
 
-        // Marca automaticamente como lido na estante se chegou à última página ou 98%
-        if (progressPercent >= 98 || (pdfDoc && currentPage >= pdfDoc.numPages)) {
-          markBookAsFinished(bookId, pdfDoc?.numPages);
+        // Sincroniza progresso com o Service Worker em background
+        syncWithServiceWorkerForBackground();
+
+        // Se chegou à última página e o livro tem mais de 1 página, sugere a confirmação de conclusão
+        if (pdfDoc && currentPage >= pdfDoc.numPages && pdfDoc.numPages > 1 && !hasPromptedCompletionRef.current) {
+          hasPromptedCompletionRef.current = true;
+          setShowCompletionModal(true);
         }
       } catch (err: any) {
         if (err?.name !== "RenderingCancelledException") {
@@ -797,9 +858,13 @@ export default function Reader() {
         synced: false,
       });
 
-      // Marca automaticamente como lido na estante se chegou ao fim do EPUB (>= 98%)
-      if (pct >= 98) {
-        markBookAsFinished(bookId, totalPages);
+      // Sincroniza dados com o Service Worker em background
+      syncWithServiceWorkerForBackground();
+
+      // Se chegou ao fim do EPUB (>= 99%), confirma com o utilizador antes de concluir
+      if (pct >= 99 && !hasPromptedCompletionRef.current) {
+        hasPromptedCompletionRef.current = true;
+        setShowCompletionModal(true);
       }
 
       // Reaplicar highlights guardados após mudança de página
@@ -901,8 +966,16 @@ export default function Reader() {
 
   const goToNextPage = () => {
     if (fileType === "epub" && epubRenditionRef.current) {
+      if (epubProgress >= 98) {
+        setShowCompletionModal(true);
+        return;
+      }
       epubRenditionRef.current.next();
-    } else if (fileType === "pdf" && currentPage < totalPages) {
+    } else if (fileType === "pdf") {
+      if (currentPage >= totalPages && totalPages > 1) {
+        setShowCompletionModal(true);
+        return;
+      }
       setCurrentPage((prev) => prev + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -1364,10 +1437,14 @@ export default function Reader() {
     };
   }, []);
 
-  // Texto de página / progresso
+  // Percentagem e texto de página / progresso
+  const currentProgressPercent = fileType === "epub"
+    ? epubProgress
+    : (totalPages > 0 ? Math.min(100, Math.round((currentPage / totalPages) * 100)) : 0);
+
   const pageLabel = fileType === "epub"
-    ? `${epubChapterTitle || "Posição " + currentPage} • ${epubProgress}%`
-    : `Página ${currentPage} de ${totalPages || 1}`;
+    ? (epubChapterTitle || `Posição ${currentPage}`)
+    : `Pág. ${currentPage} de ${totalPages || 1}`;
 
   return (
     <div className={`flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white transition-colors duration-200 select-none ${isDark ? "dark" : ""}`}>
@@ -1383,9 +1460,18 @@ export default function Reader() {
           </Link>
           <div className="min-w-0 flex-1">
             <h1 className="font-semibold text-xs sm:text-sm truncate">{bookTitle}</h1>
-            <span className="text-[10px] sm:text-[11px] block truncate text-gray-500 dark:text-gray-400">
-              {pageLabel}
-            </span>
+            <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 overflow-hidden">
+              <span className="truncate">{pageLabel}</span>
+              <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-700 shrink-0" />
+              <span className="font-bold text-black dark:text-white shrink-0">
+                {currentProgressPercent}%
+              </span>
+              <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-700 shrink-0" />
+              <span className="inline-flex items-center gap-1 shrink-0 text-gray-600 dark:text-gray-300 font-medium" title="Tempo dedicado nesta sessão de leitura">
+                <Clock className="w-3 h-3 text-gray-400" />
+                <span>{formatSessionTime(sessionSeconds)}</span>
+              </span>
+            </div>
           </div>
         </div>
 
@@ -1474,6 +1560,14 @@ export default function Reader() {
           </button>
         </div>
       </header>
+
+      {/* Barra de Progresso Superior Contínua e Fluida */}
+      <div className="w-full h-1 bg-gray-200/60 dark:bg-gray-800/60 overflow-hidden sticky top-[49px] sm:top-[57px] z-20">
+        <div
+          className="h-full bg-gradient-to-r from-gray-700 via-gray-900 to-black dark:from-gray-300 dark:via-white dark:to-gray-100 transition-all duration-300 ease-out shadow-xs"
+          style={{ width: `${currentProgressPercent}%` }}
+        />
+      </div>
 
       {/* Painel Flutuante de Configurações de Leitura */}
       {showSettings && (
@@ -1753,25 +1847,37 @@ export default function Reader() {
               );
               setShowJumpPopover(!showJumpPopover);
             }}
-            className={`text-xs font-bold tracking-tight px-2.5 py-1 rounded-full min-w-[56px] text-center whitespace-nowrap transition-all active:scale-95 hover:bg-black/10 dark:hover:bg-white/10 ${showJumpPopover ? "ring-2 ring-current" : ""}`}
+            className={`text-xs font-bold tracking-tight px-3 py-1 rounded-full min-w-[65px] text-center whitespace-nowrap transition-all active:scale-95 hover:bg-black/10 dark:hover:bg-white/10 ${showJumpPopover ? "ring-2 ring-current" : ""}`}
             title="Tocar para saltar para uma página específica"
             aria-label="Saltar para uma página específica"
           >
             {fileType === "epub"
               ? `${epubProgress}%`
-              : `${currentPage} / ${totalPages || 1}`
+              : `${currentPage} / ${totalPages || 1} • ${currentProgressPercent}%`
             }
           </button>
 
-          <button
-            onClick={goToNextPage}
-            disabled={fileType === "pdf" && currentPage >= totalPages}
-            className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none active:scale-95 transition-all hover:bg-black/10 dark:hover:bg-white/10"
-            title="Página Seguinte"
-            aria-label="Página Seguinte"
-          >
-            <ChevronRight className="w-5 h-5 stroke-[2.2]" />
-          </button>
+          {((fileType === "pdf" && currentPage >= totalPages && totalPages > 1) || (fileType === "epub" && epubProgress >= 98)) ? (
+            <button
+              onClick={() => setShowCompletionModal(true)}
+              className="px-3 py-1 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 active:scale-95 transition-all shadow-xs"
+              title="Terminar e marcar como lido"
+              aria-label="Concluir Leitura"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Concluir</span>
+            </button>
+          ) : (
+            <button
+              onClick={goToNextPage}
+              disabled={fileType === "pdf" && currentPage >= totalPages}
+              className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none active:scale-95 transition-all hover:bg-black/10 dark:hover:bg-white/10"
+              title="Página Seguinte"
+              aria-label="Página Seguinte"
+            >
+              <ChevronRight className="w-5 h-5 stroke-[2.2]" />
+            </button>
+          )}
         </div>
       </footer>
 
@@ -2239,6 +2345,22 @@ export default function Reader() {
         isOpen={guestRestrictionModal.isOpen}
         feature={guestRestrictionModal.feature}
         onClose={() => setGuestRestrictionModal((prev) => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* Modal de Confirmação de Livro Totalmente Lido */}
+      <BookCompletionModal
+        isOpen={showCompletionModal}
+        onClose={() => setShowCompletionModal(false)}
+        onConfirmFinish={async () => {
+          await markBookAsFinished(bookId, totalPages || currentPage);
+          const elapsedMins = Math.max(1, Math.round((Date.now() - sessionStartTimeRef.current) / 60000));
+          await recordReadingSession(currentUserId, bookId, elapsedMins);
+          syncWithServiceWorkerForBackground();
+        }}
+        bookTitle={bookTitle}
+        totalPages={totalPages || currentPage}
+        sessionMinutes={Math.max(1, Math.round(sessionSeconds / 60))}
+        currentPage={currentPage}
       />
 
     </div>

@@ -271,3 +271,66 @@ export async function updateUserProfile(
     return false;
   }
 }
+
+/** Regista uma sessão de leitura, acumulando os minutos e a contagem de sessões */
+export async function recordReadingSession(
+  userId: string | null | undefined,
+  bookId: string,
+  durationMinutes: number
+): Promise<{ totalMinutes: number; totalSessions: number }> {
+  if (durationMinutes <= 0) return { totalMinutes: 0, totalSessions: 0 };
+
+  const id = userId || "guest_user";
+  const localTimeKey = `reading_time_mins_${id}`;
+  const localSessionsKey = `reading_sessions_${id}`;
+  const bookTimeKey = `book_reading_time_mins_${bookId}`;
+
+  // 1. Atualizar localStorage
+  const prevMins = parseInt(localStorage.getItem(localTimeKey) || "0", 10);
+  const newMins = prevMins + durationMinutes;
+  localStorage.setItem(localTimeKey, String(newMins));
+
+  const prevSessions = parseInt(localStorage.getItem(localSessionsKey) || "0", 10);
+  const newSessions = prevSessions + 1;
+  localStorage.setItem(localSessionsKey, String(newSessions));
+
+  const prevBookMins = parseInt(localStorage.getItem(bookTimeKey) || "0", 10);
+  localStorage.setItem(bookTimeKey, String(prevBookMins + durationMinutes));
+
+  // 2. Atualizar cache de perfil
+  const cached = getCached<UserProfileData>(`profile_detail_${id}`);
+  if (cached) {
+    setCached(`profile_detail_${id}`, {
+      ...cached,
+      reading_time_minutes: newMins,
+      sessions_count: newSessions,
+    });
+  }
+
+  // 3. Atualizar no Supabase se utilizador autenticado
+  if (userId && userId !== "guest_user") {
+    Promise.resolve(
+      supabase
+        .from("profiles")
+        .update({
+          reading_time_minutes: newMins,
+        })
+        .eq("id", userId)
+    ).catch(() => {});
+
+    // Atualiza last_read_at em user_books
+    if (bookId && bookId !== "demo-book" && !bookId.startsWith("local-")) {
+      Promise.resolve(
+        supabase
+          .from("user_books")
+          .update({
+            last_read_at: new Date().toISOString(),
+          })
+          .eq("user_id", userId)
+          .eq("book_id", bookId)
+      ).catch(() => {});
+    }
+  }
+
+  return { totalMinutes: newMins, totalSessions: newSessions };
+}
