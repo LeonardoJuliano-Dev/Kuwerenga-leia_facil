@@ -87,9 +87,148 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+// ────────────────────────────────────────────────────────────────
+// ARMAZENAMENTO E NOTIFICAÇÕES EM SEGUNDO PLANO (BACKGROUND TASKS)
+// ────────────────────────────────────────────────────────────────
+const BG_DATA_CACHE = 'kuwerenga-bg-data-v1';
+
+async function setBgData(key, value) {
+  try {
+    const cache = await caches.open(BG_DATA_CACHE);
+    await cache.put(
+      new Request(`https://kuwerenga.internal/bg/${key}`),
+      new Response(JSON.stringify(value), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  } catch (err) {
+    console.warn('Erro ao guardar dados de fundo no SW:', err);
+  }
+}
+
+async function getBgData(key) {
+  try {
+    const cache = await caches.open(BG_DATA_CACHE);
+    const res = await cache.match(new Request(`https://kuwerenga.internal/bg/${key}`));
+    if (!res) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Executa as verificações em segundo plano de forma autónoma:
+ * 1. Livros parados há mais de 2 dias.
+ * 2. Lembretes diários de leitura caso o leitor ainda não tenha lido hoje.
+ */
+async function runBackgroundReadingChecks() {
+  try {
+    const settings = (await getBgData('settings')) || {
+      bookIdleReminders: true,
+      dailyReadingReminders: true,
+      muteAll: false,
+    };
+
+    if (settings.muteAll) return;
+
+    const books = (await getBgData('books')) || [];
+    const meta = (await getBgData('last_checks')) || {};
+    const now = Date.now();
+    const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const notifiedIdle = meta.notifiedIdleBooks || {};
+
+    // 1. Verificar livros inativos (+2 dias sem ler)
+    if (settings.bookIdleReminders && books.length > 0) {
+      for (const book of books) {
+        if (!book.lastReadAt) continue;
+        const lastReadTime = new Date(book.lastReadAt).getTime();
+        const diffMs = now - lastReadTime;
+
+        if (diffMs >= TWO_DAYS_MS) {
+          const lastNotified = notifiedIdle[book.id] || 0;
+          if (now - lastNotified >= ONE_DAY_MS) {
+            const daysIdle = Math.floor(diffMs / ONE_DAY_MS);
+
+            await self.registration.showNotification(
+              `Continua a tua leitura: "${book.title}"`,
+              {
+                icon: '/favicon.svg',
+                badge: '/favicon.svg',
+                vibrate: [200, 100, 200],
+                body: `Já passaram ${daysIdle} dias desde a tua última leitura. Que tal avançar mais algumas páginas hoje?`,
+                tag: `book_idle_${book.id}`,
+                data: { url: `/reader?bookId=${book.id}` },
+              }
+            );
+
+            notifiedIdle[book.id] = now;
+            break; // Notifica um livro de cada vez para não inundar o ecrã
+          }
+        }
+      }
+    }
+
+    // 2. Lembrete Diário de Leitura (se ainda não leu hoje)
+    if (settings.dailyReadingReminders && meta.lastDailyReminder !== todayStr) {
+      const hasReadToday = books.some((b) => b.lastReadAt && b.lastReadAt.startsWith(todayStr));
+
+      if (!hasReadToday) {
+        const motivationalMessages = [
+          'Dedica 10 minutos à tua leitura de hoje e mantém o teu hábito vivo!',
+          'Uma página por dia transforma o teu conhecimento. Tens um momento para ler?',
+          'O teu próximo capítulo favorito está à tua espera no Kuwerenga.',
+          'Cultiva a tua mente: ler um pouco todos os dias faz toda a diferença.',
+        ];
+        const randomMsg = motivationalMessages[Math.floor(Math.random() * motivationalMessages.length)];
+
+        await self.registration.showNotification('Hora da Leitura • Kuwerenga', {
+          icon: '/favicon.svg',
+          badge: '/favicon.svg',
+          vibrate: [200, 100, 200],
+          body: randomMsg,
+          tag: `daily_reminder_${todayStr}`,
+          data: { url: '/home' },
+        });
+
+        meta.lastDailyReminder = todayStr;
+      }
+    }
+
+    meta.lastIdleCheck = now;
+    meta.notifiedIdleBooks = notifiedIdle;
+    await setBgData('last_checks', meta);
+  } catch (err) {
+    console.warn('Erro ao processar verificações no Service Worker:', err);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
+// EVENTOS DE SINCRONIZAÇÃO EM SEGUNDO PLANO (ANDROID / CHROME)
+// ────────────────────────────────────────────────────────────────
+
+// Periodic Background Sync (executado periodicamente pelo SO mesmo com APK fechado)
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'kuwerenga-reading-reminders') {
+    event.waitUntil(runBackgroundReadingChecks());
+  }
+});
+
+// Background Sync (ao restaurar rede ou permissão)
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'kuwerenga-bg-sync') {
+    event.waitUntil(runBackgroundReadingChecks());
+  }
+});
+
 // Mensagens da aplicação
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'CACHE_BOOK') {
+  if (!event.data) return;
+
+  if (event.data.type === 'CACHE_BOOK') {
     const { url, bookId } = event.data;
     caches.open('leitura-books').then((cache) => {
       fetch(url).then((response) => {
@@ -100,8 +239,8 @@ self.addEventListener('message', (event) => {
     });
   }
 
-  // Notificação nativa disparada via postMessage
-  if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+  // Notificação nativa imediata
+  if (event.data.type === 'SHOW_NOTIFICATION') {
     const { title, options } = event.data;
     if (self.registration && 'showNotification' in self.registration) {
       self.registration.showNotification(title, {
@@ -112,9 +251,28 @@ self.addEventListener('message', (event) => {
       });
     }
   }
+
+  // Sincronização de dados da app para o Service Worker (executado ao sair ou atualizar)
+  if (event.data.type === 'SYNC_BACKGROUND_DATA') {
+    const { books, settings } = event.data.payload || {};
+    event.waitUntil(
+      Promise.all([
+        books ? setBgData('books', books) : Promise.resolve(),
+        settings ? setBgData('settings', settings) : Promise.resolve(),
+      ])
+    );
+  }
+
+  // Agendamento de lembrete com timer em segundo plano
+  if (event.data.type === 'SCHEDULE_BACKGROUND_REMINDER') {
+    const delayMs = event.data.delayMs || 3600000;
+    setTimeout(() => {
+      runBackgroundReadingChecks();
+    }, delayMs);
+  }
 });
 
-// Suporte a Web Push Notifications nativas
+// Suporte a Web Push Notifications nativas (do servidor para o telemóvel fechado)
 self.addEventListener('push', (event) => {
   if (event.data) {
     try {
@@ -125,6 +283,7 @@ self.addEventListener('push', (event) => {
           badge: '/favicon.svg',
           vibrate: [200, 100, 200],
           body: data.body || data.message || '',
+          tag: data.tag || `push_${Date.now()}`,
           data: { url: data.link || data.url || '/' },
         })
       );
@@ -132,6 +291,7 @@ self.addEventListener('push', (event) => {
       event.waitUntil(
         self.registration.showNotification('Kuwerenga • Nova Notificação', {
           icon: '/favicon.svg',
+          badge: '/favicon.svg',
           body: event.data.text(),
           data: { url: '/' },
         })

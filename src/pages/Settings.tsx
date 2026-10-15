@@ -30,6 +30,7 @@ import {
   saveNotificationSettings,
   requestBrowserNotificationPermission,
   toggleMuteClub,
+  syncWithServiceWorkerForBackground,
   type NotificationSettings
 } from "../lib/notificationService";
 
@@ -65,6 +66,7 @@ export default function Settings() {
   const handleUpdateNotifSettings = (patch: Partial<NotificationSettings>) => {
     const updated = saveNotificationSettings(patch);
     setNotifSettings({ ...updated });
+    syncWithServiceWorkerForBackground();
   };
 
   const handleRequestBrowserPermission = async () => {
@@ -73,6 +75,7 @@ export default function Settings() {
       setBrowserPermission(Notification.permission);
     }
     handleUpdateNotifSettings({ browserNotifications: granted });
+    syncWithServiceWorkerForBackground();
   };
 
   const handleUnmuteClub = (clubId: string) => {
@@ -437,25 +440,25 @@ export default function Settings() {
                 </span>
                 <span className="text-[10px] text-gray-500 dark:text-gray-400 block">
                   {browserPermission === "granted"
-                    ? "Autorizadas no navegador/sistema"
+                    ? "Ativas mesmo com a aplicação fechada em segundo plano"
                     : browserPermission === "denied"
-                    ? "Bloqueadas no navegador (altera nas permissões do site)"
-                    : "Recebe alertas mesmo com o ecrã em repouso"}
+                    ? "Bloqueadas no sistema (ativa nas definições de notificações do dispositivo)"
+                    : "Recebe lembretes e alertas mesmo com o telemóvel bloqueado"}
                 </span>
               </div>
             </div>
             {browserPermission === "granted" ? (
-              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-md border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-md border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 shrink-0">
                 <Check className="w-3 h-3 stroke-[3]" />
-                Ativas
+                Ativas em Segundo Plano
               </span>
             ) : (
               <button
                 type="button"
                 onClick={handleRequestBrowserPermission}
-                className="px-3 py-1.5 rounded-lg bg-black dark:bg-white text-white dark:text-black font-semibold text-xs active:scale-95 transition-all shadow-xs shrink-0"
+                className="px-3.5 py-1.5 rounded-lg bg-black dark:bg-white text-white dark:text-black font-semibold text-xs active:scale-95 transition-all shadow-xs shrink-0"
               >
-                Ativar
+                Ativar no Telemóvel
               </button>
             )}
           </div>

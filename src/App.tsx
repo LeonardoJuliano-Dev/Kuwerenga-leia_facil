@@ -19,7 +19,8 @@ import { initThemeListener } from "./lib/theme";
 import {
   initCommunityNotificationsListener,
   checkIdleBooksNotifications,
-  checkDailyReadingReminder
+  checkDailyReadingReminder,
+  syncWithServiceWorkerForBackground
 } from "./lib/notificationService";
 
 import { isGuestMode, disableGuestMode } from "./lib/guestMode";
@@ -75,12 +76,22 @@ function AuthRouter() {
     const cleanupTheme = initThemeListener();
     const cleanupNotifications = initCommunityNotificationsListener();
 
-    const handleFocus = () => {
-      checkIdleBooksNotifications();
-      checkDailyReadingReminder();
+    // Sincroniza dados com o Service Worker logo ao iniciar
+    syncWithServiceWorkerForBackground();
+
+    const handleAppStateChange = () => {
+      if (document.visibilityState === "visible") {
+        checkIdleBooksNotifications();
+        checkDailyReadingReminder();
+      } else if (document.visibilityState === "hidden") {
+        // Ao minimizar ou fechar, envia dados atualizados para o Service Worker vigiar em segundo plano
+        syncWithServiceWorkerForBackground();
+      }
     };
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleFocus);
+
+    window.addEventListener("focus", handleAppStateChange);
+    document.addEventListener("visibilitychange", handleAppStateChange);
+    window.addEventListener("pagehide", handleAppStateChange);
 
     // 1. Check existing session in localStorage
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -108,6 +119,7 @@ function AuthRouter() {
       if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session?.user) {
         disableGuestMode();
         await checkUserStatus(session.user);
+        syncWithServiceWorkerForBackground();
       } else if (event === "SIGNED_OUT") {
         disableGuestMode();
         navigate("/", { replace: true });
@@ -117,8 +129,9 @@ function AuthRouter() {
     return () => {
       cleanupTheme();
       cleanupNotifications();
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleFocus);
+      window.removeEventListener("focus", handleAppStateChange);
+      document.removeEventListener("visibilitychange", handleAppStateChange);
+      window.removeEventListener("pagehide", handleAppStateChange);
       subscription.unsubscribe();
     };
   }, [navigate]);

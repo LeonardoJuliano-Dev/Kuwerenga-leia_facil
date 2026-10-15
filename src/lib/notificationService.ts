@@ -558,13 +558,13 @@ export function initCommunityNotificationsListener(): () => void {
               }
             } catch {}
 
-            // Trata prévia da mensagem
+            // Trata prévia da mensagem sem emojis
             let previewText = newRow.message || "Nova mensagem partilhada";
             if (previewText.startsWith("{") && previewText.includes('"media_type"')) {
               try {
                 const parsed = JSON.parse(previewText);
-                if (parsed.media_type === "audio") previewText = "🎤 Mensagem de voz";
-                else if (parsed.media_type === "image") previewText = "📷 Fotografia partilhada";
+                if (parsed.media_type === "audio") previewText = "Mensagem de voz";
+                else if (parsed.media_type === "image") previewText = "Fotografia partilhada";
                 else if (parsed.text) previewText = parsed.text;
               } catch {}
             }
@@ -647,4 +647,105 @@ export function notifyAdminNewDonatedBook(book: { id: string; title: string; aut
       authorName: book.author,
     },
   });
+}
+
+/**
+ * Sincroniza dados com o Service Worker para garantir que as notificações
+ * continuem a ser verificadas e disparadas em segundo plano mesmo após fechar o APK/app.
+ */
+export async function syncWithServiceWorkerForBackground(): Promise<void> {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const settings = getNotificationSettings();
+
+    // 1. Recolhe livros em progresso locais e remotos
+    const booksMap: Record<string, { id: string; title: string; lastReadAt: string; progress: number }> = {};
+
+    const localBooks = getLocalCustomBooks();
+    localBooks.forEach((b) => {
+      if (b.status === "reading" && (b.progress || 0) < 100 && b.lastReadAt) {
+        booksMap[b.bookId || b.id] = {
+          id: b.bookId || b.id,
+          title: b.title,
+          lastReadAt: b.lastReadAt,
+          progress: b.progress || 0,
+        };
+      }
+    });
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: userBooks } = await supabase
+          .from("user_books")
+          .select("book_id, status, progress, last_read_at, book:books(id, title)")
+          .eq("user_id", user.id)
+          .neq("status", "finished");
+
+        if (userBooks) {
+          userBooks.forEach((item: any) => {
+            if (item.book && (item.progress || 0) < 100 && item.last_read_at) {
+              booksMap[item.book.id] = {
+                id: item.book.id,
+                title: item.book.title,
+                lastReadAt: item.last_read_at,
+                progress: item.progress || 0,
+              };
+            }
+          });
+        }
+      }
+    } catch {}
+
+    const booksList = Object.values(booksMap);
+
+    // 2. Transmite dados consolidados para a cache do Service Worker
+    const payload = {
+      books: booksList,
+      settings: {
+        bookIdleReminders: settings.bookIdleReminders,
+        dailyReadingReminders: settings.dailyReadingReminders,
+        muteAll: settings.muteAll,
+      },
+    };
+
+    if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: "SYNC_BACKGROUND_DATA",
+        payload,
+      });
+
+      // Se houver livros inativos ou lembretes pendentes, programa timer de contingência no SW
+      navigator.serviceWorker.controller.postMessage({
+        type: "SCHEDULE_BACKGROUND_REMINDER",
+        delayMs: 3 * 60 * 60 * 1000,
+      });
+    }
+
+    // 3. Regista Periodic Background Sync API no Android/Chrome se suportada
+    if ("periodicSync" in reg) {
+      try {
+        const periodicSync = (reg as any).periodicSync;
+        const tags = await periodicSync.getTags();
+        if (!tags.includes("kuwerenga-reading-reminders")) {
+          await periodicSync.register("kuwerenga-reading-reminders", {
+            minInterval: 4 * 60 * 60 * 1000,
+          });
+        }
+      } catch (err) {
+        // Ignora silenciosamente se o browser ou SO não autorizar
+      }
+    }
+
+    // 4. Regista Background Sync API regular
+    if ("sync" in reg) {
+      try {
+        await (reg as any).sync.register("kuwerenga-bg-sync");
+      } catch (err) {}
+    }
+  } catch (err) {
+    console.warn("Aviso ao sincronizar dados com o Service Worker:", err);
+  }
 }
