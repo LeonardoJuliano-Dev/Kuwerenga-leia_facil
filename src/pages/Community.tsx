@@ -475,33 +475,36 @@ export default function Community() {
         {/* ─── Supergrupo Oficial: Chat Geral da Comunidade (Pinned no Topo) ─── */}
         <div
           onClick={() => navigate("/club/geral")}
-          className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-600 text-white shadow-md cursor-pointer transition-all active:scale-[0.99] flex items-center justify-between gap-3.5 mb-5 hover:opacity-95"
+          className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-gray-900 border border-gray-200/90 dark:border-gray-800 shadow-xs cursor-pointer transition-all active:scale-[0.99] hover:border-gray-300 dark:hover:border-gray-700 flex items-center justify-between gap-3.5 mb-5 select-none"
         >
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-13 h-13 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 shadow-xs border border-white/30">
-              <MessageSquare className="w-6 h-6 text-white" />
+          <div className="flex items-center gap-3.5 min-w-0 flex-1">
+            <div className="w-13 h-13 rounded-full bg-gray-100 dark:bg-gray-800 text-black dark:text-white flex items-center justify-center shrink-0 shadow-xs border border-gray-200 dark:border-gray-700">
+              <MessageSquare className="w-6 h-6 stroke-[1.8]" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-bold text-sm sm:text-base leading-tight truncate">
+                <h3 className="font-bold text-sm sm:text-base leading-tight truncate text-black dark:text-white">
                   Chat Geral da Comunidade
                 </h3>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-white/25 uppercase tracking-wider">
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-black/5 dark:bg-white/10 text-gray-700 dark:text-gray-300 border border-black/5 dark:border-white/10">
                   Supergrupo Oficial
                 </span>
               </div>
-              <p className="text-xs text-white/80 mt-0.5 line-clamp-1 leading-relaxed">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-1 leading-relaxed">
                 Canal aberto para todos os leitores • Voz, imagens e mensagens ao vivo
               </p>
-              <span className="text-[11px] text-white/70 font-medium flex items-center gap-1 mt-1">
-                <Users className="w-3.5 h-3.5" />
+              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium flex items-center gap-1 mt-1">
+                <Users className="w-3.5 h-3.5 shrink-0" />
                 <span>Todos os utilizadores do Kuwerenga</span>
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
-            <button className="px-3.5 sm:px-4 py-2 rounded-xl bg-white text-black text-xs font-bold whitespace-nowrap shadow-xs hover:bg-gray-100 transition-colors">
+            <button
+              type="button"
+              className="px-4 py-2 rounded-xl bg-black dark:bg-white text-white dark:text-black text-xs font-bold whitespace-nowrap shadow-xs active:scale-95 transition-transform hover:opacity-90"
+            >
               Abrir
             </button>
           </div>
