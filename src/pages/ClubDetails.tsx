@@ -872,11 +872,11 @@ export default function ClubDetails() {
       <header className="px-4 sm:px-6 pt-safe bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900 flex-shrink-0 z-10">
         <div className="app-container pt-5 sm:pt-7 pb-3">
           
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
+          <div className="flex items-center justify-between mb-3 gap-1 sm:gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               <button
                 onClick={() => navigate("/community")}
-                className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
+                className="p-1.5 sm:p-2 -ml-1 sm:-ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
                 title="Voltar às Comunidades"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -885,7 +885,7 @@ export default function ClubDetails() {
               {/* Avatar do Grupo (Foto de Perfil ou Padrão Sólido Telegram com Iniciais) */}
               <div className="relative shrink-0">
                 <div
-                  className={`w-11 h-11 rounded-full overflow-hidden flex items-center justify-center shadow-xs border border-white/20 ${
+                  className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden flex items-center justify-center shadow-xs border border-white/20 ${
                     club.avatar_url
                       ? "bg-gray-100 dark:bg-gray-800"
                       : `bg-gradient-to-tr ${getCommunityColorPalette(club.name).gradient}`
@@ -898,7 +898,7 @@ export default function ClubDetails() {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <span className="font-bold text-white text-sm tracking-wider">
+                    <span className="font-bold text-white text-xs sm:text-sm tracking-wider">
                       {getCommunityInitials(club.name)}
                     </span>
                   )}
@@ -917,20 +917,22 @@ export default function ClubDetails() {
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <h1 className="font-bold text-base truncate leading-tight">{club.name}</h1>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <h1 className="font-bold text-sm sm:text-base truncate leading-tight flex-1 min-w-0">
+                    {club.name}
+                  </h1>
                   
                   {/* Badge de Privacidade */}
-                  <span className="shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 bg-gray-100 dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700">
+                  <span className="shrink-0 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 bg-gray-100 dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700">
                     {club.is_public !== false ? (
                       <>
                         <Globe className="w-2.5 h-2.5" />
-                        <span>Pública</span>
+                        <span className="hidden xs:inline">Pública</span>
                       </>
                     ) : (
                       <>
                         <Lock className="w-2.5 h-2.5" />
-                        <span>Privada</span>
+                        <span className="hidden xs:inline">Privada</span>
                       </>
                     )}
                   </span>
@@ -967,17 +969,19 @@ export default function ClubDetails() {
                 </button>
               )}
 
-              {/* Botão de Painel do Administrador (apenas para o admin da comunidade) */}
+              {/* Botão de Painel do Administrador (apenas para o criador/admin da comunidade) */}
               {isAdmin && (
                 <button
+                  type="button"
                   onClick={() => setShowAdminModal(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-black dark:bg-white text-white dark:text-black shadow-xs active:scale-95 transition-transform relative"
+                  className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-full text-xs font-bold bg-black dark:bg-white text-white dark:text-black shadow-xs active:scale-95 transition-transform relative shrink-0"
                   title="Painel do Administrador da Comunidade"
+                  aria-label="Gerir comunidade"
                 >
-                  <Shield className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Gerir</span>
+                  <Shield className="w-4 h-4 sm:w-3.5 sm:h-3.5 stroke-[2.5]" />
+                  <span className="hidden sm:inline">Gerir</span>
                   {joinRequests.length > 0 && (
-                    <span className="w-2 h-2 rounded-full bg-white dark:bg-black absolute -top-0.5 -right-0.5 animate-pulse" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-black absolute -top-0.5 -right-0.5 animate-pulse" />
                   )}
                 </button>
               )}
@@ -986,15 +990,16 @@ export default function ClubDetails() {
               {!isMember && !isAdmin && (
                 club.is_public === false ? (
                   myRequestPending ? (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full text-xs font-semibold text-gray-600 dark:text-gray-300">
+                    <div className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full text-xs font-semibold text-gray-600 dark:text-gray-300 shrink-0">
                       <Clock className="w-3.5 h-3.5" />
                       <span>Pendente</span>
                     </div>
                   ) : (
                     <button
+                      type="button"
                       onClick={handleJoinClub}
                       disabled={joining}
-                      className="flex items-center gap-1.5 px-3.5 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold active:scale-95 transition-transform shadow-xs disabled:opacity-50"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold active:scale-95 transition-transform shadow-xs disabled:opacity-50 shrink-0"
                     >
                       <Lock className="w-3.5 h-3.5" />
                       <span>{joining ? "A pedir..." : "Pedir Entrada"}</span>
@@ -1002,24 +1007,15 @@ export default function ClubDetails() {
                   )
                 ) : (
                   <button
+                    type="button"
                     onClick={handleJoinClub}
                     disabled={joining}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold active:scale-95 transition-transform shadow-xs disabled:opacity-50"
+                    className="flex items-center gap-1 px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold active:scale-95 transition-transform shadow-xs disabled:opacity-50 shrink-0"
                   >
                     <UserPlus className="w-3.5 h-3.5" />
                     <span>{joining ? "A aderir..." : "Aderir"}</span>
                   </button>
                 )
-              )}
-
-              {activeTab === "forum" && isMember && (
-                <button
-                  onClick={() => setShowForumModal(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-semibold active:scale-95 transition-transform shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Novo Tópico</span>
-                </button>
               )}
             </div>
           </div>
