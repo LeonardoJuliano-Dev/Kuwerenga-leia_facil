@@ -872,12 +872,15 @@ export default function ClubDetails() {
       <header className="px-4 sm:px-6 pt-safe bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900 flex-shrink-0 z-10">
         <div className="app-container pt-5 sm:pt-7 pb-3">
           
-          <div className="flex items-center justify-between mb-3 gap-1 sm:gap-2">
+          <div className="flex items-center justify-between mb-3 gap-1.5 sm:gap-2">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              {/* 1. Botão Voltar (Simétrico 36x36px) */}
               <button
+                type="button"
                 onClick={() => navigate("/community")}
-                className="p-1.5 sm:p-2 -ml-1 sm:-ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
+                className="w-9 h-9 rounded-full flex items-center justify-center text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0 -ml-1"
                 title="Voltar às Comunidades"
+                aria-label="Voltar"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
@@ -944,10 +947,10 @@ export default function ClubDetails() {
               </div>
             </div>
 
-            {/* Ações de Cabeçalho */}
-            <div className="flex items-center gap-1.5 shrink-0">
+            {/* Ações de Cabeçalho (Simétricas e Alinhadas) */}
+            <div className="flex items-center gap-2 shrink-0">
               
-              {/* Botão de Silenciar / Reativar Notificações da Comunidade */}
+              {/* Botão de Silenciar / Reativar Notificações (Simétrico 36x36px) */}
               {(isMember || isAdmin) && (
                 <button
                   type="button"
@@ -957,10 +960,10 @@ export default function ClubDetails() {
                       setIsMuted(next);
                     }
                   }}
-                  className={`p-2 rounded-full border transition-all touch-target ${
+                  className={`w-9 h-9 rounded-full border flex items-center justify-center transition-all shrink-0 active:scale-95 ${
                     isMuted
                       ? "bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400"
-                      : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white"
+                      : "bg-gray-100 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white"
                   }`}
                   title={isMuted ? "Notificações silenciadas nesta comunidade. Clica para reativar." : "Silenciar notificações desta comunidade"}
                   aria-label={isMuted ? "Reativar notificações da comunidade" : "Silenciar notificações da comunidade"}
@@ -969,16 +972,16 @@ export default function ClubDetails() {
                 </button>
               )}
 
-              {/* Botão de Painel do Administrador (apenas para o criador/admin da comunidade) */}
+              {/* Botão de Painel do Administrador (Simétrico 36x36px em mobile e expandido em tablet/desktop) */}
               {isAdmin && (
                 <button
                   type="button"
                   onClick={() => setShowAdminModal(true)}
-                  className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-full text-xs font-bold bg-black dark:bg-white text-white dark:text-black shadow-xs active:scale-95 transition-transform relative shrink-0"
+                  className="w-9 h-9 sm:w-auto sm:px-3.5 sm:py-2 rounded-full flex items-center justify-center gap-1.5 text-xs font-bold bg-black dark:bg-white text-white dark:text-black shadow-xs active:scale-95 transition-transform relative shrink-0"
                   title="Painel do Administrador da Comunidade"
                   aria-label="Gerir comunidade"
                 >
-                  <Shield className="w-4 h-4 sm:w-3.5 sm:h-3.5 stroke-[2.5]" />
+                  <Shield className="w-4 h-4 stroke-[2.2]" />
                   <span className="hidden sm:inline">Gerir</span>
                   {joinRequests.length > 0 && (
                     <span className="w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-black absolute -top-0.5 -right-0.5 animate-pulse" />
@@ -990,7 +993,7 @@ export default function ClubDetails() {
               {!isMember && !isAdmin && (
                 club.is_public === false ? (
                   myRequestPending ? (
-                    <div className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full text-xs font-semibold text-gray-600 dark:text-gray-300 shrink-0">
+                    <div className="h-9 px-3 rounded-full flex items-center justify-center gap-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-600 dark:text-gray-300 shrink-0">
                       <Clock className="w-3.5 h-3.5" />
                       <span>Pendente</span>
                     </div>
@@ -999,7 +1002,7 @@ export default function ClubDetails() {
                       type="button"
                       onClick={handleJoinClub}
                       disabled={joining}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold active:scale-95 transition-transform shadow-xs disabled:opacity-50 shrink-0"
+                      className="h-9 px-3.5 rounded-full flex items-center justify-center gap-1.5 bg-black dark:bg-white text-white dark:text-black text-xs font-bold active:scale-95 transition-transform shadow-xs disabled:opacity-50 shrink-0"
                     >
                       <Lock className="w-3.5 h-3.5" />
                       <span>{joining ? "A pedir..." : "Pedir Entrada"}</span>
@@ -1010,7 +1013,7 @@ export default function ClubDetails() {
                     type="button"
                     onClick={handleJoinClub}
                     disabled={joining}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black rounded-full text-xs font-bold active:scale-95 transition-transform shadow-xs disabled:opacity-50 shrink-0"
+                    className="h-9 px-3.5 rounded-full flex items-center justify-center gap-1.5 bg-black dark:bg-white text-white dark:text-black text-xs font-bold active:scale-95 transition-transform shadow-xs disabled:opacity-50 shrink-0"
                   >
                     <UserPlus className="w-3.5 h-3.5" />
                     <span>{joining ? "A aderir..." : "Aderir"}</span>
