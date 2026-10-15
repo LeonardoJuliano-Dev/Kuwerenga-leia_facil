@@ -85,7 +85,75 @@ export function getCommunityColorPalette(name: string) {
 }
 
 /**
+ * Redimensiona e comprime uma imagem no navegador antes do upload
+ */
+export async function compressImageFile(
+  file: File,
+  maxDimension = 1400,
+  quality = 0.82
+): Promise<Blob> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                resolve(blob);
+              } else {
+                resolve(file);
+              }
+            },
+            "image/jpeg",
+            quality
+          );
+        } else {
+          resolve(file);
+        }
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Converte um ficheiro ou blob em Data URL compacta para fallback
+ */
+export async function fileToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
  * Faz upload de imagem para avatar ou fundo do clube para o bucket de armazenamento
+ * com compressão automática e fallback gracioso.
  */
 export async function uploadClubImage(
   clubId: string,
@@ -93,22 +161,38 @@ export async function uploadClubImage(
   type: "avatar" | "cover"
 ): Promise<string | null> {
   try {
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `club_${type}s/${clubId}_${Date.now()}.${ext}`;
+    const maxDim = type === "avatar" ? 512 : 1400;
+    const quality = type === "avatar" ? 0.85 : 0.8;
+    const compressedBlob = await compressImageFile(file, maxDim, quality);
+
+    const path = `club_${type}s/${clubId}_${Date.now()}.jpg`;
 
     const { error: uploadErr } = await supabase.storage
       .from("covers")
-      .upload(path, file, { upsert: true });
+      .upload(path, compressedBlob, {
+        upsert: true,
+        contentType: "image/jpeg",
+      });
 
-    if (uploadErr) {
-      console.warn(`Erro no upload da ${type} do clube:`, uploadErr);
-      return null;
+    if (!uploadErr) {
+      const { data } = supabase.storage.from("covers").getPublicUrl(path);
+      if (data?.publicUrl) {
+        return data.publicUrl;
+      }
+    } else {
+      console.warn(`Aviso no upload storage da ${type} do clube:`, uploadErr);
     }
 
-    const { data } = supabase.storage.from("covers").getPublicUrl(path);
-    return data.publicUrl;
+    // Fallback de alta disponibilidade: converter para DataURL compacta caso o storage falhe
+    const fallbackDataUrl = await fileToDataUrl(compressedBlob);
+    return fallbackDataUrl;
   } catch (err) {
     console.error(`Falha ao carregar imagem (${type}):`, err);
-    return null;
+    try {
+      const directDataUrl = await fileToDataUrl(file);
+      return directDataUrl;
+    } catch {
+      return null;
+    }
   }
 }

@@ -866,7 +866,7 @@ export default function ClubDetails() {
   const isPrivateLocked = club.is_public === false && !isMember && !isAdmin;
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 dark:bg-black text-black dark:text-white overflow-hidden select-none">
+    <div className="flex flex-col h-screen h-[100dvh] max-h-[100dvh] bg-gray-50 dark:bg-black text-black dark:text-white overflow-hidden select-none">
       
       {/* ─── Top Header da Comunidade ─── */}
       <header className="px-4 sm:px-6 pt-safe bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900 flex-shrink-0 z-10">
@@ -1083,10 +1083,28 @@ export default function ClubDetails() {
         /* ══════════════════════════════════════════════════════════ */
         /* ÁREA 1: CHAT ESTILO TELEGRAM COM AVATAR, NOME E EXCLUSÃO  */
         /* ══════════════════════════════════════════════════════════ */
-        <div className="flex-1 flex flex-col justify-between overflow-hidden">
+        <div className="flex-1 flex flex-col justify-between overflow-hidden relative">
           
+          {/* Camada de Imagem de Fundo Desfocada (Estilo Telegram Wallpaper) */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-0 select-none">
+            {club.cover_url ? (
+              <>
+                <img
+                  src={club.cover_url}
+                  alt=""
+                  className="w-full h-full object-cover filter blur-2xl md:blur-3xl scale-110 opacity-30 dark:opacity-25 transition-opacity duration-700"
+                />
+                <div className="absolute inset-0 bg-white/75 dark:bg-black/80 backdrop-blur-[2px]" />
+              </>
+            ) : (
+              <div
+                className={`w-full h-full opacity-10 dark:opacity-15 bg-gradient-to-br ${getCommunityColorPalette(club.name).coverGradient}`}
+              />
+            )}
+          </div>
+
           {/* Lista de Mensagens */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+          <div className="relative z-10 flex-1 overflow-y-auto p-3 sm:p-6 space-y-3.5 sm:space-y-4">
             {chatMessages.length === 0 ? (
               <div className="text-center py-20 text-gray-400 text-xs max-w-xs mx-auto">
                 Ainda não há mensagens nesta comunidade. Sê o primeiro a partilhar uma ideia, foto ou gravação de voz!
@@ -1100,7 +1118,7 @@ export default function ClubDetails() {
                 return (
                   <div
                     key={msg.id}
-                    className={`flex items-start gap-2.5 sm:gap-3 group ${
+                    className={`flex items-start gap-2 sm:gap-3 group ${
                       isMe ? "flex-row-reverse" : "flex-row"
                     }`}
                   >
@@ -1125,7 +1143,7 @@ export default function ClubDetails() {
                     </button>
 
                     {/* 2. Balão da Mensagem */}
-                    <div className={`max-w-[82%] sm:max-w-md flex flex-col ${isMe ? "items-end" : "items-start"}`}>
+                    <div className={`max-w-[85%] sm:max-w-md flex flex-col ${isMe ? "items-end" : "items-start"}`}>
                       
                       {/* Nome do Remetente e Selo de Admin - Clicável */}
                       <div className="flex items-center gap-1.5 mb-1 px-1">
@@ -1145,10 +1163,10 @@ export default function ClubDetails() {
 
                       {/* Caixa Principal */}
                       <div
-                        className={`relative p-3.5 rounded-2xl shadow-xs transition-all ${
+                        className={`relative p-3 sm:p-3.5 rounded-2xl shadow-xs transition-all ${
                           isMe
                             ? "bg-black dark:bg-white text-white dark:text-black rounded-tr-xs"
-                            : "bg-white dark:bg-gray-900 text-black dark:text-white border border-gray-100 dark:border-gray-800 rounded-tl-xs"
+                            : "bg-white/95 dark:bg-gray-900/95 backdrop-blur-md text-black dark:text-white border border-gray-200/80 dark:border-gray-800/80 rounded-tl-xs"
                         }`}
                       >
                         {/* Imagem enviada */}
@@ -1251,7 +1269,7 @@ export default function ClubDetails() {
           )}
 
           {/* Barra de Envio (Texto, Microfone e Foto) */}
-          <footer className="p-3 sm:p-4 bg-white dark:bg-black border-t border-gray-100 dark:border-gray-900 flex-shrink-0">
+          <footer className="relative z-10 p-2 sm:p-3.5 bg-white/95 dark:bg-black/95 backdrop-blur-md border-t border-gray-100 dark:border-gray-900 flex-shrink-0">
             {isRecording ? (
               <div className="flex items-center justify-between p-2 rounded-2xl bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 animate-pulse">
                 <div className="flex items-center gap-3">
@@ -1295,7 +1313,7 @@ export default function ClubDetails() {
             ) : (
               <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                 {/* Botão de Anexar Foto */}
-                <label className="p-2.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-gray-400 hover:text-black dark:hover:text-white transition-colors">
+                <label className="p-2.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-gray-400 hover:text-black dark:hover:text-white transition-colors shrink-0">
                   <Image className="w-5 h-5" />
                   <input
                     type="file"
@@ -1317,7 +1335,7 @@ export default function ClubDetails() {
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder="Escreve uma mensagem para a comunidade..."
-                  className="flex-1 bg-gray-100 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-all font-medium text-black dark:text-white"
+                  className="flex-1 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl px-4 py-2.5 sm:py-3 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-all font-medium text-black dark:text-white"
                 />
 
                 {/* Botão de Gravação de Áudio (até 30s) */}
@@ -1347,50 +1365,93 @@ export default function ClubDetails() {
         /* ══════════════════════════════════════════════════════════ */
         /* ÁREA 2: FÓRUM / DISCUSSÕES POR CAPÍTULO                   */
         /* ══════════════════════════════════════════════════════════ */
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {forumDiscussions.length === 0 ? (
-            <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 text-center my-6">
-              <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <FileText className="w-7 h-7" />
-              </div>
-              <h3 className="font-bold text-base mb-1">Sem tópicos no fórum</h3>
-              <p className="text-xs text-gray-500 mb-6 max-w-xs mx-auto">
-                Cria o primeiro debate sobre um capítulo específico ou ideia central da leitura!
-              </p>
-              <button
-                onClick={() => {
-                  if (isGuestMode()) {
-                    setShowGuestModal(true);
-                  } else {
-                    setShowForumModal(true);
-                  }
-                }}
-                className="px-5 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold"
-              >
-                Criar Novo Tópico
-              </button>
-            </div>
-          ) : (
-            forumDiscussions.map((topic) => (
-              <div
-                key={topic.id}
-                className="p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/60 shadow-xs"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
-                    {topic.chapter_reference}
-                  </span>
-                  <span className="text-[10px] text-gray-400">
-                    {new Date(topic.created_at).toLocaleDateString("pt-PT")}
+        <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-4 relative">
+          
+          {/* Fundo Desfocado Também no Fórum */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-0 select-none">
+            {club.cover_url ? (
+              <>
+                <img
+                  src={club.cover_url}
+                  alt=""
+                  className="w-full h-full object-cover filter blur-2xl md:blur-3xl scale-110 opacity-25 dark:opacity-20 transition-opacity duration-700"
+                />
+                <div className="absolute inset-0 bg-white/80 dark:bg-black/85 backdrop-blur-[2px]" />
+              </>
+            ) : null}
+          </div>
+
+          <div className="relative z-10 space-y-4 max-w-3xl mx-auto">
+            {/* Banner e Ação Rápida de Criar Tópico */}
+            {isMember && (
+              <div className="flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border border-gray-200/80 dark:border-gray-800/80 shadow-xs">
+                <div className="min-w-0">
+                  <span className="text-xs sm:text-sm font-bold block truncate">Discussões da Comunidade</span>
+                  <span className="text-[11px] text-gray-500 block truncate">
+                    Debate capítulos, ideias e temas com os membros
                   </span>
                 </div>
-                <h4 className="font-bold text-sm mb-1.5">{topic.user_name}</h4>
-                <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line">
-                  {topic.text}
-                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowForumModal(true)}
+                  className="px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-bold active:scale-95 transition-transform flex items-center gap-1.5 shrink-0 shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Novo Tópico</span>
+                </button>
               </div>
-            ))
-          )}
+            )}
+
+            {forumDiscussions.length === 0 ? (
+              <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-gray-200/80 dark:border-gray-800/80 text-center my-4 shadow-xs">
+                <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-7 h-7" />
+                </div>
+                <h3 className="font-bold text-base mb-1">Sem tópicos no fórum</h3>
+                <p className="text-xs text-gray-500 mb-6 max-w-xs mx-auto">
+                  Cria o primeiro debate sobre um capítulo específico ou ideia central da leitura!
+                </p>
+                <button
+                  onClick={() => {
+                    if (isGuestMode()) {
+                      setShowGuestModal(true);
+                    } else {
+                      setShowForumModal(true);
+                    }
+                  }}
+                  className="px-5 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold"
+                >
+                  Criar Novo Tópico
+                </button>
+              </div>
+            ) : (
+              forumDiscussions.map((topic) => (
+                <div
+                  key={topic.id}
+                  className="p-4 sm:p-5 rounded-2xl border border-gray-200/80 dark:border-gray-800/80 bg-white/95 dark:bg-gray-900/90 backdrop-blur-md shadow-xs transition-transform hover:translate-y-[-1px]"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    {topic.chapter_reference ? (
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-black/5 dark:bg-white/10 text-black dark:text-white border border-black/10 dark:border-white/10 truncate max-w-[200px]">
+                        {topic.chapter_reference}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-500">
+                        Discussão Geral
+                      </span>
+                    )}
+                    <span className="text-[10px] text-gray-400 shrink-0">
+                      {new Date(topic.created_at).toLocaleDateString("pt-PT")}
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-sm mb-1.5">{topic.user_name}</h4>
+                  <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line break-words">
+                    {topic.text}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
 
@@ -1714,21 +1775,33 @@ export default function ClubDetails() {
         </div>
       )}
 
-      {/* Modal: Novo Tópico no Fórum */}
+      {/* Modal Responsivo: Novo Tópico no Fórum */}
       {showForumModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200 text-black dark:text-white">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-base">Novo Tópico no Fórum</h3>
+        <div
+          onClick={() => setShowForumModal(false)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl max-w-lg w-full shadow-2xl animate-in zoom-in-95 duration-200 text-black dark:text-white max-h-[90vh] flex flex-col overflow-hidden"
+          >
+            {/* Cabeçalho do Modal */}
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-black dark:text-white" />
+                <h3 className="font-bold text-base">Novo Tópico no Fórum</h3>
+              </div>
               <button
+                type="button"
                 onClick={() => setShowForumModal(false)}
-                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="p-2 rounded-xl text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateForumTopic} className="space-y-4">
+            {/* Conteúdo com Scroll para suportar Teclados Virtuais */}
+            <form onSubmit={handleCreateForumTopic} className="overflow-y-auto flex-1 p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">
                   Capítulo ou Referência (Opcional)
@@ -1738,7 +1811,7 @@ export default function ClubDetails() {
                   value={chapterRef}
                   onChange={(e) => setChapterRef(e.target.value)}
                   placeholder="Ex: Capítulo 3, Páginas 40-55"
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-base sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-all"
                 />
               </div>
 
@@ -1751,7 +1824,7 @@ export default function ClubDetails() {
                   value={forumTitle}
                   onChange={(e) => setForumTitle(e.target.value)}
                   placeholder="Ex: Análise da personagem principal"
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-base sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-all"
                   required
                 />
               </div>
@@ -1765,23 +1838,24 @@ export default function ClubDetails() {
                   value={forumContent}
                   onChange={(e) => setForumContent(e.target.value)}
                   placeholder="Escreve a tua reflexão ou pergunta para o grupo debater..."
-                  className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white resize-none"
+                  className="w-full p-3.5 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-base sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white resize-none transition-all"
                   required
                 />
               </div>
 
-              <div className="flex gap-2 justify-end pt-2">
+              {/* Botões de Ação */}
+              <div className="flex flex-col-reverse sm:flex-row gap-2 justify-end pt-2">
                 <button
                   type="button"
                   onClick={() => setShowForumModal(false)}
-                  className="px-4 py-2.5 text-xs font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl"
+                  className="w-full sm:w-auto px-5 py-3 text-xs font-bold text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={sending || !forumTitle.trim() || !forumContent.trim()}
-                  className="px-5 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold shadow-xs disabled:opacity-50"
+                  className="w-full sm:w-auto px-6 py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-bold shadow-xs active:scale-95 transition-transform disabled:opacity-50"
                 >
                   {sending ? "A publicar..." : "Publicar Tópico"}
                 </button>

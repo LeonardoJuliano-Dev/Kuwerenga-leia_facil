@@ -122,19 +122,29 @@ export default function EditCommunityModal({
     setError("");
 
     try {
-      let finalAvatarUrl: string | null = avatarPreview;
-      let finalCoverUrl: string | null = coverPreview;
+      let finalAvatarUrl: string | null =
+        avatarPreview && !avatarPreview.startsWith("blob:") ? avatarPreview : null;
+      let finalCoverUrl: string | null =
+        coverPreview && !coverPreview.startsWith("blob:") ? coverPreview : null;
 
       // 1. Upload da foto do perfil (se selecionada nova)
       if (avatarFile) {
         const uploadedAvatar = await uploadClubImage(club.id, avatarFile, "avatar");
-        if (uploadedAvatar) finalAvatarUrl = uploadedAvatar;
+        if (uploadedAvatar) {
+          finalAvatarUrl = uploadedAvatar;
+        } else {
+          throw new Error("Não foi possível carregar a foto do perfil. Tenta outra imagem.");
+        }
       }
 
       // 2. Upload da imagem de fundo (se selecionada nova)
       if (coverFile) {
         const uploadedCover = await uploadClubImage(club.id, coverFile, "cover");
-        if (uploadedCover) finalCoverUrl = uploadedCover;
+        if (uploadedCover) {
+          finalCoverUrl = uploadedCover;
+        } else {
+          throw new Error("Não foi possível carregar a imagem de fundo. Tenta outra imagem.");
+        }
       }
 
       // 3. Atualizar dados no Supabase
