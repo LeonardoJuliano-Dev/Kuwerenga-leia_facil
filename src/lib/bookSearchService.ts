@@ -12,7 +12,7 @@ export interface OfficialBookSearchResult {
   publisher?: string;
   publishedYear?: string;
   isbn?: string;
-  source: "google_books" | "open_library" | "ai_local";
+  source: "google_books" | "wikipedia" | "open_library" | "ai_local";
 }
 
 /**
@@ -27,11 +27,46 @@ export function cleanBookQuery(rawName: string): string {
 
   // Remove etiquetas de download e sufixos
   clean = clean.replace(/(\[.*?\]|\(.*?\))/g, " ");
-  clean = clean.replace(/(z-library|oceanofpdf|doceru|lelivros|baixa-livros|pdfdrive|vdoc\.pub|elivros|annas-archive)/gi, "");
+  clean = clean.replace(/(z-library|oceanofpdf|doceru|lelivros|baixa-livros|pdfdrive|vdoc\.pub|elivros|annas-archive|libgen)/gi, "");
   clean = clean.replace(/[_\-]+/g, " ");
   clean = clean.replace(/\s{2,}/g, " ").trim();
 
   return clean;
+}
+
+/**
+ * Tenta decompor nomes de ficheiro no formato "Autor - Título" ou "Título - Autor"
+ */
+export function parseFileNameTitleAndAuthor(rawName: string): { title: string; author: string } {
+  let base = rawName.replace(/\.(pdf|epub|mobi|azw3|txt)$/i, "").trim();
+  base = base.replace(/(\[.*?\]|\(.*?\))/g, " ");
+  base = base.replace(/(z-library|oceanofpdf|doceru|lelivros|baixa-livros|pdfdrive|vdoc\.pub|elivros|annas-archive)/gi, "");
+
+  // Se tiver hífen divisor
+  if (base.includes(" - ")) {
+    const parts = base.split(" - ").map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      // Geralmente "Autor - Título" ou "Título - Autor"
+      return {
+        author: cleanBookQuery(parts[0]),
+        title: cleanBookQuery(parts.slice(1).join(" "))
+      };
+    }
+  }
+
+  // Se tiver 'por' ou 'by'
+  const byMatch = base.match(/^(.*?)\s+(?:por|by)\s+(.*)$/i);
+  if (byMatch && byMatch[1] && byMatch[2]) {
+    return {
+      title: cleanBookQuery(byMatch[1]),
+      author: cleanBookQuery(byMatch[2])
+    };
+  }
+
+  return {
+    title: cleanBookQuery(base),
+    author: ""
+  };
 }
 
 /**
@@ -170,7 +205,7 @@ function cleanHtmlSynopsis(html: string): string {
 }
 
 /**
- * Pesquisa metadados e sinopse oficial na Google Books API e Open Library
+ * Pesquisa metadados e sinopse oficial na Google Books API, Wikipedia e Open Library
  */
 export async function searchOfficialBookMetadata(
   titleOrFileName: string,
@@ -179,63 +214,95 @@ export async function searchOfficialBookMetadata(
   const query = cleanBookQuery(titleOrFileName);
   if (!query || query.length < 2) return null;
 
-  const searchQuery = authorHint
-    ? `${query} ${cleanBookQuery(authorHint)}`
-    : query;
+  const parsed = parseFileNameTitleAndAuthor(titleOrFileName);
+  const primaryTitle = parsed.title || query;
+  const primaryAuthor = authorHint || parsed.author;
 
-  // 1. Consulta à Google Books API (Catálogo Oficial Mundial com suporte robusto em português)
-  try {
-    const googleUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(searchQuery)}&maxResults=5&printType=books`;
-    const res = await fetch(googleUrl);
+  // 1. Consulta à Google Books API (com múltiplos termos de busca)
+  const searchVariations = [
+    primaryAuthor ? `${primaryTitle} ${primaryAuthor}` : primaryTitle,
+    primaryTitle,
+    query
+  ];
 
-    if (res.ok) {
-      const data = await res.json();
-      const items = data.items;
+  for (const q of Array.from(new Set(searchVariations))) {
+    try {
+      const googleUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=5&printType=books`;
+      const res = await fetch(googleUrl);
 
-      if (items && Array.isArray(items) && items.length > 0) {
-        // Encontra o item com melhor sinopse e detalhes
-        const bestItem = items.find((it: any) => it.volumeInfo?.description) || items[0];
-        const vol = bestItem.volumeInfo || {};
+      if (res.ok) {
+        const data = await res.json();
+        const items = data.items;
 
-        const officialTitle = vol.title || query;
-        const officialAuthors = Array.isArray(vol.authors) ? vol.authors.join(", ") : (vol.authors || authorHint);
-        const rawDesc = vol.description || "";
-        const cleanSynopsis = cleanHtmlSynopsis(rawDesc);
-        const officialCats = Array.isArray(vol.categories) ? vol.categories : [];
-        const mappedCategory = mapOfficialCategoryToAppCategory(officialCats, officialTitle, cleanSynopsis);
+        if (items && Array.isArray(items) && items.length > 0) {
+          const bestItem = items.find((it: any) => it.volumeInfo?.description) || items[0];
+          const vol = bestItem.volumeInfo || {};
 
-        // Capa em alta resolução se disponível
-        let coverUrl: string | undefined = undefined;
-        if (vol.imageLinks) {
-          coverUrl = vol.imageLinks.thumbnail || vol.imageLinks.smallThumbnail;
-          if (coverUrl && coverUrl.startsWith("http://")) {
-            coverUrl = coverUrl.replace("http://", "https://");
+          const officialTitle = vol.title || primaryTitle;
+          const officialAuthors = Array.isArray(vol.authors)
+            ? vol.authors.join(", ")
+            : (vol.authors || primaryAuthor);
+          const rawDesc = vol.description || "";
+          let cleanSynopsis = cleanHtmlSynopsis(rawDesc);
+
+          // Se o Google Books não tiver descrição, tenta Wikipedia abaixo
+          if (!cleanSynopsis || cleanSynopsis.length < 20) {
+            const wikiDesc = await fetchWikipediaSummary(officialTitle);
+            if (wikiDesc) cleanSynopsis = wikiDesc;
           }
+
+          const officialCats = Array.isArray(vol.categories) ? vol.categories : [];
+          const mappedCategory = mapOfficialCategoryToAppCategory(officialCats, officialTitle, cleanSynopsis);
+
+          let coverUrl: string | undefined = undefined;
+          if (vol.imageLinks) {
+            coverUrl = vol.imageLinks.thumbnail || vol.imageLinks.smallThumbnail;
+            if (coverUrl && coverUrl.startsWith("http://")) {
+              coverUrl = coverUrl.replace("http://", "https://");
+            }
+          }
+
+          const isbns = vol.industryIdentifiers?.map((i: any) => i.identifier).join(", ");
+
+          return {
+            title: officialTitle,
+            author: officialAuthors,
+            synopsis: cleanSynopsis,
+            categoryName: mappedCategory,
+            coverUrl,
+            pageCount: vol.pageCount,
+            publisher: vol.publisher,
+            publishedYear: vol.publishedDate ? vol.publishedDate.slice(0, 4) : undefined,
+            isbn: isbns,
+            source: "google_books"
+          };
         }
-
-        const isbns = vol.industryIdentifiers?.map((i: any) => i.identifier).join(", ");
-
-        return {
-          title: officialTitle,
-          author: officialAuthors,
-          synopsis: cleanSynopsis,
-          categoryName: mappedCategory,
-          coverUrl,
-          pageCount: vol.pageCount,
-          publisher: vol.publisher,
-          publishedYear: vol.publishedDate ? vol.publishedDate.slice(0, 4) : undefined,
-          isbn: isbns,
-          source: "google_books"
-        };
       }
+    } catch (err) {
+      console.warn("Consulta Google Books falhou para variação:", q, err);
     }
-  } catch (err) {
-    console.warn("Falha na busca Google Books:", err);
   }
 
-  // 2. Fallback: Open Library API
+  // 2. Consulta à Wikipedia em Português (Resumo Enciclopédico Oficial)
   try {
-    const olUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(searchQuery)}&limit=5`;
+    const wikiSynopsis = await fetchWikipediaSummary(primaryTitle);
+    if (wikiSynopsis && wikiSynopsis.length > 30) {
+      const mappedCategory = mapOfficialCategoryToAppCategory([], primaryTitle, wikiSynopsis);
+      return {
+        title: primaryTitle,
+        author: primaryAuthor,
+        synopsis: wikiSynopsis,
+        categoryName: mappedCategory,
+        source: "wikipedia"
+      };
+    }
+  } catch (wikiErr) {
+    console.warn("Consulta Wikipedia falhou:", wikiErr);
+  }
+
+  // 3. Fallback: Open Library API
+  try {
+    const olUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(primaryTitle)}&limit=5`;
     const res = await fetch(olUrl);
 
     if (res.ok) {
@@ -244,13 +311,13 @@ export async function searchOfficialBookMetadata(
 
       if (docs && Array.isArray(docs) && docs.length > 0) {
         const doc = docs[0];
-        const officialTitle = doc.title || query;
-        const officialAuthor = Array.isArray(doc.author_name) ? doc.author_name.join(", ") : (doc.author_name || authorHint);
+        const officialTitle = doc.title || primaryTitle;
+        const officialAuthor = Array.isArray(doc.author_name)
+          ? doc.author_name.join(", ")
+          : (doc.author_name || primaryAuthor);
         const subjects = Array.isArray(doc.subject) ? doc.subject.slice(0, 5) : [];
-        const mappedCategory = mapOfficialCategoryToAppCategory(subjects, officialTitle);
 
         let synopsis = "";
-        // Se houver first_sentence ou key de obra, tenta obter a descrição
         if (doc.key) {
           try {
             const workRes = await fetch(`https://openlibrary.org${doc.key}.json`);
@@ -269,6 +336,8 @@ export async function searchOfficialBookMetadata(
           synopsis = doc.first_sentence.join(" ");
         }
 
+        const mappedCategory = mapOfficialCategoryToAppCategory(subjects, officialTitle, synopsis);
+
         let coverUrl: string | undefined = undefined;
         if (doc.cover_i) {
           coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
@@ -277,7 +346,7 @@ export async function searchOfficialBookMetadata(
         return {
           title: officialTitle,
           author: officialAuthor,
-          synopsis: synopsis,
+          synopsis,
           categoryName: mappedCategory,
           coverUrl,
           publishedYear: doc.first_publish_year ? String(doc.first_publish_year) : undefined,
@@ -293,13 +362,33 @@ export async function searchOfficialBookMetadata(
 }
 
 /**
+ * Consulta a Wikipedia em Português para obter o resumo oficial enciclopédico de uma obra literária
+ */
+async function fetchWikipediaSummary(bookTitle: string): Promise<string | null> {
+  if (!bookTitle || bookTitle.length < 2) return null;
+
+  try {
+    const clean = bookTitle.trim().replace(/\s+/g, "_");
+    const url = `https://pt.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(clean)}`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.extract && data.type !== "disambiguation") {
+        return cleanHtmlSynopsis(data.extract);
+      }
+    }
+  } catch {}
+
+  return null;
+}
+
+/**
  * Garante que a categoria mapeada está sincronizada na tabela categories do Supabase
  */
 export async function syncOfficialCategory(categoryName: string): Promise<string | null> {
   if (!categoryName) return null;
 
   try {
-    // 1. Procura categoria existente
     const { data: existing } = await supabase
       .from("categories")
       .select("id")
@@ -308,7 +397,6 @@ export async function syncOfficialCategory(categoryName: string): Promise<string
 
     if (existing?.id) return existing.id;
 
-    // 2. Se não existir, insere
     const { data: created, error } = await supabase
       .from("categories")
       .insert({ name: categoryName.trim() })
@@ -320,7 +408,6 @@ export async function syncOfficialCategory(categoryName: string): Promise<string
     console.warn("Aviso ao sincronizar categoria oficial:", err);
   }
 
-  // 3. Fallback: procura correspondência na lista expandida
   const found = EXPANDED_CATEGORIES.find(
     (c) => c.name.toLowerCase() === categoryName.toLowerCase().trim()
   );

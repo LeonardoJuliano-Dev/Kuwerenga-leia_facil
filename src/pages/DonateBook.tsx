@@ -14,7 +14,8 @@ import {
   Pencil,
   CheckCircle2,
   RefreshCw,
-  X
+  X,
+  FileCheck2
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { saveBookOffline } from "../lib/offlineStorage";
@@ -23,7 +24,11 @@ import GuestRestrictionModal from "../components/GuestRestrictionModal";
 import { extractCoverFromFile } from "../lib/coverExtractor";
 import { loadAndSyncCategories, type AppCategory } from "../lib/categoryData";
 import { analyzeBookWithAI } from "../lib/aiBookAnalyzer";
-import { searchOfficialBookMetadata, syncOfficialCategory } from "../lib/bookSearchService";
+import {
+  searchOfficialBookMetadata,
+  syncOfficialCategory,
+  parseFileNameTitleAndAuthor
+} from "../lib/bookSearchService";
 import { notifyAdminNewDonatedBook } from "../lib/notificationService";
 
 export default function DonateBook() {
@@ -50,12 +55,13 @@ export default function DonateBook() {
   const [searchingOfficial, setSearchingOfficial] = useState(false);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
 
-  // Estados de Envio e Pós-Submissão
+  // Estados de Envio e Pós-Submissão (Revisão Obrigatória)
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [submittedBook, setSubmittedBook] = useState<any | null>(null);
+  const [confirmedReview, setConfirmedReview] = useState(false);
 
   // Estados de Edição do Livro Submetido
   const [isEditingSubmitted, setIsEditingSubmitted] = useState(false);
@@ -74,14 +80,12 @@ export default function DonateBook() {
     }
 
     async function initializeData() {
-      // 1. Carregar categorias
       const data = await loadAndSyncCategories();
       if (data && data.length > 0) {
         setCategories(data);
         setCategoryId(data[0].id);
       }
 
-      // 2. Verificar se o utilizador é administrador
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -104,7 +108,7 @@ export default function DonateBook() {
     initializeData();
   }, []);
 
-  // Gestão de ficheiro do livro (PDF / ePub) com Extração Automática Oficial e por IA
+  // Gestão de ficheiro do livro com Preenchimento Automático Avançado
   const handleBookChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -120,7 +124,12 @@ export default function DonateBook() {
     setExtractedNotice(false);
     setAiNotice(null);
 
-    // 1. Extrai automaticamente a primeira página como imagem de capa
+    // 1. Extração preliminar imediata a partir do nome do ficheiro (0ms)
+    const initialParsed = parseFileNameTitleAndAuthor(file.name);
+    if (initialParsed.title) setTitle(initialParsed.title);
+    if (initialParsed.author) setAuthor(initialParsed.author);
+
+    // 2. Extrai automaticamente a primeira página como imagem de capa
     setExtractingCover(true);
     extractCoverFromFile(file)
       .then((result) => {
@@ -137,41 +146,55 @@ export default function DonateBook() {
         setExtractingCover(false);
       });
 
-    // 2. Análise Inteligente e Busca Oficial em Catálogos
+    // 3. Pesquisa Automática Oficial e Análise Inteligente de Metadados
     setAnalyzingAI(true);
     try {
       const currentCats = categories.length > 0 ? categories : await loadAndSyncCategories();
-      const aiResult = await analyzeBookWithAI(file, currentCats);
+      
+      // Busca direta nos catálogos oficiais primeiro
+      const searchQuery = initialParsed.title || file.name;
+      const official = await searchOfficialBookMetadata(searchQuery, initialParsed.author);
 
-      if (aiResult.title) {
-        setTitle(aiResult.title);
-      }
-      if (aiResult.author) {
-        setAuthor(aiResult.author);
-      }
-      if (aiResult.synopsis) {
-        setDescription(aiResult.synopsis);
-      }
-      if (aiResult.suggestedCategoryId) {
-        setCategoryId(aiResult.suggestedCategoryId);
-      }
+      if (official) {
+        if (official.title) setTitle(official.title);
+        if (official.author) setAuthor(official.author);
+        if (official.synopsis) setDescription(official.synopsis);
 
-      const filledCount = [aiResult.title, aiResult.author, aiResult.synopsis].filter(Boolean).length;
-      if (filledCount > 0) {
-        setAiNotice("Metadados, sinopse oficial e categoria catalogados automaticamente.");
+        if (official.categoryName) {
+          const matched = currentCats.find(
+            (c) => c.name.toLowerCase() === official.categoryName.toLowerCase()
+          );
+          if (matched) {
+            setCategoryId(matched.id);
+          } else {
+            const syncedId = await syncOfficialCategory(official.categoryName);
+            if (syncedId) setCategoryId(syncedId);
+          }
+        }
+
+        if (official.coverUrl && !coverPreview) {
+          setCoverPreview(official.coverUrl);
+        }
+
+        setAiNotice("Metadados e sinopse oficial preenchidos automaticamente. Revê os dados abaixo.");
+      } else {
+        // Fallback: Analisa o interior do livro (primeiras páginas)
+        const aiResult = await analyzeBookWithAI(file, currentCats);
+        if (aiResult.title) setTitle(aiResult.title);
+        if (aiResult.author) setAuthor(aiResult.author);
+        if (aiResult.synopsis) setDescription(aiResult.synopsis);
+        if (aiResult.suggestedCategoryId) setCategoryId(aiResult.suggestedCategoryId);
+
+        setAiNotice("Metadados identificados a partir do livro. Revê se as informações estão certas.");
       }
     } catch (err) {
-      console.warn("Falha ao analisar metadados:", err);
-      if (!title) {
-        const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
-        setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
-      }
+      console.warn("Falha no preenchimento automático:", err);
     } finally {
       setAnalyzingAI(false);
     }
   };
 
-  // Pesquisa Manual de Metadados e Sinopse Oficial nos Catálogos Mundiais
+  // Pesquisa Manual de Metadados e Sinopse Oficial nos Catálogos
   const handleManualOfficialSearch = async () => {
     const query = title.trim() || (bookFile?.name ? bookFile.name.replace(/\.[^/.]+$/, "") : "");
     if (!query) {
@@ -204,9 +227,9 @@ export default function DonateBook() {
           setCoverPreview(official.coverUrl);
         }
 
-        setAiNotice(`Metadados e sinopse oficiais catalogados com sucesso (${official.source === "google_books" ? "Google Books" : "Open Library"}).`);
+        setAiNotice("Sinopse e metadados oficiais preenchidos. Revê os campos antes de submeter.");
       } else {
-        setError("Não foi possível encontrar uma sinopse oficial para este título. Podes redigir manualmente.");
+        setError("Não foi possível encontrar a sinopse oficial nos catálogos. Podes redigi-la manualmente.");
       }
     } catch (err) {
       console.warn("Erro na pesquisa manual:", err);
@@ -314,7 +337,7 @@ export default function DonateBook() {
       }
 
       // 4. Registar o Livro na Base de Dados (is_approved: false para moderação)
-      setUploadProgress("A submeter livro para o administrador...");
+      setUploadProgress("A submeter o livro ao administrador...");
       const newBook = {
         title: title.trim(),
         author: author.trim(),
@@ -325,7 +348,7 @@ export default function DonateBook() {
         cover_url: uploadedCoverUrl || null,
         category_id: resolvedCategoryId,
         uploaded_by: user.id,
-        is_approved: false, // Obrigatório aprovação prévia pelo administrador
+        is_approved: false, // Requer aprovação do administrador
       };
 
       const { data: insertedBook, error: dbErr } = await supabase
@@ -353,7 +376,7 @@ export default function DonateBook() {
           is_downloaded: true,
         });
 
-        // Notifica o Administrador sobre o novo livro
+        // Notifica o Administrador sobre o novo livro para aprovação
         notifyAdminNewDonatedBook({
           id: insertedBook.id,
           title: insertedBook.title,
@@ -361,12 +384,13 @@ export default function DonateBook() {
         });
       }
 
-      // Define estado de sucesso sem redirecionamento automático
+      // Define estado de sucesso para revisão obrigatória sem abrir o leitor
       setSubmittedBook(insertedBook);
       setEditTitle(insertedBook.title);
       setEditAuthor(insertedBook.author);
       setEditDescription(insertedBook.description || "");
       setEditCategoryId(insertedBook.category_id || categoryId);
+      setConfirmedReview(false);
       setSuccess(true);
 
     } catch (err: any) {
@@ -456,6 +480,7 @@ export default function DonateBook() {
     setSuccess(false);
     setSubmittedBook(null);
     setIsEditingSubmitted(false);
+    setConfirmedReview(false);
     setError("");
   };
 
@@ -487,54 +512,65 @@ export default function DonateBook() {
       {/* Conteúdo Principal Centralizado e Responsivo */}
       <main className="flex-1 w-full max-w-xl mx-auto p-4 sm:p-6 pb-24">
         
-        {/* ─── PAINEL PÓS-SUBMISSÃO (ENVIADO AO ADMINISTRADOR) ─── */}
+        {/* ─── PAINEL PÓS-CADASTRO (REVISÃO OBRIGATÓRIA DOS DADOS) ─── */}
         {success && submittedBook ? (
-          <div className="bg-white dark:bg-gray-950 rounded-2xl p-6 sm:p-8 border border-gray-200 dark:border-gray-800 text-center shadow-xs animate-in fade-in zoom-in-95 duration-200 my-4 space-y-5">
+          <div className="bg-white dark:bg-gray-950 rounded-2xl p-5 sm:p-7 border border-gray-200 dark:border-gray-800 shadow-xs animate-in fade-in zoom-in-95 duration-200 my-4 space-y-5">
             
-            <div className="w-14 h-14 bg-gray-100 dark:bg-gray-900 text-black dark:text-white rounded-full flex items-center justify-center mx-auto border border-gray-200 dark:border-gray-800">
-              <Clock className="w-7 h-7 stroke-[1.8]" />
+            <div className="w-12 h-12 bg-gray-100 dark:bg-gray-900 text-black dark:text-white rounded-full flex items-center justify-center mx-auto border border-gray-200 dark:border-gray-800">
+              <FileCheck2 className="w-6 h-6 stroke-[1.8]" />
             </div>
 
-            <div className="space-y-2">
+            {/* Aviso Obrigatório de Revisão */}
+            <div className="text-center space-y-1.5">
               <h2 className="text-lg sm:text-xl font-bold tracking-tight">
                 {submittedBook.is_approved
                   ? "Livro Aprovado e Disponível!"
-                  : "Livro Enviado ao Administrador"}
+                  : "Livro Cadastrado • Revê as Informações"}
               </h2>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 max-w-md mx-auto leading-relaxed">
-                {submittedBook.is_approved
-                  ? "O livro foi aprovado e já se encontra publicado e acessível a todos os leitores da comunidade Kuwerenga."
-                  : "O teu livro foi submetido com sucesso e encaminhado para revisão do administrador do sistema. Ficará disponível para toda a comunidade assim que for validado."}
-              </p>
+              <div className="p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-left text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+                <p className="font-semibold text-black dark:text-white mb-0.5">
+                  Por favor, confirma se os dados estão certos:
+                </p>
+                <p className="text-gray-500 dark:text-gray-400">
+                  Verifica o título, autor, categoria e sinopse abaixo. O livro foi enviado para revisão do administrador e ficará disponível para todos assim que for validado.
+                </p>
+              </div>
             </div>
 
-            {/* Ficha Resumo do Livro Submetido */}
-            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 border border-gray-200 dark:border-gray-800 text-left flex gap-3.5 sm:gap-4 items-start">
-              <div className="w-16 h-22 sm:w-20 sm:h-28 bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 dark:border-gray-700 flex items-center justify-center">
-                {submittedBook.cover_url || coverPreview ? (
-                  <img
-                    src={submittedBook.cover_url || coverPreview}
-                    alt={submittedBook.title}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <Book className="w-6 h-6 text-gray-400" />
-                )}
+            {/* Ficha Completa de Revisão dos Dados */}
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 border border-gray-200 dark:border-gray-800 text-left space-y-3">
+              <div className="flex gap-3.5 items-start">
+                <div className="w-16 h-22 sm:w-20 sm:h-28 bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 dark:border-gray-700 flex items-center justify-center">
+                  {submittedBook.cover_url || coverPreview ? (
+                    <img
+                      src={submittedBook.cover_url || coverPreview}
+                      alt={submittedBook.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Book className="w-6 h-6 text-gray-400" />
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold border border-gray-200 dark:border-gray-700 bg-white dark:bg-black text-gray-700 dark:text-gray-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-black dark:bg-white" />
+                    <span>{submittedBook.is_approved ? "Disponível para Todos" : "Aguardando Moderação"}</span>
+                  </div>
+                  <h3 className="font-bold text-sm sm:text-base leading-snug">{submittedBook.title}</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{submittedBook.author}</p>
+                  <p className="text-[11px] font-medium text-gray-400">{currentCategoryName}</p>
+                </div>
               </div>
 
-              <div className="flex-1 min-w-0 space-y-1">
-                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold border border-gray-200 dark:border-gray-700 bg-white dark:bg-black text-gray-700 dark:text-gray-300">
-                  <span className="w-1.5 h-1.5 rounded-full bg-black dark:bg-white" />
-                  <span>{submittedBook.is_approved ? "Disponível para Todos" : "Aguardando Moderação"}</span>
-                </div>
-                <h3 className="font-bold text-sm sm:text-base truncate">{submittedBook.title}</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{submittedBook.author}</p>
-                <p className="text-[11px] text-gray-400 truncate">{currentCategoryName}</p>
-                {submittedBook.description && (
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 mt-1">
-                    {submittedBook.description}
-                  </p>
-                )}
+              {/* Sinopse para Verificação */}
+              <div className="border-t border-gray-200 dark:border-gray-800 pt-2.5">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 block mb-1">
+                  Sinopse Cadastrada:
+                </span>
+                <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed bg-white dark:bg-black p-3 rounded-lg border border-gray-200 dark:border-gray-800">
+                  {submittedBook.description || "Sem sinopse registada. Podes adicionar clicando em Editar."}
+                </p>
               </div>
             </div>
 
@@ -546,31 +582,51 @@ export default function DonateBook() {
               </div>
             )}
 
-            {/* Ações do Painel de Confirmação */}
-            <div className="space-y-2 pt-2">
+            {/* Confirmação de Revisão Realizada */}
+            {confirmedReview && (
+              <div className="p-3 bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl flex items-center gap-2 text-xs text-left font-medium">
+                <Check className="w-4 h-4" />
+                <span>Informações validadas com sucesso. O livro aguarda moderação.</span>
+              </div>
+            )}
+
+            {/* Ações de Revisão e Confirmação */}
+            <div className="space-y-2 pt-1">
               
-              {/* Botão de Edição Rápida */}
+              {/* Botão 1: Confirmar que os dados estão certos */}
+              {!confirmedReview && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmedReview(true)}
+                  className="w-full py-3.5 px-4 bg-black dark:bg-white text-white dark:text-black rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs hover:opacity-90 active:scale-98 transition-all"
+                >
+                  <Check className="w-4 h-4 stroke-[2.5]" />
+                  <span>As Informações Estão Certas</span>
+                </button>
+              )}
+
+              {/* Botão 2: Corrigir / Editar Detalhes */}
               <button
                 type="button"
                 onClick={() => setIsEditingSubmitted(true)}
                 className="w-full py-3 px-4 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-black dark:text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 transition-all"
               >
                 <Pencil className="w-4 h-4" />
-                <span>Editar Detalhes do Livro Submetido</span>
+                <span>Corrigir / Editar Informações</span>
               </button>
 
-              {/* Botão de Confirmação Rápida de Administrador */}
+              {/* Botão 3: Confirmação Imediata de Administrador */}
               {isAdmin && !submittedBook.is_approved && (
                 <button
                   type="button"
                   onClick={handleApproveImmediately}
                   disabled={approving}
-                  className="w-full py-3.5 px-4 bg-black dark:bg-white text-white dark:text-black rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs hover:opacity-90 active:scale-98 transition-all disabled:opacity-50"
+                  className="w-full py-3 px-4 rounded-xl border border-black dark:border-white bg-gray-100 dark:bg-gray-900 font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs hover:opacity-90 active:scale-98 transition-all disabled:opacity-50"
                 >
                   {approving ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
-                      <span>A confirmar...</span>
+                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      <span>A disponibilizar...</span>
                     </>
                   ) : (
                     <>
@@ -581,21 +637,21 @@ export default function DonateBook() {
                 </button>
               )}
 
-              {/* Botão Doar Outro Livro */}
+              {/* Botão 4: Doar Outro Livro */}
               <button
                 type="button"
                 onClick={handleResetForNewDonation}
-                className="w-full py-3 px-4 rounded-xl bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 transition-all"
+                className="w-full py-2.5 px-4 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white font-medium text-xs flex items-center justify-center gap-2 transition-all"
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className="w-3.5 h-3.5" />
                 <span>Doar Outro Livro</span>
               </button>
 
-              {/* Botão Voltar ao Início */}
+              {/* Botão 5: Voltar à Página Inicial */}
               <button
                 type="button"
                 onClick={() => navigate("/home")}
-                className="w-full py-2.5 px-4 text-gray-500 hover:text-black dark:hover:text-white text-xs transition-colors font-medium"
+                className="w-full py-2 px-4 text-gray-500 hover:text-black dark:hover:text-white text-xs transition-colors font-medium"
               >
                 Voltar à Página Inicial
               </button>
@@ -831,7 +887,7 @@ export default function DonateBook() {
               ) : (
                 <>
                   <UploadCloud className="w-4.5 h-4.5 stroke-[2]" />
-                  <span>Submeter Livro para o Administrador</span>
+                  <span>Cadastrar Livro</span>
                 </>
               )}
             </button>
@@ -847,7 +903,7 @@ export default function DonateBook() {
             <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-3">
               <div className="flex items-center gap-2">
                 <Pencil className="w-4 h-4" />
-                <h3 className="font-bold text-sm sm:text-base">Editar Detalhes da Doação</h3>
+                <h3 className="font-bold text-sm sm:text-base">Editar Detalhes da Obra</h3>
               </div>
               <button
                 type="button"
@@ -905,10 +961,10 @@ export default function DonateBook() {
                   Sinopse
                 </label>
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:outline-none focus:border-black dark:focus:border-white font-medium resize-none"
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:outline-none focus:border-black dark:focus:border-white font-medium resize-none leading-relaxed"
                 />
               </div>
             </div>
