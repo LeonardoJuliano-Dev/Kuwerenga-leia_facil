@@ -22,6 +22,7 @@ import {
   checkDailyReadingReminder,
   syncWithServiceWorkerForBackground
 } from "./lib/notificationService";
+import { generateDefaultUsername } from "./lib/profileService";
 
 import { isGuestMode, disableGuestMode } from "./lib/guestMode";
 import InAppNotificationToast from "./components/InAppNotificationToast";
@@ -35,17 +36,22 @@ function AuthRouter() {
     try {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("full_name")
+        .select("full_name, username")
         .eq("id", user.id)
         .maybeSingle();
 
-      if (!profile?.full_name || profile.full_name.trim().length === 0) {
+      const hasName = profile?.full_name && profile.full_name.trim().length > 0;
+      const hasUsername = profile?.username && profile.username.trim().length > 0;
+
+      if (!hasName) {
         // Se o utilizador autenticou via Google OAuth, utiliza o nome já fornecido
         const oauthName = user.user_metadata?.full_name || user.user_metadata?.name;
         if (oauthName && oauthName.trim().length > 0) {
+          const autoUsername = generateDefaultUsername(oauthName.trim(), user.email || "");
           await supabase.from("profiles").upsert({
             id: user.id,
             full_name: oauthName.trim(),
+            username: autoUsername,
             avatar_url: user.user_metadata?.avatar_url || null,
             updated_at: new Date().toISOString(),
           });
@@ -58,8 +64,13 @@ function AuthRouter() {
         if (location.pathname !== "/setup-profile") {
           navigate("/setup-profile", { replace: true });
         }
+      } else if (!hasUsername) {
+        // Tem nome mas falta o username → encaminhar para setup
+        if (location.pathname !== "/setup-profile") {
+          navigate("/setup-profile", { replace: true });
+        }
       } else {
-        // User is logged in and has completed profile
+        // User is logged in and has completed profile (name + username)
         if (location.pathname === "/" || location.pathname === "/login" || location.pathname === "/setup-profile") {
           navigate("/home", { replace: true });
         }

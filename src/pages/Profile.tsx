@@ -2081,61 +2081,61 @@ export default function Profile() {
       )}
 
       {/* ══════════════════════════════════════════════════════════ */}
-      {/* MODAL: PRÉ-VISUALIZAÇÃO E PARTILHA DE PERFIL               */}
+      {/* MODAL: PRÉ-VISUALIZAÇÃO E PARTILHA DE PERFIL (RESPONSIVO)   */}
       {/* ══════════════════════════════════════════════════════════ */}
       {showSharePreviewModal && profile && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200"
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 z-50 animate-in fade-in duration-200 overflow-y-auto overscroll-contain"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowSharePreviewModal(false);
           }}
         >
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl max-w-md w-full max-h-[90vh] flex flex-col p-5 sm:p-6 shadow-2xl animate-in zoom-in-95 duration-200 text-black dark:text-white">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl sm:rounded-3xl max-w-md w-full max-h-[92dvh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 text-black dark:text-white my-auto overflow-hidden">
             
-            {/* Cabeçalho do Modal */}
-            <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-800 mb-4">
+            {/* Cabeçalho do Modal Fixo */}
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-gray-100 dark:border-gray-800 shrink-0 bg-white dark:bg-gray-900">
               <div>
-                <h3 className="font-bold text-base">Partilhar Perfil</h3>
-                <span className="text-[11px] text-gray-500 dark:text-gray-400">Pré-visualização do teu cartão de leitor</span>
+                <h3 className="font-bold text-sm sm:text-base leading-tight">Partilhar Perfil</h3>
+                <span className="text-[11px] text-gray-500 dark:text-gray-400 block mt-0.5">Pré-visualização do teu cartão de leitor</span>
               </div>
               <button
                 type="button"
                 onClick={() => setShowSharePreviewModal(false)}
-                className="p-1.5 rounded-full text-gray-400 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="p-1.5 rounded-full text-gray-400 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
                 aria-label="Fechar"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Conteúdo com Scroll Suave e Responsivo */}
-            <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar pr-0.5">
+            {/* Conteúdo com Scroll Suave, Barra Elegante e Responsivo */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-5 space-y-3.5 sm:space-y-4 custom-scrollbar">
               
-              {/* Cartão de Pré-visualização Estilizado e Fiel à Imagem */}
-              <div className="bg-[#1A1613] border border-[#2F2620] rounded-[32px] p-5 sm:p-6 shadow-2xl relative overflow-hidden space-y-4 text-[#FAF7F2] max-w-sm w-full mx-auto">
+              {/* Cartão de Pré-visualização Proporcional e Fiel ao Canvas */}
+              <div className="bg-[#1A1613] border border-[#2F2620] rounded-2xl sm:rounded-[28px] p-3.5 sm:p-5 shadow-xl relative overflow-hidden space-y-3 sm:space-y-3.5 text-[#FAF7F2] max-w-sm w-full mx-auto">
                 {/* Linha Superior: Logo Oficial & Perfil Literário */}
-                <div className="flex items-center justify-between pb-1">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-[#241E1A] border border-[#382E28] flex items-center justify-center shadow-xs shrink-0 text-[#FAF7F2]">
-                      <BookOpen className="w-4.5 h-4.5" />
+                <div className="flex items-center justify-between pb-0.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#241E1A] border border-[#382E28] flex items-center justify-center shadow-xs shrink-0 text-[#FAF7F2]">
+                      <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </div>
                     <div>
-                      <span className="font-serif text-base font-bold tracking-tight block leading-tight text-[#FAF7F2]">
+                      <span className="font-serif text-sm sm:text-base font-bold tracking-tight block leading-tight text-[#FAF7F2]">
                         Kuwerenga
                       </span>
-                      <span className="text-[9px] uppercase tracking-[0.2em] text-[#A89887] font-bold block">
+                      <span className="text-[8px] uppercase tracking-[0.2em] text-[#A89887] font-bold block">
                         Leia Fácil
                       </span>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C9BDB0]">
+                  <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#C9BDB0]">
                     Perfil Literário
                   </span>
                 </div>
 
                 {/* Secção Central: Avatar, Nome, Username e Citação */}
-                <div className="flex flex-col items-center text-center pt-2">
-                  <div className="w-22 h-22 sm:w-24 sm:h-24 rounded-full ring-4 ring-[#3A3029] shadow-lg overflow-hidden bg-[#241E1A] flex items-center justify-center mb-3">
+                <div className="flex flex-col items-center text-center pt-1">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full ring-3 sm:ring-4 ring-[#3A3029] shadow-lg overflow-hidden bg-[#241E1A] flex items-center justify-center mb-2 shrink-0">
                     {profile.avatar_url ? (
                       <img
                         src={profile.avatar_url}
@@ -2143,48 +2143,48 @@ export default function Profile() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <span className="font-serif font-bold text-2xl text-[#FAF7F2]">
+                      <span className="font-serif font-bold text-xl sm:text-2xl text-[#FAF7F2]">
                         {getInitials(profile.full_name)}
                       </span>
                     )}
                   </div>
 
-                  <h4 className="font-serif text-xl sm:text-2xl font-bold tracking-tight leading-tight mb-1 text-[#FAF7F2] max-w-xs">
+                  <h4 className="font-serif text-base sm:text-xl font-bold tracking-tight leading-snug mb-0.5 text-[#FAF7F2] max-w-xs px-1">
                     {profile.full_name}
                   </h4>
-                  <div className="text-xs font-mono text-[#9C8E80] mb-3">
+                  <div className="text-[11px] sm:text-xs font-mono text-[#9C8E80] mb-2">
                     {profile.username ? (profile.username.startsWith("@") ? profile.username : `@${profile.username}`) : "@leitor"}
                   </div>
 
-                  {/* Bio / Citação em Caixa Arredondada */}
-                  <div className="bg-[#231D19] rounded-2xl px-4 py-3 border border-[#362C26] text-center text-xs sm:text-sm text-[#D1C3B4] italic w-full leading-relaxed shadow-xs">
+                  {/* Bio / Citação */}
+                  <div className="bg-[#231D19] rounded-xl sm:rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 border border-[#362C26] text-center text-xs sm:text-sm text-[#D1C3B4] italic w-full leading-relaxed shadow-xs line-clamp-3">
                     &ldquo;{profile.bio?.trim() ? profile.bio : "A existência em si é um mistério..."}&rdquo;
                   </div>
                 </div>
 
                 {/* Grelha de Estatísticas: 3 Caixas Individuais */}
-                <div className="grid grid-cols-3 gap-2 text-center pt-1">
-                  <div className="bg-[#211B17] rounded-2xl p-3 border border-[#332A24] shadow-xs">
-                    <span className="block text-lg font-bold font-mono text-[#FAF7F2]">
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2 text-center pt-0.5">
+                  <div className="bg-[#211B17] rounded-xl sm:rounded-2xl p-2 sm:p-2.5 border border-[#332A24] shadow-xs">
+                    <span className="block text-base sm:text-lg font-bold font-mono text-[#FAF7F2]">
                       {profile.views_count || 0}
                     </span>
-                    <span className="text-[9px] sm:text-[10px] font-bold text-[#A89A8C] uppercase tracking-wider block mt-0.5">
+                    <span className="text-[8px] sm:text-[9px] font-bold text-[#A89A8C] uppercase tracking-wider block mt-0.5">
                       Visualizações
                     </span>
                   </div>
-                  <div className="bg-[#211B17] rounded-2xl p-3 border border-[#332A24] shadow-xs">
-                    <span className="block text-lg font-bold font-mono text-[#FAF7F2]">
+                  <div className="bg-[#211B17] rounded-xl sm:rounded-2xl p-2 sm:p-2.5 border border-[#332A24] shadow-xs">
+                    <span className="block text-base sm:text-lg font-bold font-mono text-[#FAF7F2]">
                       {userClubs.length}
                     </span>
-                    <span className="text-[9px] sm:text-[10px] font-bold text-[#A89A8C] uppercase tracking-wider block mt-0.5">
+                    <span className="text-[8px] sm:text-[9px] font-bold text-[#A89A8C] uppercase tracking-wider block mt-0.5">
                       Clubes
                     </span>
                   </div>
-                  <div className="bg-[#211B17] rounded-2xl p-3 border border-[#332A24] shadow-xs">
-                    <span className="block text-lg font-bold font-mono text-[#FAF7F2]">
+                  <div className="bg-[#211B17] rounded-xl sm:rounded-2xl p-2 sm:p-2.5 border border-[#332A24] shadow-xs">
+                    <span className="block text-base sm:text-lg font-bold font-mono text-[#FAF7F2]">
                       {profile.favorite_books?.length || 0}
                     </span>
-                    <span className="text-[9px] sm:text-[10px] font-bold text-[#A89A8C] uppercase tracking-wider block mt-0.5">
+                    <span className="text-[8px] sm:text-[9px] font-bold text-[#A89A8C] uppercase tracking-wider block mt-0.5">
                       Favoritos
                     </span>
                   </div>
@@ -2192,15 +2192,15 @@ export default function Profile() {
 
                 {/* Livros Favoritos em Destaque */}
                 {profile.favorite_books && profile.favorite_books.length > 0 && (
-                  <div className="space-y-2 pt-1 pb-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C9BDB0] block text-center">
+                  <div className="space-y-1.5 pt-0.5 pb-0.5">
+                    <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.18em] text-[#C9BDB0] block text-center">
                       Livros em Destaque
                     </span>
-                    <div className="flex justify-center items-center gap-2.5 sm:gap-3">
+                    <div className="flex justify-center items-center gap-2 sm:gap-3">
                       {profile.favorite_books.slice(0, 3).map((fb, idx) => (
                         <div
                           key={idx}
-                          className="w-14 sm:w-16 aspect-[2/3] rounded-xl bg-[#231D19] border border-[#382E28] overflow-hidden shadow-md shrink-0 group relative"
+                          className="w-12 sm:w-14 aspect-[2/3] rounded-lg sm:rounded-xl bg-[#231D19] border border-[#382E28] overflow-hidden shadow-md shrink-0 group relative"
                           title={fb.title}
                         >
                           {fb.cover_url ? (
@@ -2210,8 +2210,8 @@ export default function Profile() {
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center p-1 text-[8px] text-center font-bold text-[#A89A8C]">
-                              <BookOpen className="w-3.5 h-3.5 mb-1 opacity-70" />
+                            <div className="w-full h-full flex flex-col items-center justify-center p-1 text-[7px] text-center font-bold text-[#A89A8C]">
+                              <BookOpen className="w-3 h-3 mb-0.5 opacity-70" />
                               <span className="line-clamp-2 leading-tight">{fb.title}</span>
                             </div>
                           )}
@@ -2222,16 +2222,16 @@ export default function Profile() {
                 )}
 
                 {/* Rodapé Pílula do Cartão com Link e Botão Aceder */}
-                <div className="bg-[#1F1916] rounded-full p-2 pl-3.5 border border-[#362D27] flex items-center justify-between gap-2 shadow-xs">
+                <div className="bg-[#1F1916] rounded-full p-1.5 sm:p-2 pl-3 sm:pl-3.5 border border-[#362D27] flex items-center justify-between gap-2 shadow-xs">
                   <div className="flex items-center gap-2 min-w-0">
                     <LinkIcon className="w-3.5 h-3.5 text-[#A89A8C] shrink-0" />
-                    <span className="text-xs font-mono font-medium text-[#FAF7F2] truncate">
+                    <span className="text-[11px] sm:text-xs font-mono font-medium text-[#FAF7F2] truncate">
                       {profileShareUrl.replace(/^https?:\/\//, "").length > 22
                         ? profileShareUrl.replace(/^https?:\/\//, "").substring(0, 19) + "..."
                         : profileShareUrl.replace(/^https?:\/\//, "")}
                     </span>
                   </div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider px-4 py-1.5 rounded-full bg-black text-white shrink-0">
+                  <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-black text-white shrink-0">
                     Aceder
                   </span>
                 </div>
@@ -2243,7 +2243,7 @@ export default function Profile() {
                   type="button"
                   onClick={handleShareCardWithLink}
                   disabled={generatingCard}
-                  className="w-full py-3 px-4 rounded-2xl bg-black dark:bg-white text-white dark:text-black text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-98 shadow-sm hover:opacity-90 disabled:opacity-50"
+                  className="w-full py-2.5 sm:py-3 px-4 rounded-xl sm:rounded-2xl bg-black dark:bg-white text-white dark:text-black text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-98 shadow-sm hover:opacity-90 disabled:opacity-50"
                 >
                   {generatingCard ? (
                     <div className="w-4 h-4 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
@@ -2262,7 +2262,7 @@ export default function Profile() {
                     type="button"
                     onClick={handleDownloadCardImage}
                     disabled={generatingCard}
-                    className="py-2.5 px-3 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-xs font-semibold flex items-center justify-center gap-2 transition-colors text-black dark:text-white"
+                    className="py-2 sm:py-2.5 px-3 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-xs font-semibold flex items-center justify-center gap-1.5 sm:gap-2 transition-colors text-black dark:text-white"
                   >
                     {downloadFeedback ? (
                       <>
@@ -2284,7 +2284,7 @@ export default function Profile() {
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="py-2.5 px-3 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-xs font-semibold flex items-center justify-center gap-2 transition-colors text-black dark:text-white"
+                    className="py-2 sm:py-2.5 px-3 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-xs font-semibold flex items-center justify-center gap-1.5 sm:gap-2 transition-colors text-black dark:text-white"
                   >
                     <MessageCircle className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                     <span>WhatsApp</span>
@@ -2294,17 +2294,17 @@ export default function Profile() {
 
               {/* Bloco de Copiar Link Manual */}
               <div className="space-y-1.5 pt-1">
-                <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <label className="text-[10px] sm:text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">
                   Link Direto
                 </label>
                 <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-600 dark:text-gray-300 truncate select-all">
+                  <div className="flex-1 min-w-0 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-600 dark:text-gray-300 truncate select-all">
                     {profileShareUrl}
                   </div>
                   <button
                     type="button"
                     onClick={handleCopyShareLink}
-                    className="px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold shrink-0 active:scale-95 transition-all flex items-center gap-1.5 shadow-xs"
+                    className="px-3.5 sm:px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold shrink-0 active:scale-95 transition-all flex items-center gap-1.5 shadow-xs"
                   >
                     {shareCopyFeedback ? (
                       <>

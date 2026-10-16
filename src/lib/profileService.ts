@@ -161,7 +161,6 @@ export async function fetchUserProfile(
   }
 
   // 4. Tempo de leitura e sessões
-  const isMe = currentUserId === targetUserId;
   const localTime = localStorage.getItem(`reading_time_mins_${targetUserId}`);
   if (localTime) {
     readingTime = parseInt(localTime, 10) || 0;
@@ -185,7 +184,7 @@ export async function fetchUserProfile(
   }
 
   // Se outro leitor estiver a visitar pela primeira vez nesta sessão, incrementar visualização
-  if (currentUserId && !isMe) {
+  if (currentUserId && currentUserId !== targetUserId) {
     const sessionVisitedKey = `session_visited_profile_${targetUserId}`;
     if (typeof window !== "undefined" && !sessionStorage.getItem(sessionVisitedKey)) {
       sessionStorage.setItem(sessionVisitedKey, "1");

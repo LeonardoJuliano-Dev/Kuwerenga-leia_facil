@@ -125,6 +125,35 @@
     scrollbar-width: none;
   }
 
+  /* Custom scrollbar elegante para modais */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cebeaa;
+    border-radius: 9999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #a3927e;
+  }
+  :is(.dark .custom-scrollbar)::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  :is(.dark .custom-scrollbar)::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.35);
+  }
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #cebeaa transparent;
+  }
+  :is(.dark .custom-scrollbar) {
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+
   /* Safe area padding for notched phones */
   .pb-safe {
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
