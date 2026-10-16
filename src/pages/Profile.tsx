@@ -68,9 +68,9 @@ async function generateCardCanvasBlob(
 ): Promise<Blob | null> {
   const canvas = document.createElement("canvas");
   const scale = 2;
-  const width = 600;
+  const width = 580;
   const hasFavs = Boolean(profile.favorite_books && profile.favorite_books.length > 0);
-  const height = hasFavs ? 760 : 640;
+  const height = hasFavs ? 780 : 650;
 
   canvas.width = width * scale;
   canvas.height = height * scale;
@@ -93,34 +93,38 @@ async function generateCardCanvasBlob(
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
 
-  // 2. Cartão principal (cor de fundo #f5f0eb)
-  roundRect(20, 20, width - 40, height - 40, 28);
+  // 2. Cartão principal (cor de fundo suave #f5f0eb)
+  roundRect(18, 18, width - 36, height - 36, 28);
   ctx.fillStyle = "#f5f0eb";
   ctx.fill();
   ctx.strokeStyle = "#e8dfd5";
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // 3. Topo do cartão: Identificação da plataforma
+  // 3. Topo do cartão: Identificação oficial da plataforma
   ctx.fillStyle = "#111827";
   ctx.font = "bold 20px Georgia, serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText("Kuwerenga", 48, 62);
+  ctx.fillText("Kuwerenga", 42, 56);
 
-  // Badge "Leitor"
-  roundRect(width - 124, 42, 76, 26, 13);
+  ctx.fillStyle = "#9ca3af";
+  ctx.font = "bold 9px sans-serif";
+  ctx.fillText("LEIA FÁCIL", 42, 69);
+
+  // Badge "Perfil Literário"
+  roundRect(width - 156, 40, 114, 26, 13);
   ctx.fillStyle = "rgba(0,0,0,0.06)";
   ctx.fill();
   ctx.fillStyle = "#4b5563";
   ctx.font = "bold 10px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("LEITOR", width - 86, 59);
+  ctx.fillText("PERFIL LITERÁRIO", width - 99, 57);
 
   // 4. Avatar do Leitor
   const avatarCenterX = width / 2;
   const avatarCenterY = 138;
-  const avatarRadius = 44;
+  const avatarRadius = 45;
 
   ctx.save();
   ctx.beginPath();
@@ -161,14 +165,14 @@ async function generateCardCanvasBlob(
       avatarRadius * 2
     );
     ctx.fillStyle = "#f9fafb";
-    ctx.font = "bold 30px Georgia, serif";
+    ctx.font = "bold 32px Georgia, serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(getInitials(profile.full_name), avatarCenterX, avatarCenterY);
   }
   ctx.restore();
 
-  // Borda ao redor do avatar
+  // Borda branca do avatar
   ctx.beginPath();
   ctx.arc(avatarCenterX, avatarCenterY, avatarRadius, 0, Math.PI * 2);
   ctx.strokeStyle = "#ffffff";
@@ -180,104 +184,124 @@ async function generateCardCanvasBlob(
   ctx.font = "bold 22px Georgia, serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText(profile.full_name, width / 2, 218);
+  ctx.fillText(profile.full_name, width / 2, 216);
 
-  ctx.fillStyle = "#6b7280";
-  ctx.font = "13px sans-serif";
-  ctx.fillText(`@${profile.username || "leitor"}`, width / 2, 238);
+  // Chip de Username
+  const usernameText = `@${profile.username || "leitor"}`;
+  ctx.font = "12px monospace";
+  const userMetrics = ctx.measureText(usernameText);
+  const chipW = userMetrics.width + 20;
+  roundRect((width - chipW) / 2, 226, chipW, 20, 10);
+  ctx.fillStyle = "rgba(0,0,0,0.05)";
+  ctx.fill();
 
-  // 6. Bio
+  ctx.fillStyle = "#4b5563";
+  ctx.textAlign = "center";
+  ctx.fillText(usernameText, width / 2, 240);
+
+  // 6. Bio em caixa translúcida
   const rawBio = profile.bio?.trim()
     ? `"${profile.bio}"`
     : '"A explorar novas páginas e histórias na plataforma Kuwerenga."';
   ctx.fillStyle = "#4b5563";
-  ctx.font = "italic 13px Georgia, serif";
+  ctx.font = "italic 12px Georgia, serif";
 
   const words = rawBio.split(" ");
-  let line = "";
-  let bioY = 265;
+  const lines: string[] = [];
+  let curLine = "";
   for (let n = 0; n < words.length; n++) {
-    const testLine = line + words[n] + " ";
+    const testLine = curLine + words[n] + " ";
     const metrics = ctx.measureText(testLine);
-    if (metrics.width > width - 130 && n > 0) {
-      ctx.fillText(line.trim(), width / 2, bioY);
-      line = words[n] + " ";
-      bioY += 18;
-      if (bioY > 300) break;
+    if (metrics.width > width - 150 && n > 0) {
+      lines.push(curLine.trim());
+      curLine = words[n] + " ";
+      if (lines.length >= 2) break;
     } else {
-      line = testLine;
+      curLine = testLine;
     }
   }
-  ctx.fillText(line.trim(), width / 2, bioY);
+  if (curLine.trim()) lines.push(curLine.trim());
 
-  // 7. Bloco de Estatísticas
-  const statsY = Math.max(bioY + 20, 315);
-  roundRect(46, statsY, width - 92, 68, 16);
-  ctx.fillStyle = "rgba(255,255,255,0.75)";
+  const bioBoxH = lines.length * 18 + 14;
+  const bioBoxY = 256;
+  roundRect(48, bioBoxY, width - 96, bioBoxH, 14);
+  ctx.fillStyle = "rgba(255,255,255,0.65)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.04)";
+  ctx.stroke();
+
+  ctx.fillStyle = "#4b5563";
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], width / 2, bioBoxY + 16 + i * 18);
+  }
+
+  // 7. Grelha de Estatísticas: 3 Caixas Individuais
+  const statsY = bioBoxY + bioBoxH + 14;
+  const totalStatsW = width - 84;
+  const statCardW = (totalStatsW - 20) / 3;
+
+  // Caixa 1: Visualizações
+  roundRect(42, statsY, statCardW, 64, 16);
+  ctx.fillStyle = "#ffffff";
   ctx.fill();
   ctx.strokeStyle = "rgba(0,0,0,0.06)";
-  ctx.lineWidth = 1;
   ctx.stroke();
 
-  const colWidth = (width - 92) / 3;
-
-  // Col 1: Visualizações
-  ctx.textAlign = "center";
   ctx.fillStyle = "#111827";
-  ctx.font = "bold 18px sans-serif";
-  ctx.fillText(String(profile.views_count || 0), 46 + colWidth * 0.5, statsY + 31);
+  ctx.font = "bold 18px monospace";
+  ctx.fillText(String(profile.views_count || 0), 42 + statCardW / 2, statsY + 28);
   ctx.fillStyle = "#6b7280";
-  ctx.font = "bold 11px sans-serif";
-  ctx.fillText("Visualizações", 46 + colWidth * 0.5, statsY + 50);
+  ctx.font = "bold 10px sans-serif";
+  ctx.fillText("VISUALIZAÇÕES", 42 + statCardW / 2, statsY + 48);
 
-  // Separador 1
-  ctx.beginPath();
-  ctx.moveTo(46 + colWidth, statsY + 14);
-  ctx.lineTo(46 + colWidth, statsY + 54);
-  ctx.strokeStyle = "rgba(0,0,0,0.08)";
+  // Caixa 2: Clubes
+  const c2X = 42 + statCardW + 10;
+  roundRect(c2X, statsY, statCardW, 64, 16);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.06)";
   ctx.stroke();
 
-  // Col 2: Clubes
   ctx.fillStyle = "#111827";
-  ctx.font = "bold 18px sans-serif";
-  ctx.fillText(String(userClubsCount), 46 + colWidth * 1.5, statsY + 31);
+  ctx.font = "bold 18px monospace";
+  ctx.fillText(String(userClubsCount), c2X + statCardW / 2, statsY + 28);
   ctx.fillStyle = "#6b7280";
-  ctx.font = "bold 11px sans-serif";
-  ctx.fillText("Clubes", 46 + colWidth * 1.5, statsY + 50);
+  ctx.font = "bold 10px sans-serif";
+  ctx.fillText("CLUBES", c2X + statCardW / 2, statsY + 48);
 
-  // Separador 2
-  ctx.beginPath();
-  ctx.moveTo(46 + colWidth * 2, statsY + 14);
-  ctx.lineTo(46 + colWidth * 2, statsY + 54);
-  ctx.strokeStyle = "rgba(0,0,0,0.08)";
+  // Caixa 3: Favoritos
+  const c3X = c2X + statCardW + 10;
+  roundRect(c3X, statsY, statCardW, 64, 16);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.06)";
   ctx.stroke();
 
-  // Col 3: Favoritos
   ctx.fillStyle = "#111827";
-  ctx.font = "bold 18px sans-serif";
-  ctx.fillText(String(profile.favorite_books?.length || 0), 46 + colWidth * 2.5, statsY + 31);
+  ctx.font = "bold 18px monospace";
+  ctx.fillText(String(profile.favorite_books?.length || 0), c3X + statCardW / 2, statsY + 28);
   ctx.fillStyle = "#6b7280";
-  ctx.font = "bold 11px sans-serif";
-  ctx.fillText("Favoritos", 46 + colWidth * 2.5, statsY + 50);
+  ctx.font = "bold 10px sans-serif";
+  ctx.fillText("FAVORITOS", c3X + statCardW / 2, statsY + 48);
 
-  let currentY = statsY + 84;
+  let currentY = statsY + 80;
 
-  // 8. Livros Favoritos (se existirem)
+  // 8. Livros Favoritos em Destaque (se existirem)
   if (hasFavs && profile.favorite_books) {
     ctx.fillStyle = "#9ca3af";
-    ctx.font = "bold 11px sans-serif";
+    ctx.font = "bold 10px sans-serif";
     ctx.fillText("LIVROS EM DESTAQUE", width / 2, currentY);
     currentY += 14;
 
     const favList = profile.favorite_books.slice(0, 3);
-    const itemW = 74;
-    const itemH = 104;
+    const itemW = 76;
+    const itemH = 114;
     const gap = 16;
     const totalFavW = favList.length * itemW + (favList.length - 1) * gap;
     let startX = (width - totalFavW) / 2;
 
     for (const fb of favList) {
-      roundRect(startX, currentY, itemW, itemH, 10);
+      roundRect(startX, currentY, itemW, itemH, 12);
       ctx.save();
       ctx.clip();
 
@@ -302,7 +326,7 @@ async function generateCardCanvasBlob(
       if (!bookCoverDrawn) {
         ctx.fillStyle = "#e5e7eb";
         ctx.fillRect(startX, currentY, itemW, itemH);
-        ctx.fillStyle = "#6b7280";
+        ctx.fillStyle = "#4b5563";
         ctx.font = "bold 10px sans-serif";
         ctx.textAlign = "center";
         const titleSnippet = fb.title.split(" ").slice(0, 3).join(" ");
@@ -310,8 +334,8 @@ async function generateCardCanvasBlob(
       }
       ctx.restore();
 
-      ctx.strokeStyle = "rgba(0,0,0,0.1)";
-      roundRect(startX, currentY, itemW, itemH, 10);
+      ctx.strokeStyle = "rgba(0,0,0,0.12)";
+      roundRect(startX, currentY, itemW, itemH, 12);
       ctx.stroke();
 
       startX += itemW + gap;
@@ -321,8 +345,8 @@ async function generateCardCanvasBlob(
   }
 
   // 9. Rodapé do Cartão com o LINK IMPRESSO
-  const footerY = height - 84;
-  roundRect(46, footerY, width - 92, 46, 14);
+  const footerY = height - 76;
+  roundRect(42, footerY, width - 84, 46, 14);
   ctx.fillStyle = "#ffffff";
   ctx.fill();
   ctx.strokeStyle = "#e5e7eb";
@@ -333,15 +357,15 @@ async function generateCardCanvasBlob(
   ctx.font = "bold 12px monospace";
   ctx.textAlign = "left";
   const displayUrl = shareUrl.replace(/^https?:\/\//, "");
-  ctx.fillText(displayUrl, 64, footerY + 28);
+  ctx.fillText(displayUrl, 58, footerY + 28);
 
-  roundRect(width - 138, footerY + 10, 76, 26, 8);
+  roundRect(width - 132, footerY + 10, 76, 26, 8);
   ctx.fillStyle = "#111827";
   ctx.fill();
   ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 11px sans-serif";
+  ctx.font = "bold 10px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("ACEDER", width - 100, footerY + 27);
+  ctx.fillText("ACEDER", width - 94, footerY + 26);
 
   return new Promise((resolve) => {
     canvas.toBlob((blob) => resolve(blob), "image/png");
@@ -372,23 +396,18 @@ export default function Profile() {
   // Navegação por abas superiores (estilo captura enviada)
   const [activeTab, setActiveTab] = useState<"profile" | "notes" | "bookmarks" | "clubs">("profile");
 
-  // Menus de 3 Pontinhos (...)
-  const [showTopOptionsMenu, setShowTopOptionsMenu] = useState(false);
+  // Menu de Opções do Cartão de Perfil (...)
   const [showCardOptionsMenu, setShowCardOptionsMenu] = useState(false);
-  const topMenuRef = useRef<HTMLDivElement | null>(null);
   const cardMenuRef = useRef<HTMLDivElement | null>(null);
   const [showSharePreviewModal, setShowSharePreviewModal] = useState(false);
   const [shareCopyFeedback, setShareCopyFeedback] = useState(false);
   const [generatingCard, setGeneratingCard] = useState(false);
   const [downloadFeedback, setDownloadFeedback] = useState(false);
 
-  // Fecha qualquer menu de 3 pontinhos ao clicar em qualquer outra parte do ecrã ou pressionar Escape
+  // Fecha o menu de opções ao clicar em qualquer outra parte do ecrã ou pressionar Escape
   useEffect(() => {
     function handleClickOutside(event: MouseEvent | TouchEvent) {
       const target = event.target as Node;
-      if (topMenuRef.current && !topMenuRef.current.contains(target)) {
-        setShowTopOptionsMenu(false);
-      }
       if (cardMenuRef.current && !cardMenuRef.current.contains(target)) {
         setShowCardOptionsMenu(false);
       }
@@ -396,12 +415,11 @@ export default function Profile() {
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setShowTopOptionsMenu(false);
         setShowCardOptionsMenu(false);
       }
     }
 
-    if (showTopOptionsMenu || showCardOptionsMenu) {
+    if (showCardOptionsMenu) {
       document.addEventListener("mousedown", handleClickOutside);
       document.addEventListener("touchstart", handleClickOutside);
       document.addEventListener("keydown", handleKeyDown);
@@ -412,7 +430,7 @@ export default function Profile() {
       document.removeEventListener("touchstart", handleClickOutside);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [showTopOptionsMenu, showCardOptionsMenu]);
+  }, [showCardOptionsMenu]);
 
   // Modal: Editar Perfil
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
@@ -830,7 +848,6 @@ export default function Profile() {
     : "";
 
   const handleOpenShareModal = () => {
-    setShowTopOptionsMenu(false);
     setShowCardOptionsMenu(false);
     setShowSharePreviewModal(true);
   };
@@ -1033,14 +1050,11 @@ export default function Profile() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24 md:pb-12 md:pt-16 select-none">
-      {/* Backdrop transparente para fechar os menus de opções flutuantes ao clicar em qualquer outra parte */}
-      {(showTopOptionsMenu || showCardOptionsMenu) && (
+      {/* Backdrop transparente para fechar o menu de opções ao clicar em qualquer outra parte */}
+      {showCardOptionsMenu && (
         <div
           className="fixed inset-0 z-40 bg-transparent"
-          onClick={() => {
-            setShowTopOptionsMenu(false);
-            setShowCardOptionsMenu(false);
-          }}
+          onClick={() => setShowCardOptionsMenu(false)}
           aria-hidden="true"
         />
       )}
@@ -1062,64 +1076,6 @@ export default function Profile() {
                 </button>
               )}
               <h1 className="font-serif text-2xl font-bold tracking-tight">Perfil</h1>
-            </div>
-
-            {/* Menu de Opções Rápido no Topo */}
-            <div className="relative" ref={topMenuRef}>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowTopOptionsMenu((prev) => !prev);
-                  setShowCardOptionsMenu(false);
-                }}
-                className="p-2 rounded-full hover:bg-gray-200/60 dark:hover:bg-gray-800 transition-colors"
-                title="Mais opções"
-                aria-label="Mais opções do perfil"
-              >
-                <MoreHorizontal className="w-5 h-5" />
-              </button>
-
-              {/* Popover Dropdown de Opções */}
-              {showTopOptionsMenu && (
-                <div className="absolute right-0 top-10 w-48 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl py-1 z-50 text-xs animate-in zoom-in-95 duration-150">
-                  {isOwnProfile && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowTopOptionsMenu(false);
-                        setShowEditProfileModal(true);
-                      }}
-                      className="w-full px-4 py-2.5 text-left flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold text-black dark:text-white"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                      <span>Editar Perfil</span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={handleOpenShareModal}
-                    className="w-full px-4 py-2.5 text-left flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold text-black dark:text-white"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    <span>Partilhar Perfil</span>
-                  </button>
-
-                  {isOwnProfile && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowTopOptionsMenu(false);
-                        navigate("/settings");
-                      }}
-                      className="w-full px-4 py-2.5 text-left flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold border-t border-gray-100 dark:border-gray-800 text-black dark:text-white"
-                    >
-                      <SettingsIcon className="w-3.5 h-3.5" />
-                      <span>Configurações</span>
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 
@@ -1223,10 +1179,7 @@ export default function Profile() {
               <div className="flex justify-end relative" ref={cardMenuRef}>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowCardOptionsMenu((prev) => !prev);
-                    setShowTopOptionsMenu(false);
-                  }}
+                  onClick={() => setShowCardOptionsMenu((prev) => !prev)}
                   className="p-1 rounded-full text-gray-500 hover:text-black dark:hover:text-white transition-colors"
                   title="Opções do perfil"
                   aria-label="Abrir opções do perfil"
@@ -2066,22 +2019,31 @@ export default function Profile() {
             {/* Conteúdo com Scroll */}
             <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar pr-0.5">
               
-              {/* Cartão de Pré-visualização Estilizado */}
-              <div className="bg-[#f5f0eb] dark:bg-gray-800/90 border border-[#e8dfd5] dark:border-gray-700 rounded-3xl p-5 shadow-xs relative overflow-hidden">
-                {/* Cabeçalho do Cartão */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-1.5">
-                    <BookOpen className="w-4 h-4 text-black dark:text-white" />
-                    <span className="font-serif text-xs font-bold tracking-tight">Kuwerenga</span>
+              {/* Cartão de Pré-visualização Estilizado e Responsivo */}
+              <div className="bg-[#f5f0eb] dark:bg-gray-850/90 border border-[#e8dfd5] dark:border-gray-700/80 rounded-3xl p-5 sm:p-6 shadow-sm relative overflow-hidden space-y-4">
+                {/* Linha Superior: Logo Oficial & Selo de Leitor */}
+                <div className="flex items-center justify-between pb-1 border-b border-black/5 dark:border-white/5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-serif text-sm font-bold tracking-tight block leading-none">
+                        Kuwerenga
+                      </span>
+                      <span className="text-[9px] uppercase tracking-widest text-gray-400 font-bold">
+                        Leia Fácil
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300">
-                    Leitor
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-black/5 dark:bg-white/10 text-gray-700 dark:text-gray-300 border border-black/5 dark:border-white/5">
+                    Perfil Literário
                   </span>
                 </div>
 
-                {/* Avatar e Dados do Leitor */}
-                <div className="flex flex-col items-center text-center">
-                  <div className="w-16 h-16 rounded-full border-2 border-white dark:border-gray-700 shadow-sm overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center mb-2.5">
+                {/* Secção Central: Avatar, Nome, Username e Bio */}
+                <div className="flex flex-col items-center text-center pt-1">
+                  <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-full ring-4 ring-white dark:ring-gray-750 shadow-md overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center mb-3">
                     {profile.avatar_url ? (
                       <img
                         src={profile.avatar_url}
@@ -2089,63 +2051,63 @@ export default function Profile() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <span className="font-serif font-bold text-lg text-gray-700 dark:text-gray-200">
+                      <span className="font-serif font-bold text-2xl text-gray-700 dark:text-gray-200">
                         {getInitials(profile.full_name)}
                       </span>
                     )}
                   </div>
 
-                  <h4 className="font-serif text-lg font-bold tracking-tight leading-snug">
+                  <h4 className="font-serif text-xl sm:text-2xl font-bold tracking-tight leading-tight mb-1 text-black dark:text-white">
                     {profile.full_name}
                   </h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-2">
+                  <div className="inline-block px-2.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-xs font-mono text-gray-600 dark:text-gray-400 mb-2.5">
                     @{profile.username || "leitor"}
-                  </p>
+                  </div>
 
-                  <p className="text-xs text-gray-600 dark:text-gray-300 italic max-w-xs leading-relaxed mb-3">
+                  <div className="bg-white/70 dark:bg-gray-800/70 rounded-2xl px-4 py-2.5 border border-black/5 dark:border-white/5 text-center text-xs text-gray-600 dark:text-gray-300 italic max-w-sm w-full leading-relaxed shadow-2xs">
                     &ldquo;{profile.bio?.trim() ? profile.bio : "A explorar novas páginas e histórias na plataforma Kuwerenga."}&rdquo;
-                  </p>
+                  </div>
                 </div>
 
-                {/* Estatísticas no Cartão de Partilha */}
-                <div className="grid grid-cols-3 gap-2 py-2.5 px-3 bg-white/70 dark:bg-gray-900/60 rounded-2xl border border-black/5 dark:border-white/5 mb-3 text-center">
-                  <div>
-                    <span className="block text-sm font-bold leading-tight">
+                {/* Grelha de Estatísticas: 3 Caixas Individuais e Organizadas */}
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 text-center">
+                  <div className="bg-white/80 dark:bg-gray-800/80 rounded-2xl p-2.5 sm:p-3 border border-black/5 dark:border-white/5 shadow-2xs">
+                    <span className="block text-base sm:text-lg font-bold font-mono leading-tight text-black dark:text-white">
                       {profile.views_count || 0}
                     </span>
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                    <span className="text-[10px] sm:text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Visualizações
                     </span>
                   </div>
-                  <div className="border-x border-gray-200/60 dark:border-gray-700/60">
-                    <span className="block text-sm font-bold leading-tight">
+                  <div className="bg-white/80 dark:bg-gray-800/80 rounded-2xl p-2.5 sm:p-3 border border-black/5 dark:border-white/5 shadow-2xs">
+                    <span className="block text-base sm:text-lg font-bold font-mono leading-tight text-black dark:text-white">
                       {userClubs.length}
                     </span>
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                    <span className="text-[10px] sm:text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Clubes
                     </span>
                   </div>
-                  <div>
-                    <span className="block text-sm font-bold leading-tight">
+                  <div className="bg-white/80 dark:bg-gray-800/80 rounded-2xl p-2.5 sm:p-3 border border-black/5 dark:border-white/5 shadow-2xs">
+                    <span className="block text-base sm:text-lg font-bold font-mono leading-tight text-black dark:text-white">
                       {profile.favorite_books?.length || 0}
                     </span>
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                    <span className="text-[10px] sm:text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Favoritos
                     </span>
                   </div>
                 </div>
 
-                {/* Livros Favoritos em Miniatura */}
+                {/* Livros Favoritos em Destaque (Proporção Real 2:3) */}
                 {profile.favorite_books && profile.favorite_books.length > 0 && (
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 block mb-2 text-center">
+                  <div className="space-y-2 pt-1">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 block text-center">
                       Livros em Destaque
                     </span>
-                    <div className="flex justify-center items-center gap-2">
+                    <div className="flex justify-center items-center gap-3 sm:gap-4">
                       {profile.favorite_books.map((fb, idx) => (
                         <div
                           key={idx}
-                          className="w-12 h-16 rounded-lg bg-gray-100 dark:bg-gray-700 border border-black/10 dark:border-white/10 overflow-hidden shadow-2xs shrink-0"
+                          className="w-14 sm:w-16 aspect-[2/3] rounded-xl bg-gray-100 dark:bg-gray-750 border border-black/10 dark:border-white/10 overflow-hidden shadow-xs shrink-0 group relative"
                           title={fb.title}
                         >
                           {fb.cover_url ? (
@@ -2155,8 +2117,9 @@ export default function Profile() {
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center p-1 text-[8px] text-center font-bold text-gray-400 line-clamp-3">
-                              {fb.title}
+                            <div className="w-full h-full flex flex-col items-center justify-center p-1 text-[8px] text-center font-bold text-gray-500 dark:text-gray-300">
+                              <BookOpen className="w-3.5 h-3.5 mb-1 opacity-60" />
+                              <span className="line-clamp-2 leading-tight">{fb.title}</span>
                             </div>
                           )}
                         </div>
@@ -2166,14 +2129,16 @@ export default function Profile() {
                 )}
 
                 {/* Rodapé Integrado no Próprio Cartão com o Link Oficial */}
-                <div className="mt-4 pt-3 border-t border-black/10 dark:border-white/10 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <LinkIcon className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400 shrink-0" />
-                    <span className="text-[11px] font-mono font-medium text-gray-600 dark:text-gray-300 truncate">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl p-2.5 sm:p-3 border border-black/5 dark:border-white/10 shadow-2xs flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="p-1 rounded-md bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 shrink-0">
+                      <LinkIcon className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-xs font-mono font-medium text-gray-700 dark:text-gray-200 truncate">
                       {profileShareUrl.replace(/^https?:\/\//, "")}
                     </span>
                   </div>
-                  <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-black dark:bg-white text-white dark:text-black shrink-0">
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-xl bg-black dark:bg-white text-white dark:text-black shrink-0 shadow-2xs">
                     Aceder
                   </span>
                 </div>
