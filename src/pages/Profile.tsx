@@ -140,7 +140,8 @@ async function generateCardCanvasBlob(
   const canvas = document.createElement("canvas");
   const scale = 2;
   const width = 500;
-  const height = 750;
+  const hasFavs = Boolean(profile.favorite_books && profile.favorite_books.length > 0);
+  const height = hasFavs ? 880 : 750;
 
   canvas.width = width * scale;
   canvas.height = height * scale;
@@ -359,7 +360,67 @@ async function generateCardCanvasBlob(
     ctx.fillText(st.label, boxX + statBoxW / 2, statsY + 54);
   });
 
-  // 8. Rodapé Pílula do Cartão com Link e Botão ACEDER
+  // 8. Livros Favoritos em Destaque (se existirem)
+  if (hasFavs && profile.favorite_books) {
+    let favSectionY = statsY + 92;
+    ctx.fillStyle = "#C9BDB0";
+    ctx.font = "bold 10px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("LIVROS EM DESTAQUE", width / 2, favSectionY);
+
+    favSectionY += 14;
+    const favList = profile.favorite_books.slice(0, 3);
+    const itemW = 72;
+    const itemH = 104;
+    const gap = 14;
+    const totalFavW = favList.length * itemW + (favList.length - 1) * gap;
+    let startX = (width - totalFavW) / 2;
+
+    for (const fb of favList) {
+      roundRect(startX, favSectionY, itemW, itemH, 12);
+      ctx.save();
+      ctx.clip();
+
+      let bookCoverDrawn = false;
+      if (fb.cover_url) {
+        try {
+          const bImg = new Image();
+          bImg.crossOrigin = "anonymous";
+          bImg.src = fb.cover_url;
+          await new Promise<void>((res, rej) => {
+            bImg.onload = () => res();
+            bImg.onerror = () => rej();
+            setTimeout(() => rej(), 1200);
+          });
+          ctx.drawImage(bImg, startX, favSectionY, itemW, itemH);
+          bookCoverDrawn = true;
+        } catch {
+          bookCoverDrawn = false;
+        }
+      }
+
+      if (!bookCoverDrawn) {
+        ctx.fillStyle = "#241E1A";
+        ctx.fillRect(startX, favSectionY, itemW, itemH);
+        drawCanvasBookIcon(ctx, startX + (itemW - 32) / 2, favSectionY + 24, 32);
+        ctx.fillStyle = "#A89A8C";
+        ctx.font = "bold 9px sans-serif";
+        ctx.textAlign = "center";
+        const titleSnippet = fb.title.split(" ").slice(0, 3).join(" ");
+        ctx.fillText(titleSnippet, startX + itemW / 2, favSectionY + 74);
+      }
+      ctx.restore();
+
+      ctx.strokeStyle = "#382E28";
+      ctx.lineWidth = 1;
+      roundRect(startX, favSectionY, itemW, itemH, 12);
+      ctx.stroke();
+
+      startX += itemW + gap;
+    }
+  }
+
+  // 9. Rodapé Pílula do Cartão com Link e Botão ACEDER
   const footerY = height - 90;
   const pillW = width - 84;
   roundRect(42, footerY, pillW, 54, 27);
@@ -2129,6 +2190,37 @@ export default function Profile() {
                   </div>
                 </div>
 
+                {/* Livros Favoritos em Destaque */}
+                {profile.favorite_books && profile.favorite_books.length > 0 && (
+                  <div className="space-y-2 pt-1 pb-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C9BDB0] block text-center">
+                      Livros em Destaque
+                    </span>
+                    <div className="flex justify-center items-center gap-2.5 sm:gap-3">
+                      {profile.favorite_books.slice(0, 3).map((fb, idx) => (
+                        <div
+                          key={idx}
+                          className="w-14 sm:w-16 aspect-[2/3] rounded-xl bg-[#231D19] border border-[#382E28] overflow-hidden shadow-md shrink-0 group relative"
+                          title={fb.title}
+                        >
+                          {fb.cover_url ? (
+                            <img
+                              src={fb.cover_url}
+                              alt={fb.title}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center p-1 text-[8px] text-center font-bold text-[#A89A8C]">
+                              <BookOpen className="w-3.5 h-3.5 mb-1 opacity-70" />
+                              <span className="line-clamp-2 leading-tight">{fb.title}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Rodapé Pílula do Cartão com Link e Botão Aceder */}
                 <div className="bg-[#1F1916] rounded-full p-2 pl-3.5 border border-[#362D27] flex items-center justify-between gap-2 shadow-xs">
                   <div className="flex items-center gap-2 min-w-0">
@@ -2228,17 +2320,6 @@ export default function Profile() {
                   </button>
                 </div>
               </div>
-            </div>
-
-            {/* Rodapé */}
-            <div className="pt-3 border-t border-gray-100 dark:border-gray-800 mt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowSharePreviewModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
-              >
-                Fechar
-              </button>
             </div>
           </div>
         </div>
