@@ -47,7 +47,13 @@ import { getTermDefinition, type DefinitionResult } from "../lib/dictionaryServi
 import { isGuestMode } from "../lib/guestMode";
 import GuestRestrictionModal from "../components/GuestRestrictionModal";
 import BookCompletionModal from "../components/BookCompletionModal";
-import { markBookAsFinished, markBookAsReading } from "../lib/bookshelfService";
+import {
+  markBookAsFinished,
+  markBookAsReading,
+  getLocalCustomBooks,
+  saveLocalCustomBooks
+} from "../lib/bookshelfService";
+import { getCached, setCached } from "../lib/cache";
 import { recordReadingSession } from "../lib/profileService";
 import { syncWithServiceWorkerForBackground } from "../lib/notificationService";
 import { applyTheme } from "../lib/theme";
@@ -93,6 +99,20 @@ function getStoredReaderTheme(): ReaderThemeOption {
   return "system";
 }
 
+function getSavedInitialProgress(bookId: string): { page: number; progress: number; cfi?: string } {
+  if (typeof window === "undefined" || !bookId) return { page: 1, progress: 0 };
+  try {
+    const raw = localStorage.getItem(`kuwerenga_progress_${bookId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const page = typeof parsed.currentPage === "number" && parsed.currentPage > 0 ? parsed.currentPage : 1;
+      const progress = typeof parsed.progress === "number" && parsed.progress >= 0 ? parsed.progress : 0;
+      return { page, progress, cfi: parsed.cfi || undefined };
+    }
+  } catch {}
+  return { page: 1, progress: 0 };
+}
+
 function formatSessionTime(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
   const mins = Math.floor(seconds / 60);
@@ -107,6 +127,9 @@ export default function Reader() {
   const bookId = searchParams.get("bookId") || "demo-book";
   const [bookTitle, setBookTitle] = useState("Manual de Leitura");
 
+  // Progresso inicial recuperado imediatamente (0ms de latência)
+  const initialSaved = useRef(getSavedInitialProgress(bookId));
+
   // Estados de Tempo de Leitura e Confirmação de Livro Concluído
   const sessionStartTimeRef = useRef<number>(Date.now());
   const [sessionSeconds, setSessionSeconds] = useState(0);
@@ -119,7 +142,7 @@ export default function Reader() {
 
   // Estados do PDF
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(initialSaved.current.page || 1);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -128,9 +151,26 @@ export default function Reader() {
 
   // Estados do EPUB
   const [epubBook, setEpubBook] = useState<Book | null>(null);
-  const [epubCurrentCfi, setEpubCurrentCfi] = useState<string>("");
-  const [epubProgress, setEpubProgress] = useState(0);
+  const [epubCurrentCfi, setEpubCurrentCfi] = useState<string>(initialSaved.current.cfi || "");
+  const [epubProgress, setEpubProgress] = useState(initialSaved.current.progress || 0);
   const [epubChapterTitle, setEpubChapterTitle] = useState("");
+
+  // Refs de estado para persistência fiável em desmonte / encerramento
+  const currentPageRef = useRef(currentPage);
+  const totalPagesRef = useRef(totalPages);
+  const progressRef = useRef(epubProgress);
+  const chapterTitleRef = useRef("");
+  const epubCfiRef = useRef(epubCurrentCfi);
+
+  useEffect(() => { currentPageRef.current = currentPage; }, [currentPage]);
+  useEffect(() => { totalPagesRef.current = totalPages; }, [totalPages]);
+  useEffect(() => {
+    progressRef.current = fileType === "epub"
+      ? epubProgress
+      : (totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0);
+  }, [currentPage, totalPages, epubProgress, fileType]);
+  useEffect(() => { epubCfiRef.current = epubCurrentCfi; }, [epubCurrentCfi]);
+  useEffect(() => { chapterTitleRef.current = epubChapterTitle; }, [epubChapterTitle]);
 
   // Estados de UI e Leitura sincronizados com o Sistema
   const [scale, setScale] = useState(1.1);
@@ -193,6 +233,116 @@ export default function Reader() {
       window.removeEventListener("pagehide", handleSaveReadingTime);
     };
   }, [bookId, currentUserId]);
+
+  // ─── Sincronização e Persistência Unificada do Progresso de Leitura ────────
+  const persistActiveProgress = useCallback((newPage: number, totalPgs: number, pct: number, chapter: string = "", cfi?: string) => {
+    if (!bookId) return;
+
+    const boundedTotal = totalPgs > 0 ? totalPgs : (totalPagesRef.current > 0 ? totalPagesRef.current : 1);
+    const boundedPage = Math.min(Math.max(1, newPage), boundedTotal);
+    const calculatedProgress = pct > 0 ? pct : Math.min(100, Math.max(0, Math.round((boundedPage / boundedTotal) * 100)));
+    const finalCfi = cfi || epubCfiRef.current || "";
+    const finalChapter = chapter || (fileType === "epub" ? (chapterTitleRef.current || `Posição ${boundedPage}`) : `Página ${boundedPage}`);
+
+    currentPageRef.current = boundedPage;
+    totalPagesRef.current = boundedTotal;
+    progressRef.current = calculatedProgress;
+    if (finalCfi) epubCfiRef.current = finalCfi;
+
+    // 1. Grava de forma síncrona no localStorage (0ms de atraso para a tela inicial Home.tsx)
+    try {
+      localStorage.setItem(`kuwerenga_progress_${bookId}`, JSON.stringify({
+        currentPage: boundedPage,
+        totalPages: boundedTotal,
+        progress: calculatedProgress,
+        chapter: finalChapter,
+        cfi: finalCfi,
+        updatedAt: new Date().toISOString()
+      }));
+    } catch {}
+
+    // 2. Grava no IndexedDB (armazenamento offline local)
+    saveReadingProgress({
+      bookId,
+      currentPage: boundedPage,
+      currentChapter: finalChapter,
+      progress: calculatedProgress,
+      lastReadAt: new Date().toISOString(),
+      synced: false,
+    }).catch(() => {});
+
+    // 3. Atualiza estante local (para utilizadores convidados e modo offline)
+    try {
+      const localBooks = getLocalCustomBooks();
+      const idx = localBooks.findIndex(b => b.bookId === bookId || b.id === bookId);
+      if (idx !== -1) {
+        localBooks[idx].currentPage = boundedPage;
+        localBooks[idx].progress = calculatedProgress;
+        localBooks[idx].totalPages = boundedTotal;
+        localBooks[idx].status = "reading";
+        localBooks[idx].lastReadAt = new Date().toISOString();
+        saveLocalCustomBooks(localBooks);
+      }
+    } catch {}
+
+    // 4. Atualiza cache da Home em memória
+    try {
+      const cached = getCached<any[]>("home_reading_list");
+      if (cached && Array.isArray(cached)) {
+        const itemIdx = cached.findIndex(b => b.bookId === bookId || b.id === bookId);
+        if (itemIdx !== -1) {
+          cached[itemIdx].currentPage = boundedPage;
+          cached[itemIdx].progress = calculatedProgress;
+          cached[itemIdx].totalPages = boundedTotal;
+          cached[itemIdx].lastReadAt = new Date().toISOString();
+          setCached("home_reading_list", cached);
+        }
+      }
+    } catch {}
+
+    // 5. Atualiza Supabase user_books em segundo plano
+    if (typeof navigator !== "undefined" && navigator.onLine && bookId !== "demo-book" && !bookId.startsWith("local-")) {
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          supabase.from("user_books").upsert({
+            user_id: user.id,
+            book_id: bookId,
+            current_page: boundedPage,
+            progress: calculatedProgress,
+            status: "reading",
+            last_read_at: new Date().toISOString()
+          }, { onConflict: "user_id,book_id" }).then(() => {});
+        }
+      }).catch(() => {});
+    }
+
+    // 6. Sincroniza com Service Worker
+    syncWithServiceWorkerForBackground();
+  }, [bookId, fileType]);
+
+  // Persistir progresso ao fechar o leitor / navegador / mudar de página
+  useEffect(() => {
+    const handleUnloadPersist = () => {
+      if (bookId && currentPageRef.current > 0) {
+        persistActiveProgress(
+          currentPageRef.current,
+          totalPagesRef.current,
+          progressRef.current,
+          chapterTitleRef.current,
+          epubCfiRef.current
+        );
+      }
+    };
+
+    window.addEventListener("beforeunload", handleUnloadPersist);
+    window.addEventListener("pagehide", handleUnloadPersist);
+
+    return () => {
+      handleUnloadPersist();
+      window.removeEventListener("beforeunload", handleUnloadPersist);
+      window.removeEventListener("pagehide", handleUnloadPersist);
+    };
+  }, [bookId, persistActiveProgress]);
 
   // Tema efetivo aplicado na leitura (sépia acolhedor ou escuro puro)
   const isDark = readerThemePref === "dark" || (readerThemePref === "system" && systemIsDark);
@@ -337,18 +487,42 @@ export default function Reader() {
       // Carrega anotações do livro
       getAnnotationsForBook(bookId).then(setAnnotations).catch(() => {});
 
-      // Recupera progresso de leitura guardado
+      // Recupera progresso de leitura guardado PRIMEIRO (localStorage síncrono)
+      const initial = getSavedInitialProgress(bookId);
+      if (initial.cfi) {
+        setEpubCurrentCfi(initial.cfi);
+        epubCfiRef.current = initial.cfi;
+      }
+      if (initial.page > 1) {
+        setCurrentPage(initial.page);
+        currentPageRef.current = initial.page;
+      }
+      if (initial.progress > 0) {
+        setEpubProgress(initial.progress);
+        progressRef.current = initial.progress;
+      }
+
+      // Fallback IndexedDB
       getReadingProgress(bookId).then((savedProgress) => {
         if (savedProgress) {
-          setCurrentPage(savedProgress.currentPage || 1);
-          setEpubProgress(savedProgress.progress || 0);
+          if (savedProgress.currentPage) {
+            setCurrentPage(savedProgress.currentPage);
+            currentPageRef.current = savedProgress.currentPage;
+          }
+          if (savedProgress.progress) {
+            setEpubProgress(savedProgress.progress);
+            progressRef.current = savedProgress.progress;
+          }
         }
       }).catch(() => {});
 
       // Gera posições em segundo plano sem bloquear o leitor
       book.locations.generate(1000).then(() => {
         const count = book.locations.length();
-        if (count > 0) setTotalPages(count);
+        if (count > 0) {
+          setTotalPages(count);
+          totalPagesRef.current = count;
+        }
       }).catch(() => {});
     } catch (err: any) {
       console.error("Erro ao inicializar EPUB:", err);
@@ -369,18 +543,46 @@ export default function Reader() {
       });
       const doc = await loadingTask.promise;
 
-      setPdfDoc(doc);
-      setFileType("pdf");
-      setBookTitle(title);
-      setPdfSourceBlob(blob);
-      setTotalPages(doc.numPages);
-      setCurrentPage(1);
+      // Recupera progresso guardado (localStorage síncrono -> IndexedDB -> Supabase)
+      const initial = getSavedInitialProgress(bookId);
+      let targetPage = initial.page;
 
-      // Recupera progresso de leitura
-      const savedProgress = await getReadingProgress(bookId);
-      if (savedProgress && savedProgress.currentPage <= doc.numPages) {
-        setCurrentPage(savedProgress.currentPage);
+      try {
+        const savedProgress = await getReadingProgress(bookId);
+        if (savedProgress?.currentPage && savedProgress.currentPage > 0) {
+          targetPage = Math.max(targetPage, savedProgress.currentPage);
+        }
+      } catch {}
+
+      if (targetPage <= 1 && bookId !== "demo-book" && !bookId.startsWith("local-")) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: ub } = await supabase
+              .from("user_books")
+              .select("current_page")
+              .eq("user_id", user.id)
+              .eq("book_id", bookId)
+              .maybeSingle();
+            if (ub?.current_page && ub.current_page > 0) {
+              targetPage = ub.current_page;
+            }
+          }
+        } catch {}
       }
+
+      if (targetPage > doc.numPages) targetPage = doc.numPages;
+      if (targetPage < 1) targetPage = 1;
+
+      // Define a página e limites ANTES de definir pdfDoc para a primeira renderização ser direto na página guardada
+      setCurrentPage(targetPage);
+      currentPageRef.current = targetPage;
+      setTotalPages(doc.numPages);
+      totalPagesRef.current = doc.numPages;
+      setPdfSourceBlob(blob);
+      setBookTitle(title);
+      setFileType("pdf");
+      setPdfDoc(doc);
 
       // Carrega anotações do livro
       const existingNotes = await getAnnotationsForBook(bookId);
@@ -610,17 +812,7 @@ export default function Reader() {
         }
 
         const progressPercent = Math.round((currentPage / (pdfDoc?.numPages || 1)) * 100);
-        saveReadingProgress({
-          bookId,
-          currentPage,
-          currentChapter: `Página ${currentPage}`,
-          progress: progressPercent,
-          lastReadAt: new Date().toISOString(),
-          synced: false,
-        });
-
-        // Sincroniza progresso com o Service Worker em background
-        syncWithServiceWorkerForBackground();
+        persistActiveProgress(currentPage, pdfDoc?.numPages || 1, progressPercent, `Página ${currentPage}`);
 
         // Se chegou à última página e o livro tem mais de 1 página, sugere a confirmação de conclusão
         if (pdfDoc && currentPage >= pdfDoc.numPages && pdfDoc.numPages > 1 && !hasPromptedCompletionRef.current) {
@@ -812,16 +1004,21 @@ export default function Reader() {
     epubRenditionRef.current = rendition;
 
     // Navegar para localização guardada ou início
-    const savedProgress = getReadingProgress(bookId);
-    savedProgress.then((progress) => {
-      if (progress && epubCurrentCfi) {
-        rendition.display(epubCurrentCfi);
-      } else {
+    const localProg = getSavedInitialProgress(bookId);
+    const targetCfi = epubCurrentCfi || localProg.cfi;
+    if (targetCfi) {
+      rendition.display(targetCfi);
+    } else {
+      getReadingProgress(bookId).then((progress) => {
+        if (progress && (progress as any).cfi) {
+          rendition.display((progress as any).cfi);
+        } else {
+          rendition.display();
+        }
+      }).catch(() => {
         rendition.display();
-      }
-    }).catch(() => {
-      rendition.display();
-    });
+      });
+    }
 
     // Acompanhar relocação (mudança de página/capítulo)
     rendition.on("relocated", (location: any) => {
@@ -829,6 +1026,7 @@ export default function Reader() {
 
       const cfi = location.start.cfi;
       setEpubCurrentCfi(cfi);
+      epubCfiRef.current = cfi;
 
       let pct = 0;
       if (epubBook.locations && epubBook.locations.length() > 0) {
@@ -849,17 +1047,7 @@ export default function Reader() {
       });
       setEpubChapterTitle(tocItem?.label || "");
 
-      saveReadingProgress({
-        bookId,
-        currentPage: locNum,
-        currentChapter: tocItem?.label || `Posição ${locNum}`,
-        progress: pct,
-        lastReadAt: new Date().toISOString(),
-        synced: false,
-      });
-
-      // Sincroniza dados com o Service Worker em background
-      syncWithServiceWorkerForBackground();
+      persistActiveProgress(locNum, totalPagesRef.current, pct, tocItem?.label || `Posição ${locNum}`, cfi);
 
       // Se chegou ao fim do EPUB (>= 99%), confirma com o utilizador antes de concluir
       if (pct >= 99 && !hasPromptedCompletionRef.current) {
@@ -1454,6 +1642,15 @@ export default function Reader() {
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
           <Link
             to="/home"
+            onClick={() => {
+              persistActiveProgress(
+                currentPageRef.current,
+                totalPagesRef.current,
+                progressRef.current,
+                chapterTitleRef.current,
+                epubCfiRef.current
+              );
+            }}
             className="p-1.5 sm:p-2 -ml-1 sm:-ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />

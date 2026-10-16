@@ -174,17 +174,33 @@ export async function approveJoinRequest(
   userId: string
 ): Promise<boolean> {
   try {
-    // 1. Adiciona como membro
-    await supabase.from("club_members").insert({
-      club_id: clubId,
-      user_id: userId,
-      role: "member",
+    // 1. Tenta via RPC com privilégios de segurança (se a migração estiver aplicada no Supabase)
+    const { error: rpcErr } = await supabase.rpc("approve_club_join_request", {
+      p_request_id: requestId,
+      p_club_id: clubId,
+      p_user_id: userId,
     });
 
-    // 2. Remove ou atualiza o pedido
-    await supabase.from("club_join_requests").delete().eq("id", requestId);
+    if (rpcErr) {
+      // 2. Fallback: marca o pedido como 'approved' para permitir entrada imediata
+      await supabase
+        .from("club_join_requests")
+        .update({ status: "approved" })
+        .eq("id", requestId);
 
-    // Limpa fallback local
+      // 3. Tenta inserção direta na tabela club_members
+      const { error: insertErr } = await supabase.from("club_members").upsert({
+        club_id: clubId,
+        user_id: userId,
+        role: "member",
+      }, { onConflict: "club_id,user_id" });
+
+      if (insertErr) {
+        console.warn("Aviso na inserção direta de membro (status de aprovação guardado no pedido):", insertErr);
+      }
+    }
+
+    // 4. Limpa fallback local
     const localKey = `pending_requests_${clubId}`;
     const current: JoinRequestItem[] = JSON.parse(localStorage.getItem(localKey) || "[]");
     localStorage.setItem(

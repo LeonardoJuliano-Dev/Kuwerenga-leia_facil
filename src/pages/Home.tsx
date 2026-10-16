@@ -73,15 +73,30 @@ export default function Home() {
           if (userBooks) {
             const activeItems: CurrentReading[] = userBooks
               .filter((item: any) => item.book && item.status !== "finished" && (item.progress || 0) < 100)
-              .map((item: any) => ({
-                bookId: item.book.id,
-                title: item.book.title,
-                author: item.book.author,
-                cover_url: item.book.cover_url,
-                currentPage: item.current_page || 1,
-                totalPages: item.book.total_pages || 1,
-                progress: item.progress || 0,
-              }));
+              .map((item: any) => {
+                let cPage = item.current_page || 1;
+                let prog = item.progress || 0;
+                try {
+                  const local = localStorage.getItem(`kuwerenga_progress_${item.book.id}`);
+                  if (local) {
+                    const parsed = JSON.parse(local);
+                    if (parsed.currentPage && parsed.currentPage > cPage) {
+                      cPage = parsed.currentPage;
+                      prog = Math.max(prog, parsed.progress || 0);
+                    }
+                  }
+                } catch {}
+
+                return {
+                  bookId: item.book.id,
+                  title: item.book.title,
+                  author: item.book.author,
+                  cover_url: item.book.cover_url,
+                  currentPage: cPage,
+                  totalPages: item.book.total_pages || 1,
+                  progress: prog,
+                };
+              });
 
             setReadingList(activeItems);
             setCached("home_reading_list", activeItems);
@@ -95,15 +110,31 @@ export default function Home() {
           const activeItems: CurrentReading[] = local
             .filter((item) => (item.status === "reading" || item.status === "to_read") && (item.progress || 0) < 100)
             .sort((a, b) => new Date(b.lastReadAt || 0).getTime() - new Date(a.lastReadAt || 0).getTime())
-            .map((item) => ({
-              bookId: item.bookId || item.id,
-              title: item.title,
-              author: item.author,
-              cover_url: item.coverUrl || null,
-              currentPage: item.currentPage || 1,
-              totalPages: item.totalPages || 100,
-              progress: item.progress || 0,
-            }));
+            .map((item) => {
+              let cPage = item.currentPage || 1;
+              let prog = item.progress || 0;
+              const targetId = item.bookId || item.id;
+              try {
+                const localSaved = localStorage.getItem(`kuwerenga_progress_${targetId}`);
+                if (localSaved) {
+                  const parsed = JSON.parse(localSaved);
+                  if (parsed.currentPage && parsed.currentPage > cPage) {
+                    cPage = parsed.currentPage;
+                    prog = Math.max(prog, parsed.progress || 0);
+                  }
+                }
+              } catch {}
+
+              return {
+                bookId: targetId,
+                title: item.title,
+                author: item.author,
+                cover_url: item.coverUrl || null,
+                currentPage: cPage,
+                totalPages: item.totalPages || 100,
+                progress: prog,
+              };
+            });
 
           setReadingList(activeItems);
           setCached("home_reading_list", activeItems);
@@ -129,6 +160,24 @@ export default function Home() {
     }
 
     loadHomeData();
+
+    const handleFocus = () => {
+      loadHomeData();
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        loadHomeData();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
   const handleSearchSubmit = (e: React.FormEvent) => {

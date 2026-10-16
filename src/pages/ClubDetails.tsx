@@ -234,18 +234,55 @@ export default function ClubDetails() {
             // Verificar se o utilizador logado é membro ativo
             if (user) {
               const myMembership = membersList.find((m) => m.user_id === user.id);
-              setIsMember(Boolean(myMembership));
+              if (myMembership) {
+                setIsMember(true);
+                setMyRequestPending(false);
+                localStorage.removeItem(`my_request_club_${effectiveId}`);
+              } else {
+                // Não está na lista de membros: verificar se tem pedido pendente ou aprovado no Supabase
+                try {
+                  const { data: myReq } = await supabase
+                    .from("club_join_requests")
+                    .select("id, status")
+                    .eq("club_id", effectiveId)
+                    .eq("user_id", user.id)
+                    .maybeSingle();
+
+                  if (myReq?.status === "approved") {
+                    // O pedido foi aprovado pelo criador/administrador: garante entrada imediata do membro
+                    await supabase.from("club_members").upsert({
+                      club_id: effectiveId,
+                      user_id: user.id,
+                      role: "member",
+                    }, { onConflict: "club_id,user_id" });
+
+                    await supabase.from("club_join_requests").delete().eq("id", myReq.id);
+                    localStorage.removeItem(`my_request_club_${effectiveId}`);
+                    setIsMember(true);
+                    setMyRequestPending(false);
+
+                    // Recarrega membros atualizados
+                    const updatedMembers = await loadClubMembers(effectiveId);
+                    setClubMembers(updatedMembers);
+                  } else if (myReq?.status === "pending") {
+                    setIsMember(false);
+                    setMyRequestPending(true);
+                  } else {
+                    const localReq = localStorage.getItem(`my_request_club_${effectiveId}`);
+                    setIsMember(false);
+                    setMyRequestPending(localReq === "pending");
+                  }
+                } catch {
+                  const localReq = localStorage.getItem(`my_request_club_${effectiveId}`);
+                  setIsMember(false);
+                  setMyRequestPending(localReq === "pending");
+                }
+              }
 
               // Se o utilizador é admin, carregar pedidos de adesão pendentes
               if (resolvedAdminId === user.id) {
                 const reqs = await loadClubJoinRequests(effectiveId);
                 setJoinRequests(reqs);
-              } else {
-                // Verificar se o utilizador tem pedido pendente
-                const localReq = localStorage.getItem(`my_request_club_${effectiveId}`);
-                if (localReq === "pending") {
-                  setMyRequestPending(true);
-                }
               }
             }
           }
