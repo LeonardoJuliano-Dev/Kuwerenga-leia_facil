@@ -60,6 +60,77 @@ interface EnrichedAnnotation extends OfflineAnnotation {
 }
 
 // ─── Gerador de Imagem PNG do Cartão de Perfil (Canvas Retina 2x) ───
+// ─── Ícones Vetoriais em Canvas 2D ───
+function drawCanvasBookIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.strokeStyle = "#FAF7F2";
+  ctx.lineWidth = 1.8;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  const w = size * 0.68;
+  const h = size * 0.52;
+
+  // Página esquerda
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + h / 2);
+  ctx.quadraticCurveTo(cx - w / 4, cy + h / 2 - 2, cx - w / 2, cy + h / 2 + 1);
+  ctx.lineTo(cx - w / 2, cy - h / 2 + 1);
+  ctx.quadraticCurveTo(cx - w / 4, cy - h / 2 - 2, cx, cy - h / 2);
+  ctx.closePath();
+  ctx.stroke();
+
+  // Página direita
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + h / 2);
+  ctx.quadraticCurveTo(cx + w / 4, cy + h / 2 - 2, cx + w / 2, cy + h / 2 + 1);
+  ctx.lineTo(cx + w / 2, cy - h / 2 + 1);
+  ctx.quadraticCurveTo(cx + w / 4, cy - h / 2 - 2, cx, cy - h / 2);
+  ctx.closePath();
+  ctx.stroke();
+
+  // Lombada central
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - h / 2);
+  ctx.lineTo(cx, cy + h / 2);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawCanvasLinkIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.strokeStyle = "#A89A8C";
+  ctx.lineWidth = 1.8;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  const r = size * 0.28;
+
+  ctx.save();
+  ctx.translate(cx - 3, cy + 3);
+  ctx.rotate(-Math.PI / 4);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r * 1.3, r * 0.72, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(cx + 3, cy - 3);
+  ctx.rotate(-Math.PI / 4);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r * 1.3, r * 0.72, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.restore();
+}
+
+// ─── Gerador de Imagem PNG do Cartão de Perfil (Canvas Retina 2x) ───
 async function generateCardCanvasBlob(
   profile: UserProfileData,
   userClubsCount: number,
@@ -68,9 +139,8 @@ async function generateCardCanvasBlob(
 ): Promise<Blob | null> {
   const canvas = document.createElement("canvas");
   const scale = 2;
-  const width = 580;
-  const hasFavs = Boolean(profile.favorite_books && profile.favorite_books.length > 0);
-  const height = hasFavs ? 780 : 650;
+  const width = 500;
+  const height = 750;
 
   canvas.width = width * scale;
   canvas.height = height * scale;
@@ -89,42 +159,50 @@ async function generateCardCanvasBlob(
     ctx.closePath();
   };
 
-  // 1. Fundo do canvas
-  ctx.fillStyle = "#ffffff";
+  // 1. Fundo do canvas (escuro neutro)
+  ctx.fillStyle = "#120F0D";
   ctx.fillRect(0, 0, width, height);
 
-  // 2. Cartão principal (cor de fundo suave #f5f0eb)
-  roundRect(18, 18, width - 36, height - 36, 28);
-  ctx.fillStyle = "#f5f0eb";
+  // 2. Cartão principal (fundo #1A1613, cantos arredondados e borda sutil)
+  const pad = 16;
+  const cardW = width - pad * 2;
+  const cardH = height - pad * 2;
+  roundRect(pad, pad, cardW, cardH, 32);
+  ctx.fillStyle = "#1A1613";
   ctx.fill();
-  ctx.strokeStyle = "#e8dfd5";
+  ctx.strokeStyle = "#2E2520";
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // 3. Topo do cartão: Identificação oficial da plataforma
-  ctx.fillStyle = "#111827";
-  ctx.font = "bold 20px Georgia, serif";
+  // 3. Topo: Logo à esquerda e Perfil Literário à direita
+  const topY = 44;
+  roundRect(42, topY, 40, 40, 12);
+  ctx.fillStyle = "#241E1A";
+  ctx.fill();
+  ctx.strokeStyle = "#382E28";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  drawCanvasBookIcon(ctx, 42, topY, 40);
+
+  ctx.fillStyle = "#FAF7F2";
+  ctx.font = "bold 19px Georgia, serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText("Kuwerenga", 42, 56);
+  ctx.fillText("Kuwerenga", 92, topY + 20);
 
-  ctx.fillStyle = "#9ca3af";
+  ctx.fillStyle = "#A89887";
   ctx.font = "bold 9px sans-serif";
-  ctx.fillText("LEIA FÁCIL", 42, 69);
+  ctx.fillText("LEIA FÁCIL", 92, topY + 34);
 
-  // Badge "Perfil Literário"
-  roundRect(width - 156, 40, 114, 26, 13);
-  ctx.fillStyle = "rgba(0,0,0,0.06)";
-  ctx.fill();
-  ctx.fillStyle = "#4b5563";
+  ctx.fillStyle = "#C9BDB0";
   ctx.font = "bold 10px sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("PERFIL LITERÁRIO", width - 99, 57);
+  ctx.textAlign = "right";
+  ctx.fillText("PERFIL LITERÁRIO", width - 42, topY + 25);
 
   // 4. Avatar do Leitor
   const avatarCenterX = width / 2;
-  const avatarCenterY = 138;
-  const avatarRadius = 45;
+  const avatarCenterY = 175;
+  const avatarRadius = 56;
 
   ctx.save();
   ctx.beginPath();
@@ -157,14 +235,14 @@ async function generateCardCanvasBlob(
   }
 
   if (!avatarDrawn) {
-    ctx.fillStyle = "#1f2937";
+    ctx.fillStyle = "#261F1A";
     ctx.fillRect(
       avatarCenterX - avatarRadius,
       avatarCenterY - avatarRadius,
       avatarRadius * 2,
       avatarRadius * 2
     );
-    ctx.fillStyle = "#f9fafb";
+    ctx.fillStyle = "#FAF7F2";
     ctx.font = "bold 32px Georgia, serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -172,200 +250,153 @@ async function generateCardCanvasBlob(
   }
   ctx.restore();
 
-  // Borda branca do avatar
+  // Anel sutil do avatar
   ctx.beginPath();
   ctx.arc(avatarCenterX, avatarCenterY, avatarRadius, 0, Math.PI * 2);
-  ctx.strokeStyle = "#ffffff";
+  ctx.strokeStyle = "#3A3029";
   ctx.lineWidth = 4;
   ctx.stroke();
 
   // 5. Nome Completo e Username
-  ctx.fillStyle = "#111827";
-  ctx.font = "bold 22px Georgia, serif";
+  ctx.fillStyle = "#FAF7F2";
+  ctx.font = "bold 23px Georgia, serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText(profile.full_name, width / 2, 216);
 
-  // Chip de Username
-  const usernameText = `@${profile.username || "leitor"}`;
-  ctx.font = "12px monospace";
-  const userMetrics = ctx.measureText(usernameText);
-  const chipW = userMetrics.width + 20;
-  roundRect((width - chipW) / 2, 226, chipW, 20, 10);
-  ctx.fillStyle = "rgba(0,0,0,0.05)";
-  ctx.fill();
+  // Se o nome for longo, divide em duas linhas
+  const rawFullName = profile.full_name?.trim() || "Leitor Kuwerenga";
+  let nameLines: string[] = [];
+  if (rawFullName.length > 22 && rawFullName.includes(" ")) {
+    const parts = rawFullName.split(" ");
+    const mid = Math.ceil(parts.length / 2);
+    nameLines = [parts.slice(0, mid).join(" "), parts.slice(mid).join(" ")];
+  } else {
+    nameLines = [rawFullName];
+  }
 
-  ctx.fillStyle = "#4b5563";
-  ctx.textAlign = "center";
-  ctx.fillText(usernameText, width / 2, 240);
+  let curY = 264;
+  for (const nl of nameLines) {
+    ctx.fillText(nl, width / 2, curY);
+    curY += 26;
+  }
 
-  // 6. Bio em caixa translúcida
+  // Username
+  const cleanUsername = profile.username?.trim()
+    ? (profile.username.startsWith("@") ? profile.username : `@${profile.username}`)
+    : "@leitor";
+  ctx.fillStyle = "#9C8E80";
+  ctx.font = "12px sans-serif";
+  ctx.fillText(cleanUsername, width / 2, curY + 2);
+
+  // 6. Citação / Bio em caixa estilizada
   const rawBio = profile.bio?.trim()
-    ? `"${profile.bio}"`
-    : '"A explorar novas páginas e histórias na plataforma Kuwerenga."';
-  ctx.fillStyle = "#4b5563";
-  ctx.font = "italic 12px Georgia, serif";
+    ? `“${profile.bio}”`
+    : "“A existência em si é um mistério...”";
 
-  const words = rawBio.split(" ");
-  const lines: string[] = [];
-  let curLine = "";
-  for (let n = 0; n < words.length; n++) {
-    const testLine = curLine + words[n] + " ";
+  ctx.font = "italic 13px Georgia, serif";
+  const bioWords = rawBio.split(" ");
+  const bioLines: string[] = [];
+  let bioCurLine = "";
+  for (let n = 0; n < bioWords.length; n++) {
+    const testLine = bioCurLine + bioWords[n] + " ";
     const metrics = ctx.measureText(testLine);
-    if (metrics.width > width - 150 && n > 0) {
-      lines.push(curLine.trim());
-      curLine = words[n] + " ";
-      if (lines.length >= 2) break;
+    if (metrics.width > width - 130 && n > 0) {
+      bioLines.push(bioCurLine.trim());
+      bioCurLine = bioWords[n] + " ";
+      if (bioLines.length >= 2) break;
     } else {
-      curLine = testLine;
+      bioCurLine = testLine;
     }
   }
-  if (curLine.trim()) lines.push(curLine.trim());
+  if (bioCurLine.trim()) bioLines.push(bioCurLine.trim());
 
-  const bioBoxH = lines.length * 18 + 14;
-  const bioBoxY = 256;
-  roundRect(48, bioBoxY, width - 96, bioBoxH, 14);
-  ctx.fillStyle = "rgba(255,255,255,0.65)";
+  const bioBoxH = bioLines.length * 20 + 16;
+  const bioBoxY = curY + 22;
+  roundRect(42, bioBoxY, width - 84, bioBoxH, 16);
+  ctx.fillStyle = "#231D19";
   ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,0.04)";
-  ctx.stroke();
-
-  ctx.fillStyle = "#4b5563";
-  for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], width / 2, bioBoxY + 16 + i * 18);
-  }
-
-  // 7. Grelha de Estatísticas: 3 Caixas Individuais
-  const statsY = bioBoxY + bioBoxH + 14;
-  const totalStatsW = width - 84;
-  const statCardW = (totalStatsW - 20) / 3;
-
-  // Caixa 1: Visualizações
-  roundRect(42, statsY, statCardW, 64, 16);
-  ctx.fillStyle = "#ffffff";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,0.06)";
-  ctx.stroke();
-
-  ctx.fillStyle = "#111827";
-  ctx.font = "bold 18px monospace";
-  ctx.fillText(String(profile.views_count || 0), 42 + statCardW / 2, statsY + 28);
-  ctx.fillStyle = "#6b7280";
-  ctx.font = "bold 10px sans-serif";
-  ctx.fillText("VISUALIZAÇÕES", 42 + statCardW / 2, statsY + 48);
-
-  // Caixa 2: Clubes
-  const c2X = 42 + statCardW + 10;
-  roundRect(c2X, statsY, statCardW, 64, 16);
-  ctx.fillStyle = "#ffffff";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,0.06)";
-  ctx.stroke();
-
-  ctx.fillStyle = "#111827";
-  ctx.font = "bold 18px monospace";
-  ctx.fillText(String(userClubsCount), c2X + statCardW / 2, statsY + 28);
-  ctx.fillStyle = "#6b7280";
-  ctx.font = "bold 10px sans-serif";
-  ctx.fillText("CLUBES", c2X + statCardW / 2, statsY + 48);
-
-  // Caixa 3: Favoritos
-  const c3X = c2X + statCardW + 10;
-  roundRect(c3X, statsY, statCardW, 64, 16);
-  ctx.fillStyle = "#ffffff";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,0.06)";
-  ctx.stroke();
-
-  ctx.fillStyle = "#111827";
-  ctx.font = "bold 18px monospace";
-  ctx.fillText(String(profile.favorite_books?.length || 0), c3X + statCardW / 2, statsY + 28);
-  ctx.fillStyle = "#6b7280";
-  ctx.font = "bold 10px sans-serif";
-  ctx.fillText("FAVORITOS", c3X + statCardW / 2, statsY + 48);
-
-  let currentY = statsY + 80;
-
-  // 8. Livros Favoritos em Destaque (se existirem)
-  if (hasFavs && profile.favorite_books) {
-    ctx.fillStyle = "#9ca3af";
-    ctx.font = "bold 10px sans-serif";
-    ctx.fillText("LIVROS EM DESTAQUE", width / 2, currentY);
-    currentY += 14;
-
-    const favList = profile.favorite_books.slice(0, 3);
-    const itemW = 76;
-    const itemH = 114;
-    const gap = 16;
-    const totalFavW = favList.length * itemW + (favList.length - 1) * gap;
-    let startX = (width - totalFavW) / 2;
-
-    for (const fb of favList) {
-      roundRect(startX, currentY, itemW, itemH, 12);
-      ctx.save();
-      ctx.clip();
-
-      let bookCoverDrawn = false;
-      if (fb.cover_url) {
-        try {
-          const bImg = new Image();
-          bImg.crossOrigin = "anonymous";
-          bImg.src = fb.cover_url;
-          await new Promise<void>((res, rej) => {
-            bImg.onload = () => res();
-            bImg.onerror = () => rej();
-            setTimeout(() => rej(), 1000);
-          });
-          ctx.drawImage(bImg, startX, currentY, itemW, itemH);
-          bookCoverDrawn = true;
-        } catch {
-          bookCoverDrawn = false;
-        }
-      }
-
-      if (!bookCoverDrawn) {
-        ctx.fillStyle = "#e5e7eb";
-        ctx.fillRect(startX, currentY, itemW, itemH);
-        ctx.fillStyle = "#4b5563";
-        ctx.font = "bold 10px sans-serif";
-        ctx.textAlign = "center";
-        const titleSnippet = fb.title.split(" ").slice(0, 3).join(" ");
-        ctx.fillText(titleSnippet, startX + itemW / 2, currentY + itemH / 2);
-      }
-      ctx.restore();
-
-      ctx.strokeStyle = "rgba(0,0,0,0.12)";
-      roundRect(startX, currentY, itemW, itemH, 12);
-      ctx.stroke();
-
-      startX += itemW + gap;
-    }
-
-    currentY += itemH + 20;
-  }
-
-  // 9. Rodapé do Cartão com o LINK IMPRESSO
-  const footerY = height - 76;
-  roundRect(42, footerY, width - 84, 46, 14);
-  ctx.fillStyle = "#ffffff";
-  ctx.fill();
-  ctx.strokeStyle = "#e5e7eb";
+  ctx.strokeStyle = "#362C26";
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  ctx.fillStyle = "#111827";
-  ctx.font = "bold 12px monospace";
-  ctx.textAlign = "left";
-  const displayUrl = shareUrl.replace(/^https?:\/\//, "");
-  ctx.fillText(displayUrl, 58, footerY + 28);
-
-  roundRect(width - 132, footerY + 10, 76, 26, 8);
-  ctx.fillStyle = "#111827";
-  ctx.fill();
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 10px sans-serif";
+  ctx.fillStyle = "#D1C3B4";
+  ctx.font = "italic 13px Georgia, serif";
   ctx.textAlign = "center";
-  ctx.fillText("ACEDER", width - 94, footerY + 26);
+  ctx.textBaseline = "middle";
+  for (let i = 0; i < bioLines.length; i++) {
+    const lineY = bioBoxY + (bioBoxH / (bioLines.length + 1)) * (i + 1);
+    ctx.fillText(bioLines[i], width / 2, lineY);
+  }
+
+  // 7. Grelha de Estatísticas: 3 Caixas Individuais
+  const statsY = bioBoxY + bioBoxH + 20;
+  const statsTotalW = width - 84;
+  const statBoxW = (statsTotalW - 16) / 3;
+
+  const stats = [
+    { value: String(profile.views_count || 0), label: "VISUALIZAÇÕES" },
+    { value: String(userClubsCount), label: "CLUBES" },
+    { value: String(profile.favorite_books?.length || 0), label: "FAVORITOS" }
+  ];
+
+  stats.forEach((st, idx) => {
+    const boxX = 42 + idx * (statBoxW + 8);
+    roundRect(boxX, statsY, statBoxW, 72, 18);
+    ctx.fillStyle = "#211B17";
+    ctx.fill();
+    ctx.strokeStyle = "#332A24";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = "#FAF7F2";
+    ctx.font = "bold 20px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(st.value, boxX + statBoxW / 2, statsY + 34);
+
+    ctx.fillStyle = "#A89A8C";
+    ctx.font = "bold 9.5px sans-serif";
+    ctx.fillText(st.label, boxX + statBoxW / 2, statsY + 54);
+  });
+
+  // 8. Rodapé Pílula do Cartão com Link e Botão ACEDER
+  const footerY = height - 90;
+  const pillW = width - 84;
+  roundRect(42, footerY, pillW, 54, 27);
+  ctx.fillStyle = "#1F1916";
+  ctx.fill();
+  ctx.strokeStyle = "#362D27";
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  // Ícone de link
+  drawCanvasLinkIcon(ctx, 56, footerY + 16, 22);
+
+  // Link abreviado
+  let cleanDomain = shareUrl.replace(/^https?:\/\//, "");
+  if (cleanDomain.length > 20) {
+    cleanDomain = cleanDomain.substring(0, 17) + "...";
+  }
+  ctx.fillStyle = "#FAF7F2";
+  ctx.font = "bold 13px monospace";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(cleanDomain, 88, footerY + 28);
+
+  // Botão preto tipo pílula ACEDER
+  const btnW = 92;
+  const btnH = 38;
+  const btnX = 42 + pillW - btnW - 8;
+  const btnY = footerY + 8;
+  roundRect(btnX, btnY, btnW, btnH, 19);
+  ctx.fillStyle = "#000000";
+  ctx.fill();
+
+  ctx.fillStyle = "#FFFFFF";
+  ctx.font = "bold 11px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("ACEDER", btnX + btnW / 2, btnY + btnH / 2);
 
   return new Promise((resolve) => {
     canvas.toBlob((blob) => resolve(blob), "image/png");
@@ -2016,34 +2047,34 @@ export default function Profile() {
               </button>
             </div>
 
-            {/* Conteúdo com Scroll */}
+            {/* Conteúdo com Scroll Suave e Responsivo */}
             <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar pr-0.5">
               
-              {/* Cartão de Pré-visualização Estilizado e Responsivo */}
-              <div className="bg-[#f5f0eb] dark:bg-gray-850/90 border border-[#e8dfd5] dark:border-gray-700/80 rounded-3xl p-5 sm:p-6 shadow-sm relative overflow-hidden space-y-4">
-                {/* Linha Superior: Logo Oficial & Selo de Leitor */}
-                <div className="flex items-center justify-between pb-1 border-b border-black/5 dark:border-white/5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs">
-                      <BookOpen className="w-4 h-4" />
+              {/* Cartão de Pré-visualização Estilizado e Fiel à Imagem */}
+              <div className="bg-[#1A1613] border border-[#2F2620] rounded-[32px] p-5 sm:p-6 shadow-2xl relative overflow-hidden space-y-4 text-[#FAF7F2] max-w-sm w-full mx-auto">
+                {/* Linha Superior: Logo Oficial & Perfil Literário */}
+                <div className="flex items-center justify-between pb-1">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-[#241E1A] border border-[#382E28] flex items-center justify-center shadow-xs shrink-0 text-[#FAF7F2]">
+                      <BookOpen className="w-4.5 h-4.5" />
                     </div>
                     <div>
-                      <span className="font-serif text-sm font-bold tracking-tight block leading-none">
+                      <span className="font-serif text-base font-bold tracking-tight block leading-tight text-[#FAF7F2]">
                         Kuwerenga
                       </span>
-                      <span className="text-[9px] uppercase tracking-widest text-gray-400 font-bold">
+                      <span className="text-[9px] uppercase tracking-[0.2em] text-[#A89887] font-bold block">
                         Leia Fácil
                       </span>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-black/5 dark:bg-white/10 text-gray-700 dark:text-gray-300 border border-black/5 dark:border-white/5">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#C9BDB0]">
                     Perfil Literário
                   </span>
                 </div>
 
-                {/* Secção Central: Avatar, Nome, Username e Bio */}
-                <div className="flex flex-col items-center text-center pt-1">
-                  <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-full ring-4 ring-white dark:ring-gray-750 shadow-md overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center mb-3">
+                {/* Secção Central: Avatar, Nome, Username e Citação */}
+                <div className="flex flex-col items-center text-center pt-2">
+                  <div className="w-22 h-22 sm:w-24 sm:h-24 rounded-full ring-4 ring-[#3A3029] shadow-lg overflow-hidden bg-[#241E1A] flex items-center justify-center mb-3">
                     {profile.avatar_url ? (
                       <img
                         src={profile.avatar_url}
@@ -2051,94 +2082,64 @@ export default function Profile() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <span className="font-serif font-bold text-2xl text-gray-700 dark:text-gray-200">
+                      <span className="font-serif font-bold text-2xl text-[#FAF7F2]">
                         {getInitials(profile.full_name)}
                       </span>
                     )}
                   </div>
 
-                  <h4 className="font-serif text-xl sm:text-2xl font-bold tracking-tight leading-tight mb-1 text-black dark:text-white">
+                  <h4 className="font-serif text-xl sm:text-2xl font-bold tracking-tight leading-tight mb-1 text-[#FAF7F2] max-w-xs">
                     {profile.full_name}
                   </h4>
-                  <div className="inline-block px-2.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-xs font-mono text-gray-600 dark:text-gray-400 mb-2.5">
-                    @{profile.username || "leitor"}
+                  <div className="text-xs font-mono text-[#9C8E80] mb-3">
+                    {profile.username ? (profile.username.startsWith("@") ? profile.username : `@${profile.username}`) : "@leitor"}
                   </div>
 
-                  <div className="bg-white/70 dark:bg-gray-800/70 rounded-2xl px-4 py-2.5 border border-black/5 dark:border-white/5 text-center text-xs text-gray-600 dark:text-gray-300 italic max-w-sm w-full leading-relaxed shadow-2xs">
-                    &ldquo;{profile.bio?.trim() ? profile.bio : "A explorar novas páginas e histórias na plataforma Kuwerenga."}&rdquo;
+                  {/* Bio / Citação em Caixa Arredondada */}
+                  <div className="bg-[#231D19] rounded-2xl px-4 py-3 border border-[#362C26] text-center text-xs sm:text-sm text-[#D1C3B4] italic w-full leading-relaxed shadow-xs">
+                    &ldquo;{profile.bio?.trim() ? profile.bio : "A existência em si é um mistério..."}&rdquo;
                   </div>
                 </div>
 
-                {/* Grelha de Estatísticas: 3 Caixas Individuais e Organizadas */}
-                <div className="grid grid-cols-3 gap-2 sm:gap-3 text-center">
-                  <div className="bg-white/80 dark:bg-gray-800/80 rounded-2xl p-2.5 sm:p-3 border border-black/5 dark:border-white/5 shadow-2xs">
-                    <span className="block text-base sm:text-lg font-bold font-mono leading-tight text-black dark:text-white">
+                {/* Grelha de Estatísticas: 3 Caixas Individuais */}
+                <div className="grid grid-cols-3 gap-2 text-center pt-1">
+                  <div className="bg-[#211B17] rounded-2xl p-3 border border-[#332A24] shadow-xs">
+                    <span className="block text-lg font-bold font-mono text-[#FAF7F2]">
                       {profile.views_count || 0}
                     </span>
-                    <span className="text-[10px] sm:text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <span className="text-[9px] sm:text-[10px] font-bold text-[#A89A8C] uppercase tracking-wider block mt-0.5">
                       Visualizações
                     </span>
                   </div>
-                  <div className="bg-white/80 dark:bg-gray-800/80 rounded-2xl p-2.5 sm:p-3 border border-black/5 dark:border-white/5 shadow-2xs">
-                    <span className="block text-base sm:text-lg font-bold font-mono leading-tight text-black dark:text-white">
+                  <div className="bg-[#211B17] rounded-2xl p-3 border border-[#332A24] shadow-xs">
+                    <span className="block text-lg font-bold font-mono text-[#FAF7F2]">
                       {userClubs.length}
                     </span>
-                    <span className="text-[10px] sm:text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <span className="text-[9px] sm:text-[10px] font-bold text-[#A89A8C] uppercase tracking-wider block mt-0.5">
                       Clubes
                     </span>
                   </div>
-                  <div className="bg-white/80 dark:bg-gray-800/80 rounded-2xl p-2.5 sm:p-3 border border-black/5 dark:border-white/5 shadow-2xs">
-                    <span className="block text-base sm:text-lg font-bold font-mono leading-tight text-black dark:text-white">
+                  <div className="bg-[#211B17] rounded-2xl p-3 border border-[#332A24] shadow-xs">
+                    <span className="block text-lg font-bold font-mono text-[#FAF7F2]">
                       {profile.favorite_books?.length || 0}
                     </span>
-                    <span className="text-[10px] sm:text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <span className="text-[9px] sm:text-[10px] font-bold text-[#A89A8C] uppercase tracking-wider block mt-0.5">
                       Favoritos
                     </span>
                   </div>
                 </div>
 
-                {/* Livros Favoritos em Destaque (Proporção Real 2:3) */}
-                {profile.favorite_books && profile.favorite_books.length > 0 && (
-                  <div className="space-y-2 pt-1">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 block text-center">
-                      Livros em Destaque
-                    </span>
-                    <div className="flex justify-center items-center gap-3 sm:gap-4">
-                      {profile.favorite_books.map((fb, idx) => (
-                        <div
-                          key={idx}
-                          className="w-14 sm:w-16 aspect-[2/3] rounded-xl bg-gray-100 dark:bg-gray-750 border border-black/10 dark:border-white/10 overflow-hidden shadow-xs shrink-0 group relative"
-                          title={fb.title}
-                        >
-                          {fb.cover_url ? (
-                            <img
-                              src={fb.cover_url}
-                              alt={fb.title}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center p-1 text-[8px] text-center font-bold text-gray-500 dark:text-gray-300">
-                              <BookOpen className="w-3.5 h-3.5 mb-1 opacity-60" />
-                              <span className="line-clamp-2 leading-tight">{fb.title}</span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Rodapé Integrado no Próprio Cartão com o Link Oficial */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-2.5 sm:p-3 border border-black/5 dark:border-white/10 shadow-2xs flex items-center justify-between gap-3">
+                {/* Rodapé Pílula do Cartão com Link e Botão Aceder */}
+                <div className="bg-[#1F1916] rounded-full p-2 pl-3.5 border border-[#362D27] flex items-center justify-between gap-2 shadow-xs">
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="p-1 rounded-md bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 shrink-0">
-                      <LinkIcon className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="text-xs font-mono font-medium text-gray-700 dark:text-gray-200 truncate">
-                      {profileShareUrl.replace(/^https?:\/\//, "")}
+                    <LinkIcon className="w-3.5 h-3.5 text-[#A89A8C] shrink-0" />
+                    <span className="text-xs font-mono font-medium text-[#FAF7F2] truncate">
+                      {profileShareUrl.replace(/^https?:\/\//, "").length > 22
+                        ? profileShareUrl.replace(/^https?:\/\//, "").substring(0, 19) + "..."
+                        : profileShareUrl.replace(/^https?:\/\//, "")}
                     </span>
                   </div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-xl bg-black dark:bg-white text-white dark:text-black shrink-0 shadow-2xs">
+                  <span className="text-[11px] font-bold uppercase tracking-wider px-4 py-1.5 rounded-full bg-black text-white shrink-0">
                     Aceder
                   </span>
                 </div>
