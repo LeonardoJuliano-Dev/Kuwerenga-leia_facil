@@ -80,9 +80,44 @@ export default function Profile() {
   // Navegação por abas superiores (estilo captura enviada)
   const [activeTab, setActiveTab] = useState<"profile" | "notes" | "bookmarks" | "clubs">("profile");
 
-  // Menu de 3 Pontinhos (...)
-  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  // Menus de 3 Pontinhos (...)
+  const [showTopOptionsMenu, setShowTopOptionsMenu] = useState(false);
+  const [showCardOptionsMenu, setShowCardOptionsMenu] = useState(false);
+  const topMenuRef = useRef<HTMLDivElement | null>(null);
+  const cardMenuRef = useRef<HTMLDivElement | null>(null);
   const [copyFeedback, setCopyFeedback] = useState(false);
+
+  // Fecha qualquer menu de 3 pontinhos ao clicar em qualquer outra parte do ecrã ou pressionar Escape
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
+      const target = event.target as Node;
+      if (topMenuRef.current && !topMenuRef.current.contains(target)) {
+        setShowTopOptionsMenu(false);
+      }
+      if (cardMenuRef.current && !cardMenuRef.current.contains(target)) {
+        setShowCardOptionsMenu(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setShowTopOptionsMenu(false);
+        setShowCardOptionsMenu(false);
+      }
+    }
+
+    if (showTopOptionsMenu || showCardOptionsMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showTopOptionsMenu, showCardOptionsMenu]);
 
   // Modal: Editar Perfil
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
@@ -506,7 +541,8 @@ export default function Profile() {
           text: `Espreita o perfil literário de ${profile.full_name} na aplicação Kuwerenga.`,
           url: profileUrl,
         });
-        setShowOptionsMenu(false);
+        setShowTopOptionsMenu(false);
+        setShowCardOptionsMenu(false);
         return;
       } catch {}
     }
@@ -517,7 +553,8 @@ export default function Profile() {
       setCopyFeedback(true);
       setTimeout(() => {
         setCopyFeedback(false);
-        setShowOptionsMenu(false);
+        setShowTopOptionsMenu(false);
+        setShowCardOptionsMenu(false);
       }, 1500);
     } catch {}
   };
@@ -616,6 +653,17 @@ export default function Profile() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-24 md:pb-12 md:pt-16 select-none">
+      {/* Backdrop transparente para fechar os menus de opções flutuantes ao clicar em qualquer outra parte */}
+      {(showTopOptionsMenu || showCardOptionsMenu) && (
+        <div
+          className="fixed inset-0 z-40 bg-transparent"
+          onClick={() => {
+            setShowTopOptionsMenu(false);
+            setShowCardOptionsMenu(false);
+          }}
+          aria-hidden="true"
+        />
+      )}
       
       {/* ─── Top Header da Página (Título e Abas) ─── */}
       <header className="px-4 sm:px-6 pt-safe bg-gray-50 dark:bg-black border-b border-gray-200/80 dark:border-gray-900 sticky top-0 z-30">
@@ -636,28 +684,32 @@ export default function Profile() {
               <h1 className="font-serif text-2xl font-bold tracking-tight">Perfil</h1>
             </div>
 
-            {/* Menu de Opções Rápido */}
-            <div className="relative">
+            {/* Menu de Opções Rápido no Topo */}
+            <div className="relative" ref={topMenuRef}>
               <button
                 type="button"
-                onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+                onClick={() => {
+                  setShowTopOptionsMenu((prev) => !prev);
+                  setShowCardOptionsMenu(false);
+                }}
                 className="p-2 rounded-full hover:bg-gray-200/60 dark:hover:bg-gray-800 transition-colors"
                 title="Mais opções"
+                aria-label="Mais opções do perfil"
               >
                 <MoreHorizontal className="w-5 h-5" />
               </button>
 
               {/* Popover Dropdown de Opções */}
-              {showOptionsMenu && (
+              {showTopOptionsMenu && (
                 <div className="absolute right-0 top-10 w-48 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl py-1 z-50 text-xs animate-in zoom-in-95 duration-150">
                   {isOwnProfile && (
                     <button
                       type="button"
                       onClick={() => {
-                        setShowOptionsMenu(false);
+                        setShowTopOptionsMenu(false);
                         setShowEditProfileModal(true);
                       }}
-                      className="w-full px-4 py-2.5 text-left flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold"
+                      className="w-full px-4 py-2.5 text-left flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold text-black dark:text-white"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                       <span>Editar Perfil</span>
@@ -666,8 +718,11 @@ export default function Profile() {
 
                   <button
                     type="button"
-                    onClick={handleShareProfile}
-                    className="w-full px-4 py-2.5 text-left flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold"
+                    onClick={() => {
+                      handleShareProfile();
+                      setShowTopOptionsMenu(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold text-black dark:text-white"
                   >
                     {copyFeedback ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
                     <span>{copyFeedback ? "Link Copiado!" : "Partilhar Perfil"}</span>
@@ -677,10 +732,10 @@ export default function Profile() {
                     <button
                       type="button"
                       onClick={() => {
-                        setShowOptionsMenu(false);
+                        setShowTopOptionsMenu(false);
                         navigate("/settings");
                       }}
-                      className="w-full px-4 py-2.5 text-left flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold border-t border-gray-100 dark:border-gray-800"
+                      className="w-full px-4 py-2.5 text-left flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold border-t border-gray-100 dark:border-gray-800 text-black dark:text-white"
                     >
                       <SettingsIcon className="w-3.5 h-3.5" />
                       <span>Configurações</span>
@@ -787,16 +842,65 @@ export default function Profile() {
             {/* O Grande Cartão de Perfil (Fiel à captura 1) */}
             <div className="bg-[#f5f0eb] dark:bg-gray-900/80 border border-[#e8dfd5] dark:border-gray-800 rounded-3xl p-5 sm:p-6 shadow-xs relative">
               
-              {/* Botão de 3 Pontinhos no topo direito do cartão */}
-              <div className="flex justify-end">
+              {/* Botão e Menu de 3 Pontinhos no topo direito do cartão */}
+              <div className="flex justify-end relative" ref={cardMenuRef}>
                 <button
                   type="button"
-                  onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+                  onClick={() => {
+                    setShowCardOptionsMenu((prev) => !prev);
+                    setShowTopOptionsMenu(false);
+                  }}
                   className="p-1 rounded-full text-gray-500 hover:text-black dark:hover:text-white transition-colors"
                   title="Opções do perfil"
+                  aria-label="Abrir opções do perfil"
                 >
                   <MoreHorizontal className="w-5 h-5" />
                 </button>
+
+                {/* Popover Dropdown de Opções do Cartão */}
+                {showCardOptionsMenu && (
+                  <div className="absolute right-0 top-8 w-48 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl py-1 z-50 text-xs animate-in zoom-in-95 duration-150">
+                    {isOwnProfile && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCardOptionsMenu(false);
+                          setShowEditProfileModal(true);
+                        }}
+                        className="w-full px-4 py-2.5 text-left flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold text-black dark:text-white"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Editar Perfil</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleShareProfile();
+                        setShowCardOptionsMenu(false);
+                      }}
+                      className="w-full px-4 py-2.5 text-left flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold text-black dark:text-white"
+                    >
+                      {copyFeedback ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
+                      <span>{copyFeedback ? "Link Copiado!" : "Partilhar Perfil"}</span>
+                    </button>
+
+                    {isOwnProfile && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCardOptionsMenu(false);
+                          navigate("/settings");
+                        }}
+                        className="w-full px-4 py-2.5 text-left flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold border-t border-gray-100 dark:border-gray-800 text-black dark:text-white"
+                      >
+                        <SettingsIcon className="w-3.5 h-3.5" />
+                        <span>Configurações</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Linha Superior: Visualizações | Avatar Central | Clubes */}
