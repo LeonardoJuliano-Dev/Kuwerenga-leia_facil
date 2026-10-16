@@ -25,6 +25,7 @@ import { EXPANDED_CATEGORIES, loadAndSyncCategories, type AppCategory } from "..
 import {
   checkIsAdmin,
   fetchBooksForSale,
+  syncLocalStoreBooksToSupabase,
   deleteBookAsAdmin,
   type BookSaleItem
 } from "../lib/storeService";
@@ -116,6 +117,14 @@ export default function Explore() {
         // 4. Livros à venda
         const saleItems = await fetchBooksForSale();
         setStoreBooks(saleItems);
+
+        // Se for administrador, sincroniza automaticamente qualquer livro pendente local para o Supabase
+        if (adminStatus) {
+          syncLocalStoreBooksToSupabase().then(async () => {
+            const refreshed = await fetchBooksForSale();
+            setStoreBooks(refreshed);
+          });
+        }
       } catch (err) {
         console.error("Erro ao carregar catálogo:", err);
       } finally {
@@ -185,8 +194,8 @@ export default function Explore() {
       return matchesSearch && matchesCategory && b.is_approved === false;
     }
 
-    // 2. Se o utilizador NÃO for admin, oculta qualquer livro doado pendente de moderação
-    if (!isAdmin && b.is_approved === false) {
+    // 2. Se o utilizador NÃO for admin, oculta qualquer livro doado pendente de moderação (livros à venda são sempre visíveis)
+    if (!isAdmin && b.is_approved === false && !b.is_for_sale) {
       return false;
     }
 
@@ -317,6 +326,11 @@ export default function Explore() {
       }
       return [saved, ...prev];
     });
+
+    // Sincroniza em segundo plano com o Supabase para que outros utilizadores vejam de imediato
+    syncLocalStoreBooksToSupabase().catch((e) =>
+      console.warn("Aviso ao sincronizar livro salvo com Supabase:", e)
+    );
   };
 
   const storeCount = allCombinedBooks.filter((b) => b.is_for_sale).length;

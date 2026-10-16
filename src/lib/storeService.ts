@@ -26,6 +26,18 @@ export interface BookSaleItem {
   rating_comment?: string;
 }
 
+export function isValidUuid(str?: string | null): boolean {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+}
+
+export function ensureValidUuid(id?: string | null): string {
+  if (id && isValidUuid(id)) {
+    return id;
+  }
+  return crypto.randomUUID();
+}
+
 const LOCAL_STORE_BOOKS_KEY = "kuwerenga_custom_store_books";
 
 /**
@@ -160,7 +172,42 @@ export function buildWhatsAppLink(book: {
 }
 
 /**
- * Carrega a lista de livros para venda
+ * Sincroniza livros locais pendentes para o Supabase para que fiquem visíveis para todos os utilizadores
+ */
+export async function syncLocalStoreBooksToSupabase(): Promise<void> {
+  const localItems = getLocalStoreBooks();
+  if (localItems.length === 0) return;
+
+  for (const item of localItems) {
+    try {
+      const validId = ensureValidUuid(item.id);
+      const isTempId = item.id !== validId || item.id.startsWith("sale_");
+
+      if (isTempId) {
+        await upsertBookForSale({
+          ...item,
+          id: validId,
+        });
+        removeLocalStoreBook(item.id);
+      } else {
+        const { data: existing } = await supabase
+          .from("books")
+          .select("id")
+          .eq("id", validId)
+          .maybeSingle();
+
+        if (!existing) {
+          await upsertBookForSale(item);
+        }
+      }
+    } catch (err) {
+      console.warn("Erro ao sincronizar livro local para o Supabase:", err);
+    }
+  }
+}
+
+/**
+ * Carrega a lista de livros para venda (do Supabase para todos os utilizadores)
  */
 export async function fetchBooksForSale(): Promise<BookSaleItem[]> {
   try {
@@ -187,29 +234,36 @@ export async function fetchBooksForSale(): Promise<BookSaleItem[]> {
 }
 
 /**
- * Adiciona ou edita um livro no catálogo
+ * Adiciona ou edita um livro no catálogo do Supabase
  */
 export async function upsertBookForSale(bookData: Partial<BookSaleItem>): Promise<BookSaleItem> {
   const { data: { user } } = await supabase.auth.getUser();
 
-  const id = bookData.id || `sale_${Date.now()}`;
+  const originalId = bookData.id;
+  const id = ensureValidUuid(bookData.id);
+
+  // Se o category_id não for UUID válido (ex: 'cat-romance'), não pode ir para coluna UUID no Postgres
+  const validCategoryId = isValidUuid(bookData.category_id) ? bookData.category_id : null;
+
+  // Garante URL de ficheiro não vazio caso a tabela tenha restrição NOT NULL
+  const safeFileUrl = bookData.file_url?.trim() || bookData.cover_url || "https://kuwerenga.app/store/physical";
+
   const completeItem: BookSaleItem = {
     id,
     title: bookData.title?.trim() || "Livro sem título",
     author: bookData.author?.trim() || "Autor desconhecido",
     description: bookData.description || null,
     cover_url: bookData.cover_url || null,
-    file_url: bookData.file_url || "",
+    file_url: safeFileUrl,
     file_type: (bookData.file_type as any) || "physical",
     is_for_sale: true,
     price: Number(bookData.price) || 0,
     currency: bookData.currency || "MT",
     stock_status: bookData.stock_status || "available",
     seller_whatsapp: formatWhatsAppNumber(bookData.seller_whatsapp || ""),
-    category_id: bookData.category_id || null,
+    category_id: validCategoryId,
     uploaded_by: user?.id,
     created_at: bookData.created_at || new Date().toISOString(),
-    // Novos campos
     seller_name: bookData.seller_name?.trim() || undefined,
     seller_type: bookData.seller_type || "independent",
     location: bookData.location?.trim() || undefined,
@@ -220,7 +274,7 @@ export async function upsertBookForSale(bookData: Partial<BookSaleItem>): Promis
   };
 
   try {
-    // 1. Tenta gravar com todos os campos no Supabase
+    // 1. Tenta gravar com todos os campos no Supabase com is_approved = true
     const { data, error } = await supabase
       .from("books")
       .upsert({
@@ -231,38 +285,49 @@ export async function upsertBookForSale(bookData: Partial<BookSaleItem>): Promis
       .single();
 
     if (!error && data) {
+      if (originalId && originalId !== id) {
+        removeLocalStoreBook(originalId);
+      }
       saveLocalStoreBook({ ...completeItem, ...(data as any) });
       return { ...completeItem, ...(data as any) };
     }
 
-    // 2. Se falhar por colunas adicionais não criadas no schema remoto, grava com campos base
+    // 2. Se falhar por colunas adicionais não criadas no schema remoto ou restrição de file_type
     if (error) {
+      console.warn("Primeira tentativa de gravação no Supabase falhou, a tentar compatibilidade:", error.message);
+
       const basePayload: any = {
         id: completeItem.id,
         title: completeItem.title,
         author: completeItem.author,
         description: completeItem.description,
         cover_url: completeItem.cover_url,
-        file_url: completeItem.file_url,
-        file_type: completeItem.file_type,
+        file_url: safeFileUrl,
+        file_type: completeItem.file_type === "physical" ? "pdf" : completeItem.file_type,
         is_for_sale: true,
         price: completeItem.price,
         currency: completeItem.currency,
         stock_status: completeItem.stock_status,
         seller_whatsapp: completeItem.seller_whatsapp,
-        category_id: completeItem.category_id,
+        category_id: validCategoryId,
+        uploaded_by: user?.id,
         is_approved: true,
       };
 
-      const { data: baseData } = await supabase
+      const { data: baseData, error: baseError } = await supabase
         .from("books")
         .upsert(basePayload)
         .select()
         .single();
 
-      if (baseData) {
-        saveLocalStoreBook({ ...completeItem, ...(baseData as any) });
-        return { ...completeItem, ...(baseData as any) };
+      if (!baseError && baseData) {
+        if (originalId && originalId !== id) {
+          removeLocalStoreBook(originalId);
+        }
+        saveLocalStoreBook({ ...completeItem, ...(baseData as any), file_type: completeItem.file_type });
+        return { ...completeItem, ...(baseData as any), file_type: completeItem.file_type };
+      } else if (baseError) {
+        console.error("Segunda tentativa de gravação no Supabase também falhou:", baseError.message);
       }
     }
   } catch (err) {
@@ -270,6 +335,9 @@ export async function upsertBookForSale(bookData: Partial<BookSaleItem>): Promis
   }
 
   // Grava localmente garantindo persistência imediata
+  if (originalId && originalId !== id) {
+    removeLocalStoreBook(originalId);
+  }
   saveLocalStoreBook(completeItem);
   return completeItem;
 }
