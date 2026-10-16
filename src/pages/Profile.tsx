@@ -20,7 +20,8 @@ import {
   Edit3,
   Check,
   Moon,
-  AlertTriangle
+  AlertTriangle,
+  Copy
 } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
@@ -85,7 +86,8 @@ export default function Profile() {
   const [showCardOptionsMenu, setShowCardOptionsMenu] = useState(false);
   const topMenuRef = useRef<HTMLDivElement | null>(null);
   const cardMenuRef = useRef<HTMLDivElement | null>(null);
-  const [copyFeedback, setCopyFeedback] = useState(false);
+  const [showSharePreviewModal, setShowSharePreviewModal] = useState(false);
+  const [shareCopyFeedback, setShareCopyFeedback] = useState(false);
 
   // Fecha qualquer menu de 3 pontinhos ao clicar em qualquer outra parte do ecrã ou pressionar Escape
   useEffect(() => {
@@ -529,34 +531,39 @@ export default function Profile() {
     await updateUserProfile(currentUserId, { favorite_books: updatedFavs });
   };
 
-  // ─── 7. Partilhar Perfil ───
-  const handleShareProfile = async () => {
-    if (!profile) return;
-    const profileUrl = `${window.location.origin}/profile/${profile.id}`;
+  // ─── 7. Partilhar Perfil com Pré-visualização ───
+  const profileShareUrl = typeof window !== "undefined" && profile
+    ? `${window.location.origin}/profile/${profile.id}`
+    : "";
 
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Perfil de ${profile.full_name} | Kuwerenga`,
-          text: `Espreita o perfil literário de ${profile.full_name} na aplicação Kuwerenga.`,
-          url: profileUrl,
-        });
-        setShowTopOptionsMenu(false);
-        setShowCardOptionsMenu(false);
-        return;
-      } catch {}
-    }
+  const handleOpenShareModal = () => {
+    setShowTopOptionsMenu(false);
+    setShowCardOptionsMenu(false);
+    setShowSharePreviewModal(true);
+  };
 
-    // Fallback: Copiar para área de transferência
+  const handleCopyShareLink = async () => {
+    if (!profileShareUrl) return;
     try {
-      await navigator.clipboard.writeText(profileUrl);
-      setCopyFeedback(true);
-      setTimeout(() => {
-        setCopyFeedback(false);
-        setShowTopOptionsMenu(false);
-        setShowCardOptionsMenu(false);
-      }, 1500);
-    } catch {}
+      await navigator.clipboard.writeText(profileShareUrl);
+      setShareCopyFeedback(true);
+      setTimeout(() => setShareCopyFeedback(false), 2000);
+    } catch (err) {
+      console.error("Erro ao copiar link:", err);
+    }
+  };
+
+  const handleNativeShare = async () => {
+    if (!profile || typeof navigator === "undefined" || !navigator.share) return;
+    try {
+      await navigator.share({
+        title: `Perfil de ${profile.full_name} | Kuwerenga`,
+        text: `Espreita o perfil literário de ${profile.full_name} na plataforma Kuwerenga.`,
+        url: profileShareUrl,
+      });
+    } catch {
+      // Utilizador cancelou a partilha nativa
+    }
   };
 
   // ─── 8. Eliminar Anotações ───
@@ -718,14 +725,11 @@ export default function Profile() {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      handleShareProfile();
-                      setShowTopOptionsMenu(false);
-                    }}
+                    onClick={handleOpenShareModal}
                     className="w-full px-4 py-2.5 text-left flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold text-black dark:text-white"
                   >
-                    {copyFeedback ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
-                    <span>{copyFeedback ? "Link Copiado!" : "Partilhar Perfil"}</span>
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>Partilhar Perfil</span>
                   </button>
 
                   {isOwnProfile && (
@@ -876,14 +880,11 @@ export default function Profile() {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        handleShareProfile();
-                        setShowCardOptionsMenu(false);
-                      }}
+                      onClick={handleOpenShareModal}
                       className="w-full px-4 py-2.5 text-left flex items-center gap-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold text-black dark:text-white"
                     >
-                      {copyFeedback ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
-                      <span>{copyFeedback ? "Link Copiado!" : "Partilhar Perfil"}</span>
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>Partilhar Perfil</span>
                     </button>
 
                     {isOwnProfile && (
@@ -1655,6 +1656,209 @@ export default function Profile() {
                 className="px-5 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-bold active:scale-95 transition-all shadow-xs"
               >
                 {processingDelete ? "A agendar..." : "Confirmar Eliminação (7 dias)"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════ */}
+      {/* MODAL: PRÉ-VISUALIZAÇÃO E PARTILHA DE PERFIL               */}
+      {/* ══════════════════════════════════════════════════════════ */}
+      {showSharePreviewModal && profile && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowSharePreviewModal(false);
+          }}
+        >
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl max-w-md w-full max-h-[90vh] flex flex-col p-5 sm:p-6 shadow-2xl animate-in zoom-in-95 duration-200 text-black dark:text-white">
+            
+            {/* Cabeçalho do Modal */}
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-800 mb-4">
+              <div>
+                <h3 className="font-bold text-base">Partilhar Perfil</h3>
+                <span className="text-[11px] text-gray-500 dark:text-gray-400">Pré-visualização do teu cartão de leitor</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSharePreviewModal(false)}
+                className="p-1.5 rounded-full text-gray-400 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                aria-label="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Conteúdo com Scroll */}
+            <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar pr-0.5">
+              
+              {/* Cartão de Pré-visualização Estilizado */}
+              <div className="bg-[#f5f0eb] dark:bg-gray-800/90 border border-[#e8dfd5] dark:border-gray-700 rounded-3xl p-5 shadow-xs relative overflow-hidden">
+                {/* Cabeçalho do Cartão */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4 text-black dark:text-white" />
+                    <span className="font-serif text-xs font-bold tracking-tight">Kuwerenga</span>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300">
+                    Leitor
+                  </span>
+                </div>
+
+                {/* Avatar e Dados do Leitor */}
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-16 h-16 rounded-full border-2 border-white dark:border-gray-700 shadow-sm overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center mb-2.5">
+                    {profile.avatar_url ? (
+                      <img
+                        src={profile.avatar_url}
+                        alt={profile.full_name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="font-serif font-bold text-lg text-gray-700 dark:text-gray-200">
+                        {getInitials(profile.full_name)}
+                      </span>
+                    )}
+                  </div>
+
+                  <h4 className="font-serif text-lg font-bold tracking-tight leading-snug">
+                    {profile.full_name}
+                  </h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-2">
+                    @{profile.username || "leitor"}
+                  </p>
+
+                  <p className="text-xs text-gray-600 dark:text-gray-300 italic max-w-xs leading-relaxed mb-3">
+                    &ldquo;{profile.bio?.trim() ? profile.bio : "A explorar novas páginas e histórias na plataforma Kuwerenga."}&rdquo;
+                  </p>
+                </div>
+
+                {/* Estatísticas no Cartão de Partilha */}
+                <div className="grid grid-cols-3 gap-2 py-2.5 px-3 bg-white/70 dark:bg-gray-900/60 rounded-2xl border border-black/5 dark:border-white/5 mb-3 text-center">
+                  <div>
+                    <span className="block text-sm font-bold leading-tight">
+                      {profile.views_count || 0}
+                    </span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                      Visualizações
+                    </span>
+                  </div>
+                  <div className="border-x border-gray-200/60 dark:border-gray-700/60">
+                    <span className="block text-sm font-bold leading-tight">
+                      {userClubs.length}
+                    </span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                      Clubes
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-sm font-bold leading-tight">
+                      {profile.favorite_books?.length || 0}
+                    </span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                      Favoritos
+                    </span>
+                  </div>
+                </div>
+
+                {/* Livros Favoritos em Miniatura */}
+                {profile.favorite_books && profile.favorite_books.length > 0 && (
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 block mb-2 text-center">
+                      Livros em Destaque
+                    </span>
+                    <div className="flex justify-center items-center gap-2">
+                      {profile.favorite_books.map((fb, idx) => (
+                        <div
+                          key={idx}
+                          className="w-12 h-16 rounded-lg bg-gray-100 dark:bg-gray-700 border border-black/10 dark:border-white/10 overflow-hidden shadow-2xs shrink-0"
+                          title={fb.title}
+                        >
+                          {fb.cover_url ? (
+                            <img
+                              src={fb.cover_url}
+                              alt={fb.title}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center p-1 text-[8px] text-center font-bold text-gray-400 line-clamp-3">
+                              {fb.title}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Bloco de Copiar Link */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Link Direto do Perfil
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-600 dark:text-gray-300 truncate select-all">
+                    {profileShareUrl}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyShareLink}
+                    className="px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold shrink-0 active:scale-95 transition-all flex items-center gap-1.5 shadow-xs"
+                  >
+                    {shareCopyFeedback ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copiar</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Botões de Ação de Partilha Social */}
+              <div className="space-y-2 pt-1">
+                {/* Partilhar no WhatsApp */}
+                <a
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                    `Espreita o perfil literário de ${profile.full_name} na plataforma Kuwerenga:\n${profileShareUrl}`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 px-4 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-xs font-semibold flex items-center justify-center gap-2 transition-colors text-black dark:text-white"
+                >
+                  <MessageCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Partilhar no WhatsApp</span>
+                </a>
+
+                {/* Partilha Nativa (Web Share API) */}
+                {typeof navigator !== "undefined" && typeof navigator.share === "function" && (
+                  <button
+                    type="button"
+                    onClick={handleNativeShare}
+                    className="w-full py-2.5 px-4 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200/70 dark:hover:bg-gray-700 text-xs font-semibold flex items-center justify-center gap-2 transition-colors text-black dark:text-white"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span>Partilhar com Outras Aplicações</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Rodapé */}
+            <div className="pt-3 border-t border-gray-100 dark:border-gray-800 mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowSharePreviewModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
+              >
+                Fechar
               </button>
             </div>
           </div>
