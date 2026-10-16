@@ -18,6 +18,14 @@ export interface BookSaleItem {
   physical_condition?: string;
   created_at: string;
   uploaded_by?: string;
+  // Campos expandidos de venda
+  seller_name?: string;
+  seller_type?: "bookstore" | "independent";
+  location?: string;
+  delivery_options?: string;
+  stock_quantity?: number;
+  purchase_rating?: number;
+  rating_comment?: string;
 }
 
 const LOCAL_STORE_BOOKS_KEY = "kuwerenga_custom_store_books";
@@ -203,10 +211,19 @@ export async function upsertBookForSale(bookData: Partial<BookSaleItem>): Promis
     category_id: bookData.category_id || null,
     uploaded_by: user?.id,
     created_at: bookData.created_at || new Date().toISOString(),
+    // Novos campos
+    seller_name: bookData.seller_name?.trim() || undefined,
+    seller_type: bookData.seller_type || "independent",
+    location: bookData.location?.trim() || undefined,
+    physical_condition: bookData.physical_condition || "Novo",
+    delivery_options: bookData.delivery_options || undefined,
+    stock_quantity: Number(bookData.stock_quantity) || 1,
+    purchase_rating: bookData.purchase_rating !== undefined ? Number(bookData.purchase_rating) : 5,
+    rating_comment: bookData.rating_comment?.trim() || undefined,
   };
 
   try {
-    // Tenta gravar no Supabase
+    // 1. Tenta gravar com todos os campos no Supabase
     const { data, error } = await supabase
       .from("books")
       .upsert({
@@ -217,16 +234,86 @@ export async function upsertBookForSale(bookData: Partial<BookSaleItem>): Promis
       .single();
 
     if (!error && data) {
-      saveLocalStoreBook(data as BookSaleItem);
-      return data as BookSaleItem;
+      saveLocalStoreBook({ ...completeItem, ...(data as any) });
+      return { ...completeItem, ...(data as any) };
+    }
+
+    // 2. Se falhar por colunas adicionais não criadas no schema remoto, grava com campos base
+    if (error) {
+      const basePayload: any = {
+        id: completeItem.id,
+        title: completeItem.title,
+        author: completeItem.author,
+        description: completeItem.description,
+        cover_url: completeItem.cover_url,
+        file_url: completeItem.file_url,
+        file_type: completeItem.file_type,
+        is_for_sale: true,
+        price: completeItem.price,
+        currency: completeItem.currency,
+        stock_status: completeItem.stock_status,
+        seller_whatsapp: completeItem.seller_whatsapp,
+        category_id: completeItem.category_id,
+        is_approved: true,
+      };
+
+      const { data: baseData } = await supabase
+        .from("books")
+        .upsert(basePayload)
+        .select()
+        .single();
+
+      if (baseData) {
+        saveLocalStoreBook({ ...completeItem, ...(baseData as any) });
+        return { ...completeItem, ...(baseData as any) };
+      }
     }
   } catch (err) {
     console.warn("Aviso ao sincronizar no Supabase:", err);
   }
 
-  // Grava localmente como garantia
+  // Grava localmente garantindo persistência imediata
   saveLocalStoreBook(completeItem);
   return completeItem;
+}
+
+/**
+ * Guarda uma classificação da compra / avaliação de interesse para o livro
+ */
+export async function rateBookPurchase(
+  bookId: string,
+  rating: number,
+  comment?: string
+): Promise<BookSaleItem | null> {
+  const books = getLocalStoreBooks();
+  const book = books.find((b) => b.id === bookId);
+  if (book) {
+    book.purchase_rating = rating;
+    if (comment !== undefined) book.rating_comment = comment;
+    saveLocalStoreBook(book);
+  }
+
+  try {
+    const { data } = await supabase
+      .from("books")
+      .update({
+        purchase_rating: rating,
+        rating_comment: comment || null,
+      })
+      .eq("id", bookId)
+      .select()
+      .maybeSingle();
+
+    if (data) {
+      const merged = { ...book, ...(data as any) };
+      saveLocalStoreBook(merged);
+      return merged;
+    }
+  } catch (err) {
+    console.warn("Aviso ao guardar classificação de compra no Supabase:", err);
+  }
+
+  return book || null;
 }
 
 /**

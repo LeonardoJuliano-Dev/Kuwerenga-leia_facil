@@ -13,17 +13,18 @@ import {
   ChevronDown,
   Check,
   X,
-  Clock
+  Clock,
+  MapPin
 } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import AdminBookSaleModal from "../components/AdminBookSaleModal";
+import BookSalePreviewModal from "../components/BookSalePreviewModal";
 import { supabase } from "../lib/supabase";
 import { getCached, setCached } from "../lib/cache";
 import { EXPANDED_CATEGORIES, loadAndSyncCategories, type AppCategory } from "../lib/categoryData";
 import {
   checkIsAdmin,
   fetchBooksForSale,
-  buildWhatsAppLink,
   deleteBookAsAdmin,
   type BookSaleItem
 } from "../lib/storeService";
@@ -50,6 +51,14 @@ interface Book {
   stock_status?: "available" | "out_of_stock";
   seller_whatsapp?: string;
   uploaded_by?: string;
+  seller_name?: string;
+  seller_type?: "bookstore" | "independent";
+  location?: string;
+  delivery_options?: string;
+  stock_quantity?: number;
+  physical_condition?: string;
+  purchase_rating?: number;
+  rating_comment?: string;
 }
 
 export default function Explore() {
@@ -69,6 +78,7 @@ export default function Explore() {
   // Estados do Modal de Venda de Livros (Admin)
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [editingBook, setEditingBook] = useState<BookSaleItem | null>(null);
+  const [previewSaleBook, setPreviewSaleBook] = useState<BookSaleItem | null>(null);
 
   const navigate = useNavigate();
 
@@ -144,6 +154,14 @@ export default function Explore() {
         seller_whatsapp: sb.seller_whatsapp,
         uploaded_by: sb.uploaded_by,
         is_approved: true, // Livros da loja adicionados pelo admin são aprovados
+        seller_name: sb.seller_name,
+        seller_type: sb.seller_type,
+        location: sb.location,
+        delivery_options: sb.delivery_options,
+        stock_quantity: sb.stock_quantity,
+        physical_condition: sb.physical_condition,
+        purchase_rating: sb.purchase_rating,
+        rating_comment: sb.rating_comment,
       });
     });
 
@@ -206,7 +224,8 @@ export default function Explore() {
   // Ações de Administrador: Editar Livro à Venda
   const handleEditSaleBook = (e: React.MouseEvent, book: Book) => {
     e.stopPropagation();
-    const item: BookSaleItem = {
+    const matched = storeBooks.find((s) => s.id === book.id);
+    const item: BookSaleItem = matched || {
       id: book.id,
       title: book.title,
       author: book.author,
@@ -222,6 +241,14 @@ export default function Explore() {
       stock_status: book.stock_status || "available",
       seller_whatsapp: book.seller_whatsapp || "",
       created_at: book.created_at,
+      seller_name: book.seller_name,
+      seller_type: book.seller_type,
+      location: book.location,
+      delivery_options: book.delivery_options,
+      stock_quantity: book.stock_quantity,
+      physical_condition: book.physical_condition,
+      purchase_rating: book.purchase_rating,
+      rating_comment: book.rating_comment,
     };
     setEditingBook(item);
     setShowSaleModal(true);
@@ -247,26 +274,40 @@ export default function Explore() {
     }
   };
 
-  // Abrir Página de Detalhes ou Leitura
+  // Abrir Página de Detalhes ou Leitura / Pré-visualização de Venda
   const handleCardClick = (book: Book) => {
     if (book.is_for_sale) {
-      // Se for livro à venda, abre link do WhatsApp diretamente
-      handleBuyViaWhatsApp(book);
+      // Abre o modal de pré-visualização completa da venda (sinopse, vendedor, localização, classificação e compra)
+      const matched = storeBooks.find((s) => s.id === book.id);
+      const saleItem: BookSaleItem = matched || {
+        id: book.id,
+        title: book.title,
+        author: book.author,
+        description: book.description,
+        cover_url: book.cover_url,
+        file_url: book.file_url,
+        file_type: book.file_type,
+        total_pages: book.total_pages,
+        category_id: book.category_id,
+        is_for_sale: true,
+        price: book.price || 0,
+        currency: book.currency || "MT",
+        stock_status: book.stock_status || "available",
+        seller_whatsapp: book.seller_whatsapp || "",
+        created_at: book.created_at,
+        seller_name: book.seller_name,
+        seller_type: book.seller_type,
+        location: book.location,
+        delivery_options: book.delivery_options,
+        stock_quantity: book.stock_quantity,
+        physical_condition: book.physical_condition,
+        purchase_rating: book.purchase_rating,
+        rating_comment: book.rating_comment,
+      };
+      setPreviewSaleBook(saleItem);
     } else {
       navigate(`/book/${book.id}`);
     }
-  };
-
-  // Ação de Compra / Reserva via WhatsApp
-  const handleBuyViaWhatsApp = (book: Book) => {
-    const link = buildWhatsAppLink({
-      title: book.title,
-      price: book.price,
-      currency: book.currency,
-      seller_whatsapp: book.seller_whatsapp || "258840000000",
-      stock_status: book.stock_status || "available",
-    });
-    window.open(link, "_blank", "noopener,noreferrer");
   };
 
   // Callback após guardar livro no modal
@@ -668,6 +709,23 @@ export default function Explore() {
                             {book.description}
                           </p>
                         )}
+
+                        {/* Informações Rápidas do Vendedor e Localização */}
+                        {isSale && (book.seller_name || book.location) && (
+                          <div className="flex items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400 mt-1 truncate">
+                            {book.seller_name && (
+                              <span className="truncate font-semibold text-gray-700 dark:text-gray-300">
+                                {book.seller_name}
+                              </span>
+                            )}
+                            {book.location && (
+                              <span className="flex items-center gap-0.5 shrink-0 text-gray-500">
+                                <MapPin className="w-2.5 h-2.5 text-gray-400" />
+                                <span className="truncate">{book.location}</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Rodapé do Card Responsivo: WhatsApp + Ações de Admin */}
@@ -677,7 +735,7 @@ export default function Explore() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleBuyViaWhatsApp(book);
+                              handleCardClick(book);
                             }}
                             className={`flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-xs active:scale-95 flex-1 sm:flex-initial min-w-[120px] ${
                               isOutOfStock
@@ -686,7 +744,7 @@ export default function Explore() {
                             }`}
                           >
                             <Phone className="w-3.5 h-3.5 fill-current shrink-0" />
-                            <span className="truncate">{isOutOfStock ? "Pedir Reserva no WhatsApp" : "Comprar no WhatsApp"}</span>
+                            <span className="truncate">{isOutOfStock ? "Reservar / Detalhes" : "Comprar / Detalhes"}</span>
                           </button>
                         ) : (
                           <div className="flex items-center justify-between flex-1 text-xs">
@@ -895,6 +953,21 @@ export default function Explore() {
         onSaved={handleBookSaved}
         categories={categories}
       />
+
+      {/* Modal de Pré-visualização de Venda de Livro */}
+      {previewSaleBook && (
+        <BookSalePreviewModal
+          isOpen={!!previewSaleBook}
+          book={previewSaleBook}
+          onClose={() => setPreviewSaleBook(null)}
+          onEdit={(bookItem) => {
+            setPreviewSaleBook(null);
+            setEditingBook(bookItem);
+            setShowSaleModal(true);
+          }}
+          isAdmin={isAdmin}
+        />
+      )}
 
       <BottomNav />
     </div>

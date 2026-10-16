@@ -8,7 +8,14 @@ import {
   Sparkles,
   CheckCircle,
   AlertCircle,
-  BookOpen
+  BookOpen,
+  Building2,
+  UserCheck,
+  MapPin,
+  Truck,
+  Eye,
+  Star,
+  Package
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { extractCoverFromFile } from "../lib/coverExtractor";
@@ -18,6 +25,7 @@ import {
   type BookSaleItem
 } from "../lib/storeService";
 import { analyzeBookWithAI } from "../lib/aiBookAnalyzer";
+import BookSalePreviewModal from "./BookSalePreviewModal";
 
 interface AdminBookSaleModalProps {
   isOpen: boolean;
@@ -34,15 +42,27 @@ export default function AdminBookSaleModal({
   onSaved,
   categories,
 }: AdminBookSaleModalProps) {
+  // Informações da Obra
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("MT");
   const [stockStatus, setStockStatus] = useState<"available" | "out_of_stock">("available");
+  const [stockQuantity, setStockQuantity] = useState("1");
+  const [physicalCondition, setPhysicalCondition] = useState("Novo");
   const [sellerWhatsApp, setSellerWhatsApp] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [bookType, setBookType] = useState<"physical" | "pdf" | "epub">("physical");
+
+  // Vendedor e Localização
+  const [sellerType, setSellerType] = useState<"bookstore" | "independent">("independent");
+  const [sellerName, setSellerName] = useState("");
+  const [location, setLocation] = useState("");
+  const [deliveryOptions, setDeliveryOptions] = useState("");
+
+  // Classificação
+  const [purchaseRating, setPurchaseRating] = useState<number>(5);
 
   // Capa e ficheiros
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -51,9 +71,12 @@ export default function AdminBookSaleModal({
   const [extractingCover, setExtractingCover] = useState(false);
   const [extractedNotice, setExtractedNotice] = useState(false);
 
-  // Estados de envio
+  // Estados de envio e pré-visualização
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [savedPreviewBook, setSavedPreviewBook] = useState<BookSaleItem | null>(null);
+  const [isNewlySaved, setIsNewlySaved] = useState(false);
 
   const coverInputRef = useRef<HTMLInputElement>(null);
   const bookInputRef = useRef<HTMLInputElement>(null);
@@ -66,9 +89,16 @@ export default function AdminBookSaleModal({
       setPrice(bookToEdit.price ? String(bookToEdit.price) : "");
       setCurrency(bookToEdit.currency || "MT");
       setStockStatus(bookToEdit.stock_status || "available");
+      setStockQuantity(bookToEdit.stock_quantity ? String(bookToEdit.stock_quantity) : "1");
+      setPhysicalCondition(bookToEdit.physical_condition || "Novo");
       setSellerWhatsApp(bookToEdit.seller_whatsapp || "");
       setCategoryId(bookToEdit.category_id || (categories[0]?.id || ""));
       setBookType((bookToEdit.file_type as any) || "physical");
+      setSellerType(bookToEdit.seller_type || "independent");
+      setSellerName(bookToEdit.seller_name || "");
+      setLocation(bookToEdit.location || "");
+      setDeliveryOptions(bookToEdit.delivery_options || "");
+      setPurchaseRating(bookToEdit.purchase_rating || 5);
       setCoverPreview(bookToEdit.cover_url || null);
       setCoverFile(null);
       setBookFile(null);
@@ -80,18 +110,65 @@ export default function AdminBookSaleModal({
       setPrice("");
       setCurrency("MT");
       setStockStatus("available");
+      setStockQuantity("1");
+      setPhysicalCondition("Novo");
       setSellerWhatsApp("");
       setCategoryId(categories[0]?.id || "");
       setBookType("physical");
+      setSellerType("independent");
+      setSellerName("");
+      setLocation("");
+      setDeliveryOptions("");
+      setPurchaseRating(5);
       setCoverPreview(null);
       setCoverFile(null);
       setBookFile(null);
       setExtractedNotice(false);
     }
     setError("");
+    setShowPreviewModal(false);
+    setSavedPreviewBook(null);
+    setIsNewlySaved(false);
   }, [bookToEdit, isOpen, categories]);
 
   if (!isOpen) return null;
+
+  // Monta objeto de pré-visualização com dados atuais
+  const buildCurrentPreviewItem = (): BookSaleItem => {
+    return {
+      id: bookToEdit?.id || "preview-sale-id",
+      title: title.trim() || "Título de Exemplo",
+      author: author.trim() || "Autor da Obra",
+      description: description.trim() || null,
+      cover_url: coverPreview || null,
+      file_type: bookType,
+      is_for_sale: true,
+      price: parseFloat(price) || 0,
+      currency: currency || "MT",
+      stock_status: stockStatus,
+      stock_quantity: parseInt(stockQuantity, 10) || 1,
+      physical_condition: physicalCondition,
+      seller_whatsapp: sellerWhatsApp.trim() || "258840000000",
+      seller_name: sellerName.trim() || (sellerType === "bookstore" ? "Livraria Parceira" : "Vendedor Independente"),
+      seller_type: sellerType,
+      location: location.trim() || "Moçambique",
+      delivery_options: deliveryOptions.trim() || "A combinar diretamente via WhatsApp.",
+      category_id: categoryId || null,
+      purchase_rating: purchaseRating,
+      created_at: bookToEdit?.created_at || new Date().toISOString(),
+    };
+  };
+
+  const handleOpenPreview = () => {
+    if (!title.trim() && !author.trim()) {
+      setError("Por favor, preenche pelo menos o título e autor antes de abrir a pré-visualização.");
+      return;
+    }
+    setError("");
+    setIsNewlySaved(false);
+    setSavedPreviewBook(buildCurrentPreviewItem());
+    setShowPreviewModal(true);
+  };
 
   // Ao selecionar um ficheiro de livro (PDF ou EPUB)
   const handleBookFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -200,7 +277,7 @@ export default function AdminBookSaleModal({
         }
       }
 
-      // 2. Grava ou atualiza os dados do livro
+      // 2. Grava ou atualiza os dados completos do livro
       const saved = await upsertBookForSale({
         id: bookToEdit?.id,
         title: title.trim(),
@@ -209,15 +286,25 @@ export default function AdminBookSaleModal({
         price: parseFloat(price) || 0,
         currency: currency || "MT",
         stock_status: stockStatus,
+        stock_quantity: parseInt(stockQuantity, 10) || 1,
+        physical_condition: physicalCondition,
         seller_whatsapp: formatWhatsAppNumber(sellerWhatsApp),
         category_id: categoryId || null,
         cover_url: finalCoverUrl || null,
         file_type: bookType,
         is_for_sale: true,
+        seller_name: sellerName.trim() || undefined,
+        seller_type: sellerType,
+        location: location.trim() || undefined,
+        delivery_options: deliveryOptions.trim() || undefined,
+        purchase_rating: purchaseRating,
       });
 
       onSaved(saved);
-      onClose();
+      // Abre imediatamente a pré-visualização do livro salvo
+      setSavedPreviewBook(saved);
+      setIsNewlySaved(true);
+      setShowPreviewModal(true);
     } catch (err: any) {
       console.error("Erro ao guardar livro à venda:", err);
       setError(err?.message || "Ocorreu um erro ao guardar o livro.");
@@ -227,294 +314,528 @@ export default function AdminBookSaleModal({
   };
 
   return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 md:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
-    >
+    <>
       <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl max-h-[94vh] flex flex-col overflow-hidden text-black dark:text-white animate-in zoom-in-95 duration-200"
+        onClick={onClose}
+        className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 md:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
       >
-        {/* Header */}
-        <div className="px-4 py-3.5 sm:px-6 sm:py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md">
-          <div className="flex items-center gap-2.5 min-w-0 pr-2">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs shrink-0">
-              <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="font-bold text-sm sm:text-base leading-tight truncate">
-                {bookToEdit ? "Editar Livro para Venda" : "Cadastrar Livro para Venda"}
-              </h2>
-              <span className="text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400 block truncate mt-0.5">
-                Painel do Administrador • Vendas via WhatsApp
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 sm:p-2 rounded-xl text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
-            aria-label="Fechar"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Formulário com scroll suave */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
-          {error && (
-            <div className="p-3 sm:p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* ─── Secção da Capa e Ficheiro ─── */}
-          <div className="p-3.5 sm:p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-3">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 block">
-              Capa & Arquivo do Livro
-            </span>
-
-            <div className="flex flex-col sm:flex-row gap-3.5 sm:gap-4 items-center sm:items-start">
-              {/* Preview da Capa */}
-              <div className="w-24 h-32 sm:w-28 sm:h-36 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col items-center justify-center overflow-hidden shrink-0 relative shadow-xs">
-                {coverPreview ? (
-                  <img
-                    src={coverPreview}
-                    alt="Capa do Livro"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center p-2 text-center text-gray-400">
-                    <ImageIcon className="w-6 h-6 mb-1 opacity-60" />
-                    <span className="text-[9px] font-semibold">Sem capa</span>
-                  </div>
-                )}
-                {extractingCover && (
-                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  </div>
-                )}
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="w-full max-w-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl max-h-[94vh] flex flex-col overflow-hidden text-black dark:text-white animate-in zoom-in-95 duration-200"
+        >
+          {/* Header */}
+          <div className="px-4 py-3.5 sm:px-6 sm:py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md">
+            <div className="flex items-center gap-2.5 min-w-0 pr-2">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs shrink-0">
+                <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
               </div>
-
-              {/* Botões de Ação para Capa */}
-              <div className="flex-1 w-full space-y-2">
-                {extractedNotice && (
-                  <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                    <span>Capa extraída da 1ª página com sucesso</span>
-                  </div>
-                )}
-
-                {/* Botão de anexar ficheiro (extrai a capa automaticamente) */}
-                <div>
-                  <input
-                    ref={bookInputRef}
-                    type="file"
-                    accept=".pdf,.epub,application/pdf,application/epub+zip"
-                    onChange={handleBookFileChange}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => bookInputRef.current?.click()}
-                    className="w-full py-2.5 px-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs font-semibold flex items-center justify-center gap-1.5 hover:border-black dark:hover:border-white transition-all shadow-xs"
-                  >
-                    <BookOpen className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{bookFile ? "Trocar Ficheiro (PDF/ePub)" : "Anexar PDF / ePub (Extrai Capa)"}</span>
-                  </button>
-                </div>
-
-                {/* Botão para carregar/substituir imagem de capa */}
-                <div>
-                  <input
-                    ref={coverInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleCoverFileChange}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => coverInputRef.current?.click()}
-                    className="w-full py-2.5 px-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-medium flex items-center justify-center gap-1.5 hover:text-black dark:hover:text-white transition-colors"
-                  >
-                    <Upload className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{coverPreview ? "Substituir Capa Manualmente" : "Carregar Imagem de Capa"}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Título */}
-          <div>
-            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-              Título da Obra *
-            </label>
-            <input
-              type="text"
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ex: Terra Sonâmbula"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
-            />
-          </div>
-
-          {/* Autor */}
-          <div>
-            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-              Autor(a) *
-            </label>
-            <input
-              type="text"
-              required
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              placeholder="Ex: Mia Couto"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
-            />
-          </div>
-
-          {/* Preço e Stock (Responsivo 1 col em mobile, 2 col em desktop) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                Preço de Venda *
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  required
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  placeholder="Ex: 500"
-                  className="w-full pl-3.5 pr-12 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-semibold focus:outline-none focus:border-black dark:focus:border-white"
-                />
-                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">
-                  {currency}
+              <div className="min-w-0">
+                <h2 className="font-bold text-sm sm:text-base leading-tight truncate">
+                  {bookToEdit ? "Editar Livro para Venda" : "Cadastrar Livro para Venda"}
+                </h2>
+                <span className="text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400 block truncate mt-0.5">
+                  Painel do Administrador • Gestão de Catálogo Comercial
                 </span>
               </div>
             </div>
-
-            {/* Estado do Stock (Zero Emojis) */}
-            <div>
-              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                Estado do Stock *
-              </label>
-              <select
-                value={stockStatus}
-                onChange={(e) => setStockStatus(e.target.value as any)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-semibold focus:outline-none focus:border-black dark:focus:border-white"
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleOpenPreview}
+                className="px-2.5 py-1.5 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 text-[11px] font-semibold flex items-center gap-1.5 transition-colors text-gray-700 dark:text-gray-300"
+                title="Pré-visualizar livro antes de publicar"
               >
-                <option value="available">Disponível (Em Stock)</option>
-                <option value="out_of_stock">Esgotado (Aceita Reservas)</option>
-              </select>
-            </div>
-          </div>
-
-          {/* WhatsApp do Vendedor */}
-          <div>
-            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-              WhatsApp do Vendedor (com indicativo) *
-            </label>
-            <div className="relative">
-              <Phone className="w-4 h-4 text-emerald-600 dark:text-emerald-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                required
-                value={sellerWhatsApp}
-                onChange={(e) => setSellerWhatsApp(e.target.value)}
-                placeholder="Ex: +258 84 123 4567 ou 258841234567"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
-              />
-            </div>
-            <span className="text-[10px] text-gray-500 block mt-1">
-              Ao clicar em comprar, o cliente será redirecionado para este WhatsApp com mensagem automática pronta.
-            </span>
-          </div>
-
-          {/* Categoria e Formato (Responsivo 1 col em mobile, 2 col em desktop; Zero Emojis) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                Categoria
-              </label>
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+                <Eye className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Pré-visualizar</span>
+              </button>
+              <button
+                onClick={onClose}
+                className="p-1.5 sm:p-2 rounded-xl text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                aria-label="Fechar"
               >
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Formulário com scroll suave */}
+          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
+            {error && (
+              <div className="p-3 sm:p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Secção da Capa e Ficheiro */}
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-3">
+              <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 block">
+                Capa & Arquivo da Obra
+              </span>
+
+              <div className="flex flex-col sm:flex-row gap-3.5 sm:gap-4 items-center sm:items-start">
+                {/* Preview da Capa */}
+                <div className="w-24 h-32 sm:w-28 sm:h-36 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col items-center justify-center overflow-hidden shrink-0 relative shadow-xs">
+                  {coverPreview ? (
+                    <img
+                      src={coverPreview}
+                      alt="Capa do Livro"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center p-2 text-center text-gray-400">
+                      <ImageIcon className="w-6 h-6 mb-1 opacity-60" />
+                      <span className="text-[9px] font-semibold">Sem capa</span>
+                    </div>
+                  )}
+                  {extractingCover && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Botões de Ação para Capa */}
+                <div className="flex-1 w-full space-y-2">
+                  {extractedNotice && (
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                      <span>Capa extraída da 1ª página com sucesso</span>
+                    </div>
+                  )}
+
+                  {/* Anexar ficheiro */}
+                  <div>
+                    <input
+                      ref={bookInputRef}
+                      type="file"
+                      accept=".pdf,.epub,application/pdf,application/epub+zip"
+                      onChange={handleBookFileChange}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => bookInputRef.current?.click()}
+                      className="w-full py-2.5 px-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs font-semibold flex items-center justify-center gap-1.5 hover:border-black dark:hover:border-white transition-all shadow-xs"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{bookFile ? "Trocar Ficheiro (PDF/ePub)" : "Anexar PDF / ePub (Extrai Capa)"}</span>
+                    </button>
+                  </div>
+
+                  {/* Carregar imagem */}
+                  <div>
+                    <input
+                      ref={coverInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCoverFileChange}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => coverInputRef.current?.click()}
+                      className="w-full py-2.5 px-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-medium flex items-center justify-center gap-1.5 hover:text-black dark:hover:text-white transition-colors"
+                    >
+                      <Upload className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{coverPreview ? "Substituir Capa Manualmente" : "Carregar Imagem de Capa"}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                Formato do Livro
-              </label>
-              <select
-                value={bookType}
-                onChange={(e) => setBookType(e.target.value as any)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+            {/* Secção: Identificação da Obra */}
+            <div className="space-y-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block">
+                Detalhes da Obra
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Título */}
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                    Título da Obra *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Ex: Terra Sonâmbula"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+                  />
+                </div>
+
+                {/* Autor */}
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                    Autor(a) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={author}
+                    onChange={(e) => setAuthor(e.target.value)}
+                    placeholder="Ex: Mia Couto"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+                  />
+                </div>
+
+                {/* Categoria */}
+                <div>
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                    Categoria
+                  </label>
+                  <select
+                    value={categoryId}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+                  >
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Formato */}
+                <div>
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                    Formato da Obra
+                  </label>
+                  <select
+                    value={bookType}
+                    onChange={(e) => setBookType(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+                  >
+                    <option value="physical">Livro Físico (Impresso)</option>
+                    <option value="pdf">Ficheiro PDF</option>
+                    <option value="epub">Ficheiro ePub</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Secção Expandida: Vendedor & Localização */}
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-3.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block">
+                Identificação do Vendedor & Localização
+              </span>
+
+              {/* Tipo de Vendedor (Livraria vs Vendedor Independente) */}
+              <div>
+                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                  Tipo de Vendedor *
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSellerType("bookstore")}
+                    className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      sellerType === "bookstore"
+                        ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black shadow-xs"
+                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300"
+                    }`}
+                  >
+                    <Building2 className="w-3.5 h-3.5" />
+                    <span>Livraria / Loja</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSellerType("independent")}
+                    className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      sellerType === "independent"
+                        ? "border-black dark:border-white bg-black dark:bg-white text-white dark:text-black shadow-xs"
+                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300"
+                    }`}
+                  >
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>Vendedor Independente</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Nome do Vendedor / Livraria */}
+                <div>
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                    {sellerType === "bookstore" ? "Nome da Livraria / Loja" : "Nome do Vendedor"}
+                  </label>
+                  <div className="relative">
+                    {sellerType === "bookstore" ? (
+                      <Building2 className="w-3.5 h-3.5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    ) : (
+                      <UserCheck className="w-3.5 h-3.5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    )}
+                    <input
+                      type="text"
+                      value={sellerName}
+                      onChange={(e) => setSellerName(e.target.value)}
+                      placeholder={sellerType === "bookstore" ? "Ex: Livraria Minerva" : "Ex: Leonardo Juliano"}
+                      className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Localização */}
+                <div>
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                    Localização (Cidade / Bairro)
+                  </label>
+                  <div className="relative">
+                    <MapPin className="w-3.5 h-3.5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      placeholder="Ex: Maputo (Baixa / Polana)"
+                      className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+                    />
+                  </div>
+                </div>
+
+                {/* WhatsApp */}
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                    WhatsApp para Pedidos & Contacto *
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      required
+                      value={sellerWhatsApp}
+                      onChange={(e) => setSellerWhatsApp(e.target.value)}
+                      placeholder="Ex: 841234567 ou +258 84 123 4567"
+                      className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+                    />
+                  </div>
+                  <span className="text-[10px] text-gray-500 block mt-1">
+                    Os clientes iniciarão uma conversa direta neste número com a mensagem pré-formatada do livro.
+                  </span>
+                </div>
+
+                {/* Opções de Entrega */}
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                    Opções de Entrega / Envio
+                  </label>
+                  <div className="relative">
+                    <Truck className="w-3.5 h-3.5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={deliveryOptions}
+                      onChange={(e) => setDeliveryOptions(e.target.value)}
+                      placeholder="Ex: Entrega ao domicílio em Maputo, envio por transportadora ou levantamento no local"
+                      className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Secção: Preço, Stock & Condição */}
+            <div className="space-y-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block">
+                Preço, Stock & Condição
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Preço */}
+                <div>
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                    Preço de Venda *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      required
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder="Ex: 500"
+                      className="w-full pl-3.5 pr-12 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-semibold focus:outline-none focus:border-black dark:focus:border-white"
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">
+                      {currency}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Quantidade em Stock */}
+                <div>
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                    Exemplares em Stock
+                  </label>
+                  <div className="relative">
+                    <Package className="w-3.5 h-3.5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={stockQuantity}
+                      onChange={(e) => setStockQuantity(e.target.value)}
+                      placeholder="Ex: 1"
+                      className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-semibold focus:outline-none focus:border-black dark:focus:border-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Estado do Stock */}
+                <div>
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                    Estado do Stock *
+                  </label>
+                  <select
+                    value={stockStatus}
+                    onChange={(e) => setStockStatus(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-semibold focus:outline-none focus:border-black dark:focus:border-white"
+                  >
+                    <option value="available">Disponível (Em Stock)</option>
+                    <option value="out_of_stock">Esgotado (Aceita Reserva)</option>
+                  </select>
+                </div>
+
+                {/* Condição Física */}
+                <div className="sm:col-span-3">
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                    Estado Físico / Conservação do Livro
+                  </label>
+                  <select
+                    value={physicalCondition}
+                    onChange={(e) => setPhysicalCondition(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
+                  >
+                    <option value="Novo">Novo (Embalado / Sem uso)</option>
+                    <option value="Como Novo">Como Novo (Exemplar impecável)</option>
+                    <option value="Muito Bom">Muito Bom (Sinais mínimos de manuseio)</option>
+                    <option value="Bom Estado">Bom Estado (Páginas limpas, capa firme)</option>
+                    <option value="Usado">Usado (Com marcas normais de leitura)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Secção: Sinopse & Classificação */}
+            <div className="space-y-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block">
+                Sinopse & Classificação
+              </span>
+
+              {/* Sinopse */}
+              <div>
+                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+                  Sinopse / Descrição da Obra
+                </label>
+                <textarea
+                  rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Escreve uma sinopse cativante ou detalhes da edição, ano e publicação..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white resize-none"
+                />
+              </div>
+
+              {/* Classificação Inicial da Compra */}
+              <div className="p-3 sm:p-3.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <label className="text-xs font-bold text-amber-950 dark:text-amber-200 block">
+                      Classificação da Compra
+                    </label>
+                    <span className="text-[10px] text-amber-900/70 dark:text-amber-400/80">
+                      Recomendação inicial da relação qualidade / raridade / preço
+                    </span>
+                  </div>
+                  <span className="text-xs font-bold font-mono text-amber-600 dark:text-amber-400">
+                    {purchaseRating}.0 / 5.0
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setPurchaseRating(star)}
+                      className="p-1 rounded-lg text-amber-500 hover:scale-110 active:scale-95 transition-transform"
+                      title={`${star} estrelas`}
+                    >
+                      <Star
+                        className={`w-5 h-5 ${
+                          star <= purchaseRating
+                            ? "fill-amber-500 stroke-amber-500"
+                            : "text-gray-300 dark:text-gray-700 stroke-1"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Botões de Ação Responsivos */}
+            <div className="pt-2 flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={loading}
+                className="w-full sm:flex-1 py-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               >
-                <option value="physical">Livro Físico (Impresso)</option>
-                <option value="pdf">Ficheiro PDF</option>
-                <option value="epub">Ficheiro ePub</option>
-              </select>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenPreview}
+                disabled={loading}
+                className="w-full sm:w-auto px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Eye className="w-4 h-4" />
+                <span>Pré-visualizar</span>
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full sm:flex-1 py-3 rounded-xl bg-black dark:bg-white text-white dark:text-black text-xs font-bold active:scale-95 transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
+                    <span>A guardar...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4 stroke-[2]" />
+                    <span>{bookToEdit ? "Atualizar Livro" : "Publicar Livro"}</span>
+                  </>
+                )}
+              </button>
             </div>
-          </div>
-
-          {/* Sinopse / Resumo */}
-          <div>
-            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-              Sinopse / Resumo do Livro
-            </label>
-            <textarea
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Descreve brevemente o livro, edição, estado de conservação..."
-              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white resize-none"
-            />
-          </div>
-
-          {/* Botões de Ação Responsivos */}
-          <div className="pt-2 flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="w-full sm:flex-1 py-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full sm:flex-1 py-3 rounded-xl bg-black dark:bg-white text-white dark:text-black text-xs font-bold active:scale-95 transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <div className="w-3.5 h-3.5 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
-                  <span>A guardar...</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-4 h-4 stroke-[2]" />
-                  <span>{bookToEdit ? "Atualizar Livro" : "Publicar Livro"}</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
-    </div>
+
+      {/* Modal de Pré-visualização Integrado */}
+      {showPreviewModal && savedPreviewBook && (
+        <BookSalePreviewModal
+          isOpen={showPreviewModal}
+          book={savedPreviewBook}
+          onClose={() => {
+            setShowPreviewModal(false);
+            if (isNewlySaved) {
+              onClose();
+            }
+          }}
+          isAdmin={true}
+          onEdit={() => {
+            setShowPreviewModal(false);
+          }}
+        />
+      )}
+    </>
   );
 }
