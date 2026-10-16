@@ -21,7 +21,9 @@ import {
   Check,
   Moon,
   AlertTriangle,
-  Copy
+  Copy,
+  Download,
+  Link as LinkIcon
 } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
@@ -57,6 +59,295 @@ interface EnrichedAnnotation extends OfflineAnnotation {
   bookTitle?: string;
 }
 
+// ─── Gerador de Imagem PNG do Cartão de Perfil (Canvas Retina 2x) ───
+async function generateCardCanvasBlob(
+  profile: UserProfileData,
+  userClubsCount: number,
+  shareUrl: string,
+  getInitials: (name: string) => string
+): Promise<Blob | null> {
+  const canvas = document.createElement("canvas");
+  const scale = 2;
+  const width = 600;
+  const hasFavs = Boolean(profile.favorite_books && profile.favorite_books.length > 0);
+  const height = hasFavs ? 760 : 640;
+
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.scale(scale, scale);
+
+  const roundRect = (x: number, y: number, w: number, h: number, radius: number) => {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.arcTo(x + w, y, x + w, y + h, radius);
+    ctx.arcTo(x + w, y + h, x, y + h, radius);
+    ctx.arcTo(x, y + h, x, y, radius);
+    ctx.arcTo(x, y, x + w, y, radius);
+    ctx.closePath();
+  };
+
+  // 1. Fundo do canvas
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+
+  // 2. Cartão principal (cor de fundo #f5f0eb)
+  roundRect(20, 20, width - 40, height - 40, 28);
+  ctx.fillStyle = "#f5f0eb";
+  ctx.fill();
+  ctx.strokeStyle = "#e8dfd5";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // 3. Topo do cartão: Identificação da plataforma
+  ctx.fillStyle = "#111827";
+  ctx.font = "bold 20px Georgia, serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("Kuwerenga", 48, 62);
+
+  // Badge "Leitor"
+  roundRect(width - 124, 42, 76, 26, 13);
+  ctx.fillStyle = "rgba(0,0,0,0.06)";
+  ctx.fill();
+  ctx.fillStyle = "#4b5563";
+  ctx.font = "bold 10px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("LEITOR", width - 86, 59);
+
+  // 4. Avatar do Leitor
+  const avatarCenterX = width / 2;
+  const avatarCenterY = 138;
+  const avatarRadius = 44;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(avatarCenterX, avatarCenterY, avatarRadius, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+
+  let avatarDrawn = false;
+  if (profile.avatar_url) {
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = profile.avatar_url;
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject();
+        setTimeout(() => reject(), 1200);
+      });
+      ctx.drawImage(
+        img,
+        avatarCenterX - avatarRadius,
+        avatarCenterY - avatarRadius,
+        avatarRadius * 2,
+        avatarRadius * 2
+      );
+      avatarDrawn = true;
+    } catch {
+      avatarDrawn = false;
+    }
+  }
+
+  if (!avatarDrawn) {
+    ctx.fillStyle = "#1f2937";
+    ctx.fillRect(
+      avatarCenterX - avatarRadius,
+      avatarCenterY - avatarRadius,
+      avatarRadius * 2,
+      avatarRadius * 2
+    );
+    ctx.fillStyle = "#f9fafb";
+    ctx.font = "bold 30px Georgia, serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(getInitials(profile.full_name), avatarCenterX, avatarCenterY);
+  }
+  ctx.restore();
+
+  // Borda ao redor do avatar
+  ctx.beginPath();
+  ctx.arc(avatarCenterX, avatarCenterY, avatarRadius, 0, Math.PI * 2);
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  // 5. Nome Completo e Username
+  ctx.fillStyle = "#111827";
+  ctx.font = "bold 22px Georgia, serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(profile.full_name, width / 2, 218);
+
+  ctx.fillStyle = "#6b7280";
+  ctx.font = "13px sans-serif";
+  ctx.fillText(`@${profile.username || "leitor"}`, width / 2, 238);
+
+  // 6. Bio
+  const rawBio = profile.bio?.trim()
+    ? `"${profile.bio}"`
+    : '"A explorar novas páginas e histórias na plataforma Kuwerenga."';
+  ctx.fillStyle = "#4b5563";
+  ctx.font = "italic 13px Georgia, serif";
+
+  const words = rawBio.split(" ");
+  let line = "";
+  let bioY = 265;
+  for (let n = 0; n < words.length; n++) {
+    const testLine = line + words[n] + " ";
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > width - 130 && n > 0) {
+      ctx.fillText(line.trim(), width / 2, bioY);
+      line = words[n] + " ";
+      bioY += 18;
+      if (bioY > 300) break;
+    } else {
+      line = testLine;
+    }
+  }
+  ctx.fillText(line.trim(), width / 2, bioY);
+
+  // 7. Bloco de Estatísticas
+  const statsY = Math.max(bioY + 20, 315);
+  roundRect(46, statsY, width - 92, 68, 16);
+  ctx.fillStyle = "rgba(255,255,255,0.75)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.06)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  const colWidth = (width - 92) / 3;
+
+  // Col 1: Visualizações
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#111827";
+  ctx.font = "bold 18px sans-serif";
+  ctx.fillText(String(profile.views_count || 0), 46 + colWidth * 0.5, statsY + 31);
+  ctx.fillStyle = "#6b7280";
+  ctx.font = "bold 11px sans-serif";
+  ctx.fillText("Visualizações", 46 + colWidth * 0.5, statsY + 50);
+
+  // Separador 1
+  ctx.beginPath();
+  ctx.moveTo(46 + colWidth, statsY + 14);
+  ctx.lineTo(46 + colWidth, statsY + 54);
+  ctx.strokeStyle = "rgba(0,0,0,0.08)";
+  ctx.stroke();
+
+  // Col 2: Clubes
+  ctx.fillStyle = "#111827";
+  ctx.font = "bold 18px sans-serif";
+  ctx.fillText(String(userClubsCount), 46 + colWidth * 1.5, statsY + 31);
+  ctx.fillStyle = "#6b7280";
+  ctx.font = "bold 11px sans-serif";
+  ctx.fillText("Clubes", 46 + colWidth * 1.5, statsY + 50);
+
+  // Separador 2
+  ctx.beginPath();
+  ctx.moveTo(46 + colWidth * 2, statsY + 14);
+  ctx.lineTo(46 + colWidth * 2, statsY + 54);
+  ctx.strokeStyle = "rgba(0,0,0,0.08)";
+  ctx.stroke();
+
+  // Col 3: Favoritos
+  ctx.fillStyle = "#111827";
+  ctx.font = "bold 18px sans-serif";
+  ctx.fillText(String(profile.favorite_books?.length || 0), 46 + colWidth * 2.5, statsY + 31);
+  ctx.fillStyle = "#6b7280";
+  ctx.font = "bold 11px sans-serif";
+  ctx.fillText("Favoritos", 46 + colWidth * 2.5, statsY + 50);
+
+  let currentY = statsY + 84;
+
+  // 8. Livros Favoritos (se existirem)
+  if (hasFavs && profile.favorite_books) {
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillText("LIVROS EM DESTAQUE", width / 2, currentY);
+    currentY += 14;
+
+    const favList = profile.favorite_books.slice(0, 3);
+    const itemW = 74;
+    const itemH = 104;
+    const gap = 16;
+    const totalFavW = favList.length * itemW + (favList.length - 1) * gap;
+    let startX = (width - totalFavW) / 2;
+
+    for (const fb of favList) {
+      roundRect(startX, currentY, itemW, itemH, 10);
+      ctx.save();
+      ctx.clip();
+
+      let bookCoverDrawn = false;
+      if (fb.cover_url) {
+        try {
+          const bImg = new Image();
+          bImg.crossOrigin = "anonymous";
+          bImg.src = fb.cover_url;
+          await new Promise<void>((res, rej) => {
+            bImg.onload = () => res();
+            bImg.onerror = () => rej();
+            setTimeout(() => rej(), 1000);
+          });
+          ctx.drawImage(bImg, startX, currentY, itemW, itemH);
+          bookCoverDrawn = true;
+        } catch {
+          bookCoverDrawn = false;
+        }
+      }
+
+      if (!bookCoverDrawn) {
+        ctx.fillStyle = "#e5e7eb";
+        ctx.fillRect(startX, currentY, itemW, itemH);
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "bold 10px sans-serif";
+        ctx.textAlign = "center";
+        const titleSnippet = fb.title.split(" ").slice(0, 3).join(" ");
+        ctx.fillText(titleSnippet, startX + itemW / 2, currentY + itemH / 2);
+      }
+      ctx.restore();
+
+      ctx.strokeStyle = "rgba(0,0,0,0.1)";
+      roundRect(startX, currentY, itemW, itemH, 10);
+      ctx.stroke();
+
+      startX += itemW + gap;
+    }
+
+    currentY += itemH + 20;
+  }
+
+  // 9. Rodapé do Cartão com o LINK IMPRESSO
+  const footerY = height - 84;
+  roundRect(46, footerY, width - 92, 46, 14);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.strokeStyle = "#e5e7eb";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.fillStyle = "#111827";
+  ctx.font = "bold 12px monospace";
+  ctx.textAlign = "left";
+  const displayUrl = shareUrl.replace(/^https?:\/\//, "");
+  ctx.fillText(displayUrl, 64, footerY + 28);
+
+  roundRect(width - 138, footerY + 10, 76, 26, 8);
+  ctx.fillStyle = "#111827";
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 11px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("ACEDER", width - 100, footerY + 27);
+
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/png");
+  });
+}
+
 export default function Profile() {
   const { userId: routeUserId } = useParams<{ userId?: string }>();
   const navigate = useNavigate();
@@ -88,6 +379,8 @@ export default function Profile() {
   const cardMenuRef = useRef<HTMLDivElement | null>(null);
   const [showSharePreviewModal, setShowSharePreviewModal] = useState(false);
   const [shareCopyFeedback, setShareCopyFeedback] = useState(false);
+  const [generatingCard, setGeneratingCard] = useState(false);
+  const [downloadFeedback, setDownloadFeedback] = useState(false);
 
   // Fecha qualquer menu de 3 pontinhos ao clicar em qualquer outra parte do ecrã ou pressionar Escape
   useEffect(() => {
@@ -563,6 +856,86 @@ export default function Profile() {
       });
     } catch {
       // Utilizador cancelou a partilha nativa
+    }
+  };
+
+  // Partilhar Cartão com Link Anexado
+  const handleShareCardWithLink = async () => {
+    if (!profile) return;
+    setGeneratingCard(true);
+    try {
+      const blob = await generateCardCanvasBlob(
+        profile,
+        userClubs.length,
+        profileShareUrl,
+        getInitials
+      );
+
+      if (!blob) {
+        await handleNativeShare();
+        return;
+      }
+
+      const cardFileName = `cartao-perfil-${profile.username || "leitor"}.png`;
+      const cardFile = new File([blob], cardFileName, { type: "image/png" });
+
+      if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [cardFile] })) {
+        await navigator.share({
+          files: [cardFile],
+          title: `Perfil de ${profile.full_name} | Kuwerenga`,
+          text: `Espreita o meu perfil literário no Kuwerenga: ${profileShareUrl}`,
+          url: profileShareUrl,
+        });
+      } else if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({
+          title: `Perfil de ${profile.full_name} | Kuwerenga`,
+          text: `Espreita o perfil literário de ${profile.full_name} na plataforma Kuwerenga: ${profileShareUrl}`,
+          url: profileShareUrl,
+        });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = cardFileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        await handleCopyShareLink();
+        setDownloadFeedback(true);
+        setTimeout(() => setDownloadFeedback(false), 2500);
+      }
+    } catch (err) {
+      console.error("Erro ao partilhar cartão:", err);
+    } finally {
+      setGeneratingCard(false);
+    }
+  };
+
+  // Descarregar Imagem do Cartão
+  const handleDownloadCardImage = async () => {
+    if (!profile) return;
+    setGeneratingCard(true);
+    try {
+      const blob = await generateCardCanvasBlob(
+        profile,
+        userClubs.length,
+        profileShareUrl,
+        getInitials
+      );
+      if (!blob) return;
+
+      const cardFileName = `cartao-perfil-${profile.username || "leitor"}.png`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = cardFileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      setDownloadFeedback(true);
+      setTimeout(() => setDownloadFeedback(false), 2500);
+    } catch (err) {
+      console.error("Erro ao descarregar cartão:", err);
+    } finally {
+      setGeneratingCard(false);
     }
   };
 
@@ -1791,12 +2164,80 @@ export default function Profile() {
                     </div>
                   </div>
                 )}
+
+                {/* Rodapé Integrado no Próprio Cartão com o Link Oficial */}
+                <div className="mt-4 pt-3 border-t border-black/10 dark:border-white/10 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <LinkIcon className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400 shrink-0" />
+                    <span className="text-[11px] font-mono font-medium text-gray-600 dark:text-gray-300 truncate">
+                      {profileShareUrl.replace(/^https?:\/\//, "")}
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-black dark:bg-white text-white dark:text-black shrink-0">
+                    Aceder
+                  </span>
+                </div>
               </div>
 
-              {/* Bloco de Copiar Link */}
-              <div className="space-y-1.5">
+              {/* Botão de Destaque: Partilhar Cartão com Link */}
+              <div className="space-y-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleShareCardWithLink}
+                  disabled={generatingCard}
+                  className="w-full py-3 px-4 rounded-2xl bg-black dark:bg-white text-white dark:text-black text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-98 shadow-sm hover:opacity-90 disabled:opacity-50"
+                >
+                  {generatingCard ? (
+                    <div className="w-4 h-4 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Share2 className="w-4 h-4" />
+                  )}
+                  <span>
+                    {generatingCard ? "A processar cartão com link..." : "Partilhar Cartão com Link"}
+                  </span>
+                </button>
+
+                {/* Ações Secundárias em Grelha */}
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Descarregar Imagem do Cartão */}
+                  <button
+                    type="button"
+                    onClick={handleDownloadCardImage}
+                    disabled={generatingCard}
+                    className="py-2.5 px-3 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-xs font-semibold flex items-center justify-center gap-2 transition-colors text-black dark:text-white"
+                  >
+                    {downloadFeedback ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>Descarregado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Guardar Cartão</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Partilhar no WhatsApp com Link */}
+                  <a
+                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                      `Espreita o meu perfil literário no Kuwerenga:\n${profileShareUrl}`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-2.5 px-3 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-xs font-semibold flex items-center justify-center gap-2 transition-colors text-black dark:text-white"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>WhatsApp</span>
+                  </a>
+                </div>
+              </div>
+
+              {/* Bloco de Copiar Link Manual */}
+              <div className="space-y-1.5 pt-1">
                 <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Link Direto do Perfil
+                  Link Direto
                 </label>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-600 dark:text-gray-300 truncate select-all">
@@ -1820,34 +2261,6 @@ export default function Profile() {
                     )}
                   </button>
                 </div>
-              </div>
-
-              {/* Botões de Ação de Partilha Social */}
-              <div className="space-y-2 pt-1">
-                {/* Partilhar no WhatsApp */}
-                <a
-                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                    `Espreita o perfil literário de ${profile.full_name} na plataforma Kuwerenga:\n${profileShareUrl}`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-2.5 px-4 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-xs font-semibold flex items-center justify-center gap-2 transition-colors text-black dark:text-white"
-                >
-                  <MessageCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  <span>Partilhar no WhatsApp</span>
-                </a>
-
-                {/* Partilha Nativa (Web Share API) */}
-                {typeof navigator !== "undefined" && typeof navigator.share === "function" && (
-                  <button
-                    type="button"
-                    onClick={handleNativeShare}
-                    className="w-full py-2.5 px-4 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200/70 dark:hover:bg-gray-700 text-xs font-semibold flex items-center justify-center gap-2 transition-colors text-black dark:text-white"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    <span>Partilhar com Outras Aplicações</span>
-                  </button>
-                )}
               </div>
             </div>
 
