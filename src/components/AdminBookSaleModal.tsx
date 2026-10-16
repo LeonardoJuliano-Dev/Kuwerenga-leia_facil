@@ -305,14 +305,14 @@ export default function AdminBookSaleModal({
     <>
       <div
         onClick={onClose}
-        className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 md:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+        className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4 md:p-6 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200"
       >
         <div
           onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl max-h-[94vh] flex flex-col overflow-hidden text-black dark:text-white animate-in zoom-in-95 duration-200"
+          className="w-full max-w-2xl bg-white dark:bg-gray-900 border-0 sm:border border-gray-200 dark:border-gray-800 rounded-none sm:rounded-3xl shadow-2xl h-full sm:h-auto max-h-[100dvh] sm:max-h-[92vh] flex flex-col overflow-hidden text-black dark:text-white animate-in zoom-in-95 duration-200"
         >
-          {/* Header */}
-          <div className="px-4 py-3.5 sm:px-6 sm:py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md">
+          {/* Header Fixo */}
+          <div className="px-4 py-3 sm:px-6 sm:py-3.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md pt-[max(0.75rem,env(safe-area-inset-top))]">
             <div className="flex items-center gap-2.5 min-w-0 pr-2">
               <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs shrink-0">
                 <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
@@ -328,15 +328,6 @@ export default function AdminBookSaleModal({
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               <button
-                type="button"
-                onClick={handleOpenPreview}
-                className="px-2.5 py-1.5 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 text-[11px] font-semibold flex items-center gap-1.5 transition-colors text-gray-700 dark:text-gray-300"
-                title="Pré-visualizar livro antes de publicar"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Pré-visualizar</span>
-              </button>
-              <button
                 onClick={onClose}
                 className="p-1.5 sm:p-2 rounded-xl text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 aria-label="Fechar"
@@ -346,14 +337,16 @@ export default function AdminBookSaleModal({
             </div>
           </div>
 
-          {/* Formulário com scroll suave */}
-          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
-            {error && (
-              <div className="p-3 sm:p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
+          {/* Form com Área Scrollável e Barra de Ações Fixa no Rodapé */}
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            {/* Conteúdo com Scroll Próprio */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5 overscroll-contain">
+              {error && (
+                <div className="p-3 sm:p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
 
             {/* Secção da Capa e Ficheiro */}
             <div className="p-3.5 sm:p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-3">
@@ -705,43 +698,46 @@ export default function AdminBookSaleModal({
                 />
               </div>
             </div>
+            </div>
 
-            {/* Botões de Ação Responsivos */}
-            <div className="pt-2 flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3">
+            {/* Barra de Ações Fixa no Rodapé (SEMPRE visível no telemóvel e desktop) */}
+            <div className="shrink-0 px-3.5 sm:px-6 py-3 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-between gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_25px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_25px_rgba(0,0,0,0.4)]">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={loading}
-                className="w-full sm:flex-1 py-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="py-2.5 px-3 sm:px-4 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"
               >
                 Cancelar
               </button>
-              <button
-                type="button"
-                onClick={handleOpenPreview}
-                disabled={loading}
-                className="w-full sm:w-auto px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <Eye className="w-4 h-4" />
-                <span>Pré-visualizar</span>
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full sm:flex-1 py-3 rounded-xl bg-black dark:bg-white text-white dark:text-black text-xs font-bold active:scale-95 transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {loading ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
-                    <span>A guardar...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4 stroke-[2]" />
-                    <span>{bookToEdit ? "Atualizar Livro" : "Publicar Livro"}</span>
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenPreview}
+                  disabled={loading}
+                  className="py-2.5 px-3 sm:px-4 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors text-gray-700 dark:text-gray-300"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span className="hidden xs:inline">Pré-visualizar</span>
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="py-2.5 px-4 sm:px-6 rounded-xl bg-black dark:bg-white text-white dark:text-black text-xs font-bold active:scale-95 transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
+                      <span>A guardar...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4 stroke-[2]" />
+                      <span>{bookToEdit ? "Atualizar Livro" : "Publicar Livro"}</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </form>
         </div>

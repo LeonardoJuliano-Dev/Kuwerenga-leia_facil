@@ -73,14 +73,14 @@ export default function BookSalePreviewModal({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-black/65 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4 md:p-6 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden text-black dark:text-white animate-in zoom-in-95 duration-200"
+        className="w-full max-w-xl bg-white dark:bg-gray-900 border-0 sm:border border-gray-200 dark:border-gray-800 rounded-none sm:rounded-3xl shadow-2xl h-full sm:h-auto max-h-[100dvh] sm:max-h-[92vh] flex flex-col overflow-hidden text-black dark:text-white animate-in zoom-in-95 duration-200"
       >
         {/* Cabeçalho do Modal */}
-        <div className="px-4 py-3.5 sm:px-6 sm:py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md">
+        <div className="px-4 py-3 sm:px-6 sm:py-3.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md pt-[max(0.75rem,env(safe-area-inset-top))]">
           <div className="flex items-center gap-2.5 min-w-0 pr-2">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
               <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -335,7 +335,7 @@ export default function BookSalePreviewModal({
         </div>
 
         {/* Rodapé com Ações */}
-        <div className="p-4 sm:p-5 border-t border-gray-100 dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 flex flex-col sm:flex-row gap-2.5 items-center justify-between shrink-0">
+        <div className="px-4 py-3 sm:px-6 sm:py-4 border-t border-gray-100 dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 flex flex-col-reverse sm:flex-row gap-2.5 items-center justify-between shrink-0 pb-[max(0.85rem,env(safe-area-inset-bottom))] shadow-[0_-4px_25px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_25px_rgba(0,0,0,0.4)]">
           <div className="flex items-center gap-2 w-full sm:w-auto">
             {isAdmin && onEdit && (
               <button
