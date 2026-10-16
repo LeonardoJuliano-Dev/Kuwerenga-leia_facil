@@ -173,7 +173,7 @@ export default function BookSalePreviewModal({
                   ) : (
                     <span className="text-emerald-700 dark:text-emerald-300 font-bold flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
-                      Em Stock ({book.stock_quantity || 1} disp.)
+                      Em Stock
                     </span>
                   )}
                 </div>
@@ -268,7 +268,7 @@ export default function BookSalePreviewModal({
                   Classificação da Compra
                 </span>
                 <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                  Avalia a qualidade, preço ou interesse nesta oportunidade de compra
+                  Avaliação deixada por leitores e compradores desta obra
                 </span>
               </div>
               <div className="text-sm font-bold font-mono text-amber-600 dark:text-amber-400">

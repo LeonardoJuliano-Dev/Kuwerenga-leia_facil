@@ -55,7 +55,6 @@ interface Book {
   seller_type?: "bookstore" | "independent";
   location?: string;
   delivery_options?: string;
-  stock_quantity?: number;
   physical_condition?: string;
   purchase_rating?: number;
   rating_comment?: string;
@@ -158,7 +157,6 @@ export default function Explore() {
         seller_type: sb.seller_type,
         location: sb.location,
         delivery_options: sb.delivery_options,
-        stock_quantity: sb.stock_quantity,
         physical_condition: sb.physical_condition,
         purchase_rating: sb.purchase_rating,
         rating_comment: sb.rating_comment,
@@ -245,7 +243,6 @@ export default function Explore() {
       seller_type: book.seller_type,
       location: book.location,
       delivery_options: book.delivery_options,
-      stock_quantity: book.stock_quantity,
       physical_condition: book.physical_condition,
       purchase_rating: book.purchase_rating,
       rating_comment: book.rating_comment,
@@ -299,7 +296,6 @@ export default function Explore() {
         seller_type: book.seller_type,
         location: book.location,
         delivery_options: book.delivery_options,
-        stock_quantity: book.stock_quantity,
         physical_condition: book.physical_condition,
         purchase_rating: book.purchase_rating,
         rating_comment: book.rating_comment,

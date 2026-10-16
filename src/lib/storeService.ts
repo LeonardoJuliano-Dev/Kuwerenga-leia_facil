@@ -18,12 +18,10 @@ export interface BookSaleItem {
   physical_condition?: string;
   created_at: string;
   uploaded_by?: string;
-  // Campos expandidos de venda
   seller_name?: string;
   seller_type?: "bookstore" | "independent";
   location?: string;
   delivery_options?: string;
-  stock_quantity?: number;
   purchase_rating?: number;
   rating_comment?: string;
 }
@@ -217,7 +215,6 @@ export async function upsertBookForSale(bookData: Partial<BookSaleItem>): Promis
     location: bookData.location?.trim() || undefined,
     physical_condition: bookData.physical_condition || "Novo",
     delivery_options: bookData.delivery_options || undefined,
-    stock_quantity: Number(bookData.stock_quantity) || 1,
     purchase_rating: bookData.purchase_rating !== undefined ? Number(bookData.purchase_rating) : 5,
     rating_comment: bookData.rating_comment?.trim() || undefined,
   };

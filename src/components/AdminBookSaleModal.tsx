@@ -13,9 +13,7 @@ import {
   UserCheck,
   MapPin,
   Truck,
-  Eye,
-  Star,
-  Package
+  Eye
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { extractCoverFromFile } from "../lib/coverExtractor";
@@ -49,7 +47,6 @@ export default function AdminBookSaleModal({
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("MT");
   const [stockStatus, setStockStatus] = useState<"available" | "out_of_stock">("available");
-  const [stockQuantity, setStockQuantity] = useState("1");
   const [physicalCondition, setPhysicalCondition] = useState("Novo");
   const [sellerWhatsApp, setSellerWhatsApp] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -60,9 +57,6 @@ export default function AdminBookSaleModal({
   const [sellerName, setSellerName] = useState("");
   const [location, setLocation] = useState("");
   const [deliveryOptions, setDeliveryOptions] = useState("");
-
-  // Classificação
-  const [purchaseRating, setPurchaseRating] = useState<number>(5);
 
   // Capa e ficheiros
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -89,7 +83,6 @@ export default function AdminBookSaleModal({
       setPrice(bookToEdit.price ? String(bookToEdit.price) : "");
       setCurrency(bookToEdit.currency || "MT");
       setStockStatus(bookToEdit.stock_status || "available");
-      setStockQuantity(bookToEdit.stock_quantity ? String(bookToEdit.stock_quantity) : "1");
       setPhysicalCondition(bookToEdit.physical_condition || "Novo");
       setSellerWhatsApp(bookToEdit.seller_whatsapp || "");
       setCategoryId(bookToEdit.category_id || (categories[0]?.id || ""));
@@ -98,7 +91,6 @@ export default function AdminBookSaleModal({
       setSellerName(bookToEdit.seller_name || "");
       setLocation(bookToEdit.location || "");
       setDeliveryOptions(bookToEdit.delivery_options || "");
-      setPurchaseRating(bookToEdit.purchase_rating || 5);
       setCoverPreview(bookToEdit.cover_url || null);
       setCoverFile(null);
       setBookFile(null);
@@ -110,7 +102,6 @@ export default function AdminBookSaleModal({
       setPrice("");
       setCurrency("MT");
       setStockStatus("available");
-      setStockQuantity("1");
       setPhysicalCondition("Novo");
       setSellerWhatsApp("");
       setCategoryId(categories[0]?.id || "");
@@ -119,7 +110,6 @@ export default function AdminBookSaleModal({
       setSellerName("");
       setLocation("");
       setDeliveryOptions("");
-      setPurchaseRating(5);
       setCoverPreview(null);
       setCoverFile(null);
       setBookFile(null);
@@ -146,7 +136,6 @@ export default function AdminBookSaleModal({
       price: parseFloat(price) || 0,
       currency: currency || "MT",
       stock_status: stockStatus,
-      stock_quantity: parseInt(stockQuantity, 10) || 1,
       physical_condition: physicalCondition,
       seller_whatsapp: sellerWhatsApp.trim() || "258840000000",
       seller_name: sellerName.trim() || (sellerType === "bookstore" ? "Livraria Parceira" : "Vendedor Independente"),
@@ -154,7 +143,8 @@ export default function AdminBookSaleModal({
       location: location.trim() || "Moçambique",
       delivery_options: deliveryOptions.trim() || "A combinar diretamente via WhatsApp.",
       category_id: categoryId || null,
-      purchase_rating: purchaseRating,
+      purchase_rating: bookToEdit?.purchase_rating || 5,
+      rating_comment: bookToEdit?.rating_comment,
       created_at: bookToEdit?.created_at || new Date().toISOString(),
     };
   };
@@ -286,7 +276,6 @@ export default function AdminBookSaleModal({
         price: parseFloat(price) || 0,
         currency: currency || "MT",
         stock_status: stockStatus,
-        stock_quantity: parseInt(stockQuantity, 10) || 1,
         physical_condition: physicalCondition,
         seller_whatsapp: formatWhatsAppNumber(sellerWhatsApp),
         category_id: categoryId || null,
@@ -297,7 +286,6 @@ export default function AdminBookSaleModal({
         seller_type: sellerType,
         location: location.trim() || undefined,
         delivery_options: deliveryOptions.trim() || undefined,
-        purchase_rating: purchaseRating,
       });
 
       onSaved(saved);
@@ -666,25 +654,6 @@ export default function AdminBookSaleModal({
                   </div>
                 </div>
 
-                {/* Quantidade em Stock */}
-                <div>
-                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                    Exemplares em Stock
-                  </label>
-                  <div className="relative">
-                    <Package className="w-3.5 h-3.5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={stockQuantity}
-                      onChange={(e) => setStockQuantity(e.target.value)}
-                      placeholder="Ex: 1"
-                      className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-semibold focus:outline-none focus:border-black dark:focus:border-white"
-                    />
-                  </div>
-                </div>
-
                 {/* Estado do Stock */}
                 <div>
                   <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
@@ -701,9 +670,9 @@ export default function AdminBookSaleModal({
                 </div>
 
                 {/* Condição Física */}
-                <div className="sm:col-span-3">
+                <div>
                   <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                    Estado Físico / Conservação do Livro
+                    Estado Físico / Conservação
                   </label>
                   <select
                     value={physicalCondition}
@@ -720,61 +689,20 @@ export default function AdminBookSaleModal({
               </div>
             </div>
 
-            {/* Secção: Sinopse & Classificação */}
+            {/* Secção: Sinopse & Descrição */}
             <div className="space-y-3">
               <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block">
-                Sinopse & Classificação
+                Sinopse & Descrição da Obra
               </span>
 
-              {/* Sinopse */}
               <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                  Sinopse / Descrição da Obra
-                </label>
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Escreve uma sinopse cativante ou detalhes da edição, ano e publicação..."
                   className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white resize-none"
                 />
-              </div>
-
-              {/* Classificação Inicial da Compra */}
-              <div className="p-3 sm:p-3.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <label className="text-xs font-bold text-amber-950 dark:text-amber-200 block">
-                      Classificação da Compra
-                    </label>
-                    <span className="text-[10px] text-amber-900/70 dark:text-amber-400/80">
-                      Recomendação inicial da relação qualidade / raridade / preço
-                    </span>
-                  </div>
-                  <span className="text-xs font-bold font-mono text-amber-600 dark:text-amber-400">
-                    {purchaseRating}.0 / 5.0
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setPurchaseRating(star)}
-                      className="p-1 rounded-lg text-amber-500 hover:scale-110 active:scale-95 transition-transform"
-                      title={`${star} estrelas`}
-                    >
-                      <Star
-                        className={`w-5 h-5 ${
-                          star <= purchaseRating
-                            ? "fill-amber-500 stroke-amber-500"
-                            : "text-gray-300 dark:text-gray-700 stroke-1"
-                        }`}
-                      />
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
 
