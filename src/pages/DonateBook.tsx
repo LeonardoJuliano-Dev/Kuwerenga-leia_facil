@@ -1,6 +1,21 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, UploadCloud, Book, Image, CheckCircle, AlertCircle, FileText, Sparkles, Clock, Check } from "lucide-react";
+import {
+  ArrowLeft,
+  UploadCloud,
+  Book,
+  Image,
+  AlertCircle,
+  FileText,
+  Sparkles,
+  Clock,
+  Check,
+  Search,
+  Pencil,
+  CheckCircle2,
+  RefreshCw,
+  X
+} from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { saveBookOffline } from "../lib/offlineStorage";
 import { isGuestMode } from "../lib/guestMode";
@@ -8,6 +23,7 @@ import GuestRestrictionModal from "../components/GuestRestrictionModal";
 import { extractCoverFromFile } from "../lib/coverExtractor";
 import { loadAndSyncCategories, type AppCategory } from "../lib/categoryData";
 import { analyzeBookWithAI } from "../lib/aiBookAnalyzer";
+import { searchOfficialBookMetadata, syncOfficialCategory } from "../lib/bookSearchService";
 import { notifyAdminNewDonatedBook } from "../lib/notificationService";
 
 export default function DonateBook() {
@@ -20,6 +36,7 @@ export default function DonateBook() {
   const [categoryId, setCategoryId] = useState("");
   const [categories, setCategories] = useState<AppCategory[]>([]);
   const [showGuestModal, setShowGuestModal] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Ficheiros e Extração
   const [bookFile, setBookFile] = useState<File | null>(null);
@@ -28,34 +45,66 @@ export default function DonateBook() {
   const [extractingCover, setExtractingCover] = useState(false);
   const [extractedNotice, setExtractedNotice] = useState(false);
 
-  // Estados de IA
+  // Estados de IA e Pesquisa Oficial
   const [analyzingAI, setAnalyzingAI] = useState(false);
+  const [searchingOfficial, setSearchingOfficial] = useState(false);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
 
-  // Estados de Envio
+  // Estados de Envio e Pós-Submissão
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [submittedBook, setSubmittedBook] = useState<any | null>(null);
 
-  // Carregar as 24 categorias completas e verificar modo convidado
+  // Estados de Edição do Livro Submetido
+  const [isEditingSubmitted, setIsEditingSubmitted] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editAuthor, setEditAuthor] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState("");
+  const [savingEdits, setSavingEdits] = useState(false);
+  const [approving, setApproving] = useState(false);
+
+  // Carregar categorias, perfil de admin e verificar modo convidado
   useEffect(() => {
     if (isGuestMode()) {
       setShowGuestModal(true);
       return;
     }
 
-    async function fetchCategories() {
+    async function initializeData() {
+      // 1. Carregar categorias
       const data = await loadAndSyncCategories();
       if (data && data.length > 0) {
         setCategories(data);
         setCategoryId(data[0].id);
       }
+
+      // 2. Verificar se o utilizador é administrador
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          if (user.email?.toLowerCase() === "leonardojulianoj@gmail.com") {
+            setIsAdmin(true);
+          } else {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("is_admin")
+              .eq("id", user.id)
+              .maybeSingle();
+            if (profile?.is_admin) setIsAdmin(true);
+          }
+        }
+      } catch (err) {
+        console.warn("Erro ao verificar papel de administrador:", err);
+      }
     }
-    fetchCategories();
+
+    initializeData();
   }, []);
 
-  // Gestão de ficheiro do livro (PDF / ePub) com Extração Automática por IA
+  // Gestão de ficheiro do livro (PDF / ePub) com Extração Automática Oficial e por IA
   const handleBookChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -88,7 +137,7 @@ export default function DonateBook() {
         setExtractingCover(false);
       });
 
-    // 2. Análise Inteligente com IA (deduz título, autor, sinopse e categoria)
+    // 2. Análise Inteligente e Busca Oficial em Catálogos
     setAnalyzingAI(true);
     try {
       const currentCats = categories.length > 0 ? categories : await loadAndSyncCategories();
@@ -109,17 +158,61 @@ export default function DonateBook() {
 
       const filledCount = [aiResult.title, aiResult.author, aiResult.synopsis].filter(Boolean).length;
       if (filledCount > 0) {
-        setAiNotice(`Campos e sinopse sugeridos com IA. Podes revê-los ou editar livremente.`);
+        setAiNotice("Metadados, sinopse oficial e categoria catalogados automaticamente.");
       }
     } catch (err) {
-      console.warn("Falha ao analisar metadados com IA:", err);
-      // Fallback básico: limpa nome do ficheiro para título
+      console.warn("Falha ao analisar metadados:", err);
       if (!title) {
         const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
         setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
       }
     } finally {
       setAnalyzingAI(false);
+    }
+  };
+
+  // Pesquisa Manual de Metadados e Sinopse Oficial nos Catálogos Mundiais
+  const handleManualOfficialSearch = async () => {
+    const query = title.trim() || (bookFile?.name ? bookFile.name.replace(/\.[^/.]+$/, "") : "");
+    if (!query) {
+      setError("Introduz o título do livro para pesquisar a sinopse e categoria oficiais.");
+      return;
+    }
+
+    setSearchingOfficial(true);
+    setError("");
+    try {
+      const official = await searchOfficialBookMetadata(query, author);
+      if (official) {
+        if (official.title) setTitle(official.title);
+        if (official.author) setAuthor(official.author);
+        if (official.synopsis) setDescription(official.synopsis);
+
+        if (official.categoryName) {
+          const matched = categories.find(
+            (c) => c.name.toLowerCase() === official.categoryName.toLowerCase()
+          );
+          if (matched) {
+            setCategoryId(matched.id);
+          } else {
+            const syncedId = await syncOfficialCategory(official.categoryName);
+            if (syncedId) setCategoryId(syncedId);
+          }
+        }
+
+        if (official.coverUrl && !coverPreview) {
+          setCoverPreview(official.coverUrl);
+        }
+
+        setAiNotice(`Metadados e sinopse oficiais catalogados com sucesso (${official.source === "google_books" ? "Google Books" : "Open Library"}).`);
+      } else {
+        setError("Não foi possível encontrar uma sinopse oficial para este título. Podes redigir manualmente.");
+      }
+    } catch (err) {
+      console.warn("Erro na pesquisa manual:", err);
+      setError("Ocorreu um erro ao consultar os catálogos oficiais.");
+    } finally {
+      setSearchingOfficial(false);
     }
   };
 
@@ -193,7 +286,7 @@ export default function DonateBook() {
         uploadedFileUrl = bookUrlData.publicUrl;
       }
 
-      // 3. Resolução segura de UUID da Categoria (suporte a categorias expandidas)
+      // 3. Resolução segura de UUID da Categoria
       let resolvedCategoryId: string | null = null;
       if (categoryId && !categoryId.startsWith("cat-")) {
         resolvedCategoryId = categoryId;
@@ -220,8 +313,8 @@ export default function DonateBook() {
         }
       }
 
-      // 4. Registar o Livro na Base de Dados (is_approved: false para moderação do admin)
-      setUploadProgress("A registar livro para moderação...");
+      // 4. Registar o Livro na Base de Dados (is_approved: false para moderação)
+      setUploadProgress("A submeter livro para o administrador...");
       const newBook = {
         title: title.trim(),
         author: author.trim(),
@@ -243,7 +336,7 @@ export default function DonateBook() {
 
       if (dbErr) throw dbErr;
 
-      // 5. Salvar no IndexedDB local para que o doador possa ler de imediato na sua biblioteca
+      // 5. Salvar no IndexedDB local para persistência offline
       if (insertedBook?.id) {
         await saveBookOffline(insertedBook.id, bookFile, {
           title: insertedBook.title,
@@ -252,15 +345,15 @@ export default function DonateBook() {
           file_type: fileExt,
         });
 
-        // Adiciona à biblioteca pessoal do utilizador
+        // Adiciona à estante pessoal do utilizador
         await supabase.from("user_books").upsert({
           user_id: user.id,
           book_id: insertedBook.id,
-          status: "reading",
+          status: "saved",
           is_downloaded: true,
         });
 
-        // Notifica o Administrador (leonardojulianoj@gmail.com) sobre o novo livro para aprovação
+        // Notifica o Administrador sobre o novo livro
         notifyAdminNewDonatedBook({
           id: insertedBook.id,
           title: insertedBook.title,
@@ -268,14 +361,13 @@ export default function DonateBook() {
         });
       }
 
+      // Define estado de sucesso sem redirecionamento automático
+      setSubmittedBook(insertedBook);
+      setEditTitle(insertedBook.title);
+      setEditAuthor(insertedBook.author);
+      setEditDescription(insertedBook.description || "");
+      setEditCategoryId(insertedBook.category_id || categoryId);
       setSuccess(true);
-      setTimeout(() => {
-        if (insertedBook?.id) {
-          navigate(`/reader?bookId=${insertedBook.id}`);
-        } else {
-          navigate("/home");
-        }
-      }, 2500);
 
     } catch (err: any) {
       console.error("Erro ao doar livro:", err);
@@ -285,95 +377,283 @@ export default function DonateBook() {
     }
   };
 
+  // Salvar Edições Feitas pelo Utilizador no Livro Submetido
+  const handleSaveEdits = async () => {
+    if (!submittedBook?.id) return;
+    setSavingEdits(true);
+    setError("");
+
+    try {
+      const { error: updateErr } = await supabase
+        .from("books")
+        .update({
+          title: editTitle.trim(),
+          author: editAuthor.trim(),
+          description: editDescription.trim() || null,
+          category_id: editCategoryId || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", submittedBook.id);
+
+      if (updateErr) throw updateErr;
+
+      setSubmittedBook((prev: any) => ({
+        ...prev,
+        title: editTitle.trim(),
+        author: editAuthor.trim(),
+        description: editDescription.trim(),
+        category_id: editCategoryId
+      }));
+
+      setIsEditingSubmitted(false);
+    } catch (err: any) {
+      console.error("Erro ao salvar alterações:", err);
+      setError(err?.message || "Não foi possível guardar as alterações.");
+    } finally {
+      setSavingEdits(false);
+    }
+  };
+
+  // Aprovação e Confirmação Imediata (para Administrador)
+  const handleApproveImmediately = async () => {
+    if (!submittedBook?.id) return;
+    setApproving(true);
+    setError("");
+
+    try {
+      const { error: approveErr } = await supabase
+        .from("books")
+        .update({
+          is_approved: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", submittedBook.id);
+
+      if (approveErr) throw approveErr;
+
+      setSubmittedBook((prev: any) => ({
+        ...prev,
+        is_approved: true
+      }));
+    } catch (err: any) {
+      console.error("Erro ao aprovar livro imediatamente:", err);
+      setError(err?.message || "Não foi possível disponibilizar o livro.");
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  // Reiniciar Formulário para doar outro livro
+  const handleResetForNewDonation = () => {
+    setTitle("");
+    setAuthor("");
+    setDescription("");
+    setBookFile(null);
+    setCoverFile(null);
+    setCoverPreview(null);
+    setExtractedNotice(false);
+    setAiNotice(null);
+    setSuccess(false);
+    setSubmittedBook(null);
+    setIsEditingSubmitted(false);
+    setError("");
+  };
+
+  const currentCategoryName = categories.find(
+    (c) => c.id === (submittedBook?.category_id || categoryId)
+  )?.name || "Geral";
+
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-black text-black dark:text-white pb-16">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white pb-16 transition-colors">
       
-      {/* Header */}
-      <header className="px-4 sm:px-6 pt-safe bg-white dark:bg-black border-b border-gray-100 dark:border-gray-900 sticky top-0 z-10">
-        <div className="app-container pt-6 sm:pt-8 pb-4 flex items-center justify-between">
+      {/* Header Monocromático Padrão */}
+      <header className="px-4 sm:px-6 pt-safe bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
+        <div className="app-container pt-4 sm:pt-6 pb-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
               to="/home"
-              className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+              className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors text-black dark:text-white"
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div>
-              <h1 className="text-xl font-bold">Doar um Livro</h1>
-              <span className="text-xs text-gray-500 block">Contribui para a biblioteca comunitária</span>
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight">Doar um Livro</h1>
+              <span className="text-xs text-gray-500 block">Contribui com obras para a comunidade</span>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Conteúdo Principal Centralizado */}
+      {/* Conteúdo Principal Centralizado e Responsivo */}
       <main className="flex-1 w-full max-w-xl mx-auto p-4 sm:p-6 pb-24">
         
-        {success ? (
-          <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 text-center shadow-sm animate-in zoom-in-95 duration-300 my-10 space-y-4">
-            <div className="w-16 h-16 bg-blue-50 dark:bg-blue-950/40 text-blue-500 rounded-full flex items-center justify-center mx-auto">
-              <CheckCircle className="w-8 h-8" />
+        {/* ─── PAINEL PÓS-SUBMISSÃO (ENVIADO AO ADMINISTRADOR) ─── */}
+        {success && submittedBook ? (
+          <div className="bg-white dark:bg-gray-950 rounded-2xl p-6 sm:p-8 border border-gray-200 dark:border-gray-800 text-center shadow-xs animate-in fade-in zoom-in-95 duration-200 my-4 space-y-5">
+            
+            <div className="w-14 h-14 bg-gray-100 dark:bg-gray-900 text-black dark:text-white rounded-full flex items-center justify-center mx-auto border border-gray-200 dark:border-gray-800">
+              <Clock className="w-7 h-7 stroke-[1.8]" />
             </div>
-            <h2 className="text-xl font-bold">Livro Submetido para Aprovação</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto leading-relaxed">
-              Obrigado pela tua contribuição! O livro foi submetido e ficará visível para toda a comunidade assim que for aprovado pelo administrador. Podes começar a lê-lo já na tua biblioteca pessoal.
-            </p>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-full text-xs text-gray-500">
-              <Clock className="w-3.5 h-3.5 text-amber-500" />
-              <span>A aguardar moderação • A abrir o leitor...</span>
+
+            <div className="space-y-2">
+              <h2 className="text-lg sm:text-xl font-bold tracking-tight">
+                {submittedBook.is_approved
+                  ? "Livro Aprovado e Disponível!"
+                  : "Livro Enviado ao Administrador"}
+              </h2>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 max-w-md mx-auto leading-relaxed">
+                {submittedBook.is_approved
+                  ? "O livro foi aprovado e já se encontra publicado e acessível a todos os leitores da comunidade Kuwerenga."
+                  : "O teu livro foi submetido com sucesso e encaminhado para revisão do administrador do sistema. Ficará disponível para toda a comunidade assim que for validado."}
+              </p>
+            </div>
+
+            {/* Ficha Resumo do Livro Submetido */}
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 border border-gray-200 dark:border-gray-800 text-left flex gap-3.5 sm:gap-4 items-start">
+              <div className="w-16 h-22 sm:w-20 sm:h-28 bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 dark:border-gray-700 flex items-center justify-center">
+                {submittedBook.cover_url || coverPreview ? (
+                  <img
+                    src={submittedBook.cover_url || coverPreview}
+                    alt={submittedBook.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <Book className="w-6 h-6 text-gray-400" />
+                )}
+              </div>
+
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold border border-gray-200 dark:border-gray-700 bg-white dark:bg-black text-gray-700 dark:text-gray-300">
+                  <span className="w-1.5 h-1.5 rounded-full bg-black dark:bg-white" />
+                  <span>{submittedBook.is_approved ? "Disponível para Todos" : "Aguardando Moderação"}</span>
+                </div>
+                <h3 className="font-bold text-sm sm:text-base truncate">{submittedBook.title}</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{submittedBook.author}</p>
+                <p className="text-[11px] text-gray-400 truncate">{currentCategoryName}</p>
+                {submittedBook.description && (
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 mt-1">
+                    {submittedBook.description}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Mensagem de Erro na Edição / Aprovação */}
+            {error && (
+              <div className="p-3 bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl flex items-start gap-2.5 text-xs text-left">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Ações do Painel de Confirmação */}
+            <div className="space-y-2 pt-2">
+              
+              {/* Botão de Edição Rápida */}
+              <button
+                type="button"
+                onClick={() => setIsEditingSubmitted(true)}
+                className="w-full py-3 px-4 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-black dark:text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 transition-all"
+              >
+                <Pencil className="w-4 h-4" />
+                <span>Editar Detalhes do Livro Submetido</span>
+              </button>
+
+              {/* Botão de Confirmação Rápida de Administrador */}
+              {isAdmin && !submittedBook.is_approved && (
+                <button
+                  type="button"
+                  onClick={handleApproveImmediately}
+                  disabled={approving}
+                  className="w-full py-3.5 px-4 bg-black dark:bg-white text-white dark:text-black rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs hover:opacity-90 active:scale-98 transition-all disabled:opacity-50"
+                >
+                  {approving ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
+                      <span>A confirmar...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Confirmar e Disponibilizar Agora (Admin)</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {/* Botão Doar Outro Livro */}
+              <button
+                type="button"
+                onClick={handleResetForNewDonation}
+                className="w-full py-3 px-4 rounded-xl bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 transition-all"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Doar Outro Livro</span>
+              </button>
+
+              {/* Botão Voltar ao Início */}
+              <button
+                type="button"
+                onClick={() => navigate("/home")}
+                className="w-full py-2.5 px-4 text-gray-500 hover:text-black dark:hover:text-white text-xs transition-colors font-medium"
+              >
+                Voltar à Página Inicial
+              </button>
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
+          
+          /* ─── FORMULÁRIO PRINCIPAL DE DOAÇÃO ─── */
+          <form onSubmit={handleSubmit} className="space-y-5">
             
             {/* Mensagem de Erro */}
             {error && (
-              <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-2xl flex items-start gap-3 text-red-600 dark:text-red-400 text-sm">
-                <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <div className="p-3.5 bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl flex items-start gap-3 text-xs leading-relaxed">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-black dark:text-white" />
                 <span>{error}</span>
               </div>
             )}
 
             {/* Aviso Informativo de Moderação Prévia */}
-            <div className="p-3.5 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 rounded-2xl flex items-start gap-3 text-blue-900 dark:text-blue-300 text-xs leading-relaxed">
-              <Clock className="w-4 h-4 flex-shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
+            <div className="p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl flex items-start gap-2.5 text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+              <Clock className="w-4 h-4 flex-shrink-0 mt-0.5 text-gray-500" />
               <span>
-                Para manter a alta qualidade do catálogo, cada livro doado é revisto e aprovado pelo administrador antes de ser disponibilizado publicamente a todos os utilizadores.
+                Cada livro doado é revisto e aprovado pelo administrador antes de ser disponibilizado publicamente a todos os utilizadores.
               </span>
             </div>
 
             {/* 1. Upload do Ficheiro do Livro */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">
                 Ficheiro do Livro (PDF ou ePub) *
               </label>
 
-              <label className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer transition-all ${
+              <label className={`border-2 border-dashed rounded-xl p-5 sm:p-6 flex flex-col items-center justify-center cursor-pointer transition-all ${
                 bookFile 
                   ? "border-black dark:border-white bg-gray-50 dark:bg-gray-900" 
                   : "border-gray-200 dark:border-gray-800 hover:border-gray-400 bg-white dark:bg-black"
               }`}>
                 {bookFile ? (
                   <div className="flex items-center gap-3 w-full">
-                    <div className="w-12 h-12 bg-black dark:bg-white text-white dark:text-black rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-xs uppercase">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-black dark:bg-white text-white dark:text-black rounded-lg flex items-center justify-center flex-shrink-0 font-bold text-xs uppercase">
                       {bookFile.name.split(".").pop()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate">{bookFile.name}</p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs sm:text-sm font-semibold truncate">{bookFile.name}</p>
+                      <p className="text-[11px] text-gray-500">
                         {(bookFile.size / (1024 * 1024)).toFixed(2)} MB
                       </p>
                     </div>
-                    <span className="text-xs font-medium text-emerald-500 flex items-center gap-1">
+                    <span className="text-xs font-semibold text-black dark:text-white flex items-center gap-1 border border-gray-200 dark:border-gray-700 px-2 py-1 rounded bg-white dark:bg-black">
                       <Check className="w-3.5 h-3.5" />
                       Pronto
                     </span>
                   </div>
                 ) : (
                   <>
-                    <UploadCloud className="w-10 h-10 text-gray-400 mb-2 stroke-1" />
-                    <p className="text-sm font-semibold mb-1">Clica para anexar o livro</p>
-                    <p className="text-xs text-gray-400">Suporta formatos PDF e ePub até 50MB</p>
+                    <UploadCloud className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400 mb-2 stroke-1" />
+                    <p className="text-xs sm:text-sm font-semibold mb-0.5">Toca para anexar o livro</p>
+                    <p className="text-[11px] text-gray-500">Formatos suportados: PDF ou ePub até 50MB</p>
                   </>
                 )}
                 <input
@@ -384,17 +664,17 @@ export default function DonateBook() {
                 />
               </label>
 
-              {/* Indicador de Processamento de IA */}
+              {/* Indicador de Processamento / Catalogação Automática */}
               {analyzingAI && (
-                <div className="mt-2.5 p-3 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900 rounded-xl flex items-center gap-2.5 text-purple-700 dark:text-purple-300 text-xs animate-pulse">
-                  <div className="w-4 h-4 border-2 border-purple-600 dark:border-purple-400 border-t-transparent rounded-full animate-spin" />
-                  <span>A analisar o livro com Inteligência Artificial (metadados e sinopse)...</span>
+                <div className="mt-2.5 p-3 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl flex items-center gap-2.5 text-xs text-gray-700 dark:text-gray-300">
+                  <div className="w-4 h-4 border-2 border-black dark:border-white border-t-transparent rounded-full animate-spin" />
+                  <span>A pesquisar sinopse oficial e metadados nos catálogos...</span>
                 </div>
               )}
 
               {aiNotice && !analyzingAI && (
-                <div className="mt-2.5 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded-xl flex items-center gap-2 text-emerald-700 dark:text-emerald-300 text-xs">
-                  <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <div className="mt-2.5 p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                  <Sparkles className="w-4 h-4 text-black dark:text-white shrink-0" />
                   <span>{aiNotice}</span>
                 </div>
               )}
@@ -403,64 +683,78 @@ export default function DonateBook() {
             {/* 2. Capa Opcional */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">
                   Capa do Livro
                 </label>
                 {extractedNotice && (
-                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Capa obtida da 1ª página
+                  <span className="text-[11px] font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" />
+                    Obtida automaticamente
                   </span>
                 )}
               </div>
 
-              <div className="flex items-center gap-4">
-                <div className="w-20 h-28 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 relative">
+              <div className="flex items-center gap-3.5">
+                <div className="w-16 h-22 sm:w-20 sm:h-28 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 relative">
                   {coverPreview ? (
                     <img src={coverPreview} alt="Capa" className="w-full h-full object-cover" />
                   ) : extractingCover ? (
                     <div className="flex flex-col items-center justify-center p-2 text-center text-gray-400">
-                      <div className="w-5 h-5 border-2 border-black dark:border-white border-t-transparent rounded-full animate-spin mb-1" />
-                      <span className="text-[8px] font-semibold">A extrair capa...</span>
+                      <div className="w-4 h-4 border-2 border-black dark:border-white border-t-transparent rounded-full animate-spin mb-1" />
+                      <span className="text-[8px] font-semibold">A extrair...</span>
                     </div>
                   ) : (
-                    <Image className="w-8 h-8 text-gray-400 stroke-1" />
+                    <Image className="w-6 h-6 text-gray-400 stroke-1" />
                   )}
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl text-xs font-semibold transition-colors shadow-xs">
-                    <Image className="w-4 h-4" />
+                <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                  <label className="cursor-pointer inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl text-xs font-semibold transition-colors shadow-xs w-fit">
+                    <Image className="w-3.5 h-3.5" />
                     <span>{coverPreview ? "Alterar Capa" : "Escolher Imagem"}</span>
                     <input type="file" accept="image/*" onChange={handleCoverChange} className="hidden" />
                   </label>
                   <span className="text-[10px] text-gray-500">
-                    {coverPreview
-                      ? "Podes manter a capa obtida ou escolher uma imagem personalizada."
-                      : "A capa é obtida da 1ª página ou podes carregar uma imagem."}
+                    A capa é gerada da primeira página ou podes selecionar uma imagem.
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* 3. Título do Livro */}
+            {/* 3. Título do Livro com Botão de Pesquisa Oficial */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">
                   Título do Livro *
                 </label>
-                {title && (
-                  <span className="text-[10px] text-gray-400">Sugerido por IA ou editável</span>
-                )}
+                <button
+                  type="button"
+                  onClick={handleManualOfficialSearch}
+                  disabled={searchingOfficial}
+                  className="text-[11px] font-medium text-black dark:text-white underline hover:opacity-80 flex items-center gap-1 disabled:opacity-50"
+                  title="Pesquisar sinopse e categoria oficiais nos catálogos mundiais"
+                >
+                  {searchingOfficial ? (
+                    <>
+                      <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                      <span>A pesquisar...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-3 h-3" />
+                      <span>Pesquisar Catálogo</span>
+                    </>
+                  )}
+                </button>
               </div>
               <div className="relative">
-                <Book className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Book className="w-4.5 h-4.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Ex: Terra Sonâmbula"
-                  className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-all"
+                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:border-black dark:focus:border-white transition-all"
                   required
                 />
               </div>
@@ -468,39 +762,32 @@ export default function DonateBook() {
 
             {/* 4. Autor */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
-                  Autor(a) *
-                </label>
-                {author ? (
-                  <span className="text-[10px] text-gray-400">Identificado por IA</span>
-                ) : (
-                  <span className="text-[10px] text-gray-400">Deixado em branco para digitação</span>
-                )}
-              </div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+                Autor(a) *
+              </label>
               <div className="relative">
-                <FileText className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <FileText className="w-4.5 h-4.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   value={author}
                   onChange={(e) => setAuthor(e.target.value)}
                   placeholder="Ex: Mia Couto"
-                  className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-all"
+                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:border-black dark:focus:border-white transition-all"
                   required
                 />
               </div>
             </div>
 
-            {/* 5. Categoria (Todas as 24 categorias) */}
+            {/* 5. Categoria (Sincronizada Automaticamente) */}
             {categories.length > 0 && (
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-                  Categoria / Género Literário ({categories.length} Categorias)
+                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+                  Categoria Literária ({categories.length} Categorias)
                 </label>
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full px-4 py-3.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-all"
+                  className="w-full px-3.5 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:border-black dark:focus:border-white transition-all"
                 >
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -511,46 +798,141 @@ export default function DonateBook() {
               </div>
             )}
 
-            {/* 6. Sinopse / Resumo */}
+            {/* 6. Sinopse ou Descrição Oficial */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
-                  Sinopse ou Descrição
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Sinopse ou Descrição Oficial
                 </label>
                 <span className="text-[10px] text-gray-400">
-                  {description ? "Sintetizada com IA" : "Opcional • Digita se desejares"}
+                  {description ? "Preenchida automaticamente" : "Opcional"}
                 </span>
               </div>
               <textarea
                 rows={4}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Breve resumo da obra gerado por IA ou redigido manualmente..."
-                className="w-full p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-all resize-none"
+                placeholder="Sinopse oficial da obra catalogada automaticamente ou redigida por ti..."
+                className="w-full p-3.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:border-black dark:focus:border-white transition-all resize-none leading-relaxed"
               />
             </div>
 
-            {/* Botão de Submissão */}
+            {/* Botão de Submissão com Design do Sistema */}
             <button
               type="submit"
               disabled={uploading || !bookFile || !title.trim() || !author.trim()}
-              className="w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-xl font-semibold text-sm shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none"
+              className="w-full bg-black dark:bg-white text-white dark:text-black py-3.5 sm:py-4 rounded-xl font-semibold text-xs sm:text-sm shadow-xs hover:opacity-90 active:scale-98 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none"
             >
               {uploading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white dark:border-black border-t-transparent dark:border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-4 h-4 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
                   <span>{uploadProgress}</span>
                 </>
               ) : (
                 <>
-                  <UploadCloud className="w-5 h-5" />
-                  <span>Submeter Livro para Moderação</span>
+                  <UploadCloud className="w-4.5 h-4.5 stroke-[2]" />
+                  <span>Submeter Livro para o Administrador</span>
                 </>
               )}
             </button>
           </form>
         )}
       </main>
+
+      {/* ─── MODAL DE EDIÇÃO DO LIVRO SUBMETIDO ─── */}
+      {isEditingSubmitted && submittedBook && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-lg w-full p-5 sm:p-6 border border-gray-200 dark:border-gray-800 shadow-xl space-y-4">
+            
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-4 h-4" />
+                <h3 className="font-bold text-sm sm:text-base">Editar Detalhes da Doação</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditingSubmitted(false)}
+                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-left text-xs sm:text-sm">
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                  Título
+                </label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:outline-none focus:border-black dark:focus:border-white font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                  Autor
+                </label>
+                <input
+                  type="text"
+                  value={editAuthor}
+                  onChange={(e) => setEditAuthor(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:outline-none focus:border-black dark:focus:border-white font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                  Categoria
+                </label>
+                <select
+                  value={editCategoryId}
+                  onChange={(e) => setEditCategoryId(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:outline-none focus:border-black dark:focus:border-white font-medium"
+                >
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                  Sinopse
+                </label>
+                <textarea
+                  rows={3}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:outline-none focus:border-black dark:focus:border-white font-medium resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setIsEditingSubmitted(false)}
+                className="px-4 py-2 rounded-xl text-xs font-medium border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdits}
+                disabled={savingEdits || !editTitle.trim() || !editAuthor.trim()}
+                className="px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold hover:opacity-90 disabled:opacity-50"
+              >
+                {savingEdits ? "A guardar..." : "Guardar Alterações"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Restrição para Convidados */}
       <GuestRestrictionModal

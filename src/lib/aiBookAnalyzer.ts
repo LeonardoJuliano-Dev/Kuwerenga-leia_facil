@@ -2,6 +2,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import ePub from "epubjs";
 import { EXPANDED_CATEGORIES, type AppCategory } from "./categoryData";
+import { searchOfficialBookMetadata, syncOfficialCategory } from "./bookSearchService";
 
 // Garante que o worker do pdfjs está pronto
 if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
@@ -303,6 +304,44 @@ export async function analyzeBookWithAI(
     // Fallback do título a partir do nome do ficheiro se ainda estiver vazio
     if (!extractedTitle) {
       extractedTitle = cleanExtractedTitle(file.name);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 2.5 PESQUISA EM CATÁLOGOS OFICIAIS (GOOGLE BOOKS & OPEN LIBRARY)
+    // ─────────────────────────────────────────────────────────────
+    const candidateQuery = extractedTitle || cleanExtractedTitle(file.name);
+    if (candidateQuery) {
+      try {
+        const official = await searchOfficialBookMetadata(candidateQuery, extractedAuthor);
+        if (official) {
+          const finalTitle = official.title || extractedTitle;
+          const finalAuthor = official.author || extractedAuthor;
+          const finalSynopsis = official.synopsis || extractedDescription;
+          const finalCategoryName = official.categoryName || detectCategoryFromContent(extractedText, finalTitle);
+
+          let matchedCat = availableCategories.find(
+            (c) => c.name.toLowerCase() === finalCategoryName.toLowerCase()
+          );
+
+          let resolvedCatId = matchedCat?.id;
+          if (!resolvedCatId) {
+            resolvedCatId = (await syncOfficialCategory(finalCategoryName)) || undefined;
+          }
+
+          if (finalSynopsis && finalSynopsis.length > 30) {
+            return {
+              title: finalTitle,
+              author: finalAuthor,
+              synopsis: finalSynopsis,
+              suggestedCategoryName: finalCategoryName,
+              suggestedCategoryId: resolvedCatId,
+              confidence: "high",
+            };
+          }
+        }
+      } catch (officialErr) {
+        console.warn("Pesquisa de metadados oficiais avisou:", officialErr);
+      }
     }
 
     // ─────────────────────────────────────────────────────────────
