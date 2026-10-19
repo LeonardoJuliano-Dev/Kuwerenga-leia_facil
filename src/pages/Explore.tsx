@@ -14,7 +14,8 @@ import {
   Check,
   X,
   Clock,
-  MapPin
+  MapPin,
+  Save
 } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import AdminBookSaleModal from "../components/AdminBookSaleModal";
@@ -84,6 +85,15 @@ export default function Explore() {
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [editingBook, setEditingBook] = useState<BookSaleItem | null>(null);
   const [previewSaleBook, setPreviewSaleBook] = useState<BookSaleItem | null>(null);
+
+  // Estados do Modal de Edição de Livros Doados (Admin)
+  const [editingDonatedBook, setEditingDonatedBook] = useState<Book | null>(null);
+  const [editDonatedTitle, setEditDonatedTitle] = useState("");
+  const [editDonatedAuthor, setEditDonatedAuthor] = useState("");
+  const [editDonatedDescription, setEditDonatedDescription] = useState("");
+  const [editDonatedCategoryId, setEditDonatedCategoryId] = useState("");
+  const [editDonatedCustomCategory, setEditDonatedCustomCategory] = useState("");
+  const [savingDonatedEdit, setSavingDonatedEdit] = useState(false);
 
   const navigate = useNavigate();
 
@@ -266,6 +276,74 @@ export default function Explore() {
     };
     setEditingBook(item);
     setShowSaleModal(true);
+  };
+
+  // Ações de Administrador: Editar Livro Doado (não é venda)
+  const handleEditDonatedBook = (e: React.MouseEvent, book: Book) => {
+    e.stopPropagation();
+    setEditingDonatedBook(book);
+    setEditDonatedTitle(book.title);
+    setEditDonatedAuthor(book.author);
+    setEditDonatedDescription(book.description || "");
+    setEditDonatedCategoryId(book.category_id || "");
+    setEditDonatedCustomCategory("");
+  };
+
+  const handleSaveDonatedEdit = async () => {
+    if (!editingDonatedBook) return;
+    setSavingDonatedEdit(true);
+    try {
+      // Resolve categoria personalizada: cria slug local se for nova
+      let finalCategoryId = editDonatedCategoryId;
+      if (editDonatedCategoryId === "__custom__") {
+        const trimmed = editDonatedCustomCategory.trim();
+        if (!trimmed) {
+          alert("Por favor escreve o nome da categoria personalizada.");
+          setSavingDonatedEdit(false);
+          return;
+        }
+        // Procura se já existe categoria com esse nome
+        const existing = categories.find(
+          (c) => c.name.toLowerCase() === trimmed.toLowerCase()
+        );
+        finalCategoryId = existing?.id ||
+          `cat-custom-${trimmed.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}` ||
+          "";
+      }
+
+      const { error } = await supabase
+        .from("books")
+        .update({
+          title: editDonatedTitle.trim(),
+          author: editDonatedAuthor.trim(),
+          description: editDonatedDescription.trim() || null,
+          category_id: finalCategoryId || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editingDonatedBook.id);
+
+      if (error) throw error;
+
+      setBooks((prev) =>
+        prev.map((b) =>
+          b.id === editingDonatedBook.id
+            ? {
+                ...b,
+                title: editDonatedTitle.trim(),
+                author: editDonatedAuthor.trim(),
+                description: editDonatedDescription.trim() || null,
+                category_id: finalCategoryId || null,
+              }
+            : b
+        )
+      );
+      setEditingDonatedBook(null);
+    } catch (err) {
+      console.error("Erro ao guardar edição do livro doado:", err);
+      alert("Não foi possível guardar as alterações. Tenta novamente.");
+    } finally {
+      setSavingDonatedEdit(false);
+    }
   };
 
   // Ações de Administrador: Eliminar Livro (qualquer livro do sistema)
@@ -792,13 +870,23 @@ export default function Explore() {
                               </button>
                             )}
 
-                            {isSale && (
+                            {isSale ? (
                               <button
                                 type="button"
                                 onClick={(e) => handleEditSaleBook(e, book)}
                                 className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors"
                                 title="Editar livro para venda"
                                 aria-label="Editar livro"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => handleEditDonatedBook(e, book)}
+                                className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors"
+                                title="Editar informações do livro doado"
+                                aria-label="Editar livro doado"
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
@@ -957,6 +1045,148 @@ export default function Explore() {
                   Nenhuma categoria encontrada para "{categorySearchQuery}".
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modal de Edição de Livro Doado (Admin) ─── */}
+      {editingDonatedBook && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 border-t sm:border border-gray-200 dark:border-gray-800 shadow-xl space-y-4 animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-200">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">Editar Livro Doado</h3>
+                  <p className="text-[10px] text-gray-400 leading-none mt-0.5">As alterações ficam imediatamente visíveis no catálogo</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingDonatedBook(null)}
+                className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Capa + Campos */}
+            <div className="flex gap-3.5 items-start">
+              {/* Miniatura da Capa */}
+              <div className="w-16 h-22 bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden flex-shrink-0 border border-gray-200 dark:border-gray-700 flex items-center justify-center">
+                {editingDonatedBook.cover_url ? (
+                  <img src={editingDonatedBook.cover_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <BookOpen className="w-5 h-5 text-gray-400" />
+                )}
+              </div>
+
+              {/* Campos de edição */}
+              <div className="flex-1 space-y-3">
+                {/* Título */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Título *</label>
+                  <input
+                    type="text"
+                    value={editDonatedTitle}
+                    onChange={(e) => setEditDonatedTitle(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white transition-all"
+                    placeholder="Título do livro"
+                  />
+                </div>
+
+                {/* Autor */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Autor(a) *</label>
+                  <input
+                    type="text"
+                    value={editDonatedAuthor}
+                    onChange={(e) => setEditDonatedAuthor(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white transition-all"
+                    placeholder="Nome do autor"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Género / Categoria */}
+            <div>
+              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Género / Categoria</label>
+              <select
+                value={editDonatedCategoryId}
+                onChange={(e) => {
+                  setEditDonatedCategoryId(e.target.value);
+                  if (e.target.value !== "__custom__") setEditDonatedCustomCategory("");
+                }}
+                className="w-full px-3 py-2.5 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white transition-all"
+              >
+                <option value="">— Sem categoria —</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+                <option value="__custom__">✏️ Outra categoria (escrever)...</option>
+              </select>
+
+              {/* Campo de Categoria Personalizada */}
+              {editDonatedCategoryId === "__custom__" && (
+                <div className="mt-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <input
+                    type="text"
+                    value={editDonatedCustomCategory}
+                    onChange={(e) => setEditDonatedCustomCategory(e.target.value)}
+                    placeholder="Ex: Literatura Moçambicana, Ensaio Filosófico..."
+                    className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border-2 border-black dark:border-white rounded-xl text-xs font-medium focus:outline-none transition-all"
+                    autoFocus
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1 pl-1">Escreve o nome da categoria que desejas atribuir a este livro.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Sinopse */}
+            <div>
+              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Sinopse</label>
+              <textarea
+                rows={3}
+                value={editDonatedDescription}
+                onChange={(e) => setEditDonatedDescription(e.target.value)}
+                className="w-full px-3 py-2.5 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white transition-all resize-none leading-relaxed"
+                placeholder="Sinopse ou descrição do livro..."
+              />
+            </div>
+
+            {/* Botões de Ação */}
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setEditingDonatedBook(null)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveDonatedEdit}
+                disabled={savingDonatedEdit || !editDonatedTitle.trim() || !editDonatedAuthor.trim()}
+                className="flex-[2] py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {savingDonatedEdit ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
+                    <span>A guardar...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Guardar Alterações</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

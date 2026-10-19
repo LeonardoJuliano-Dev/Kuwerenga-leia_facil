@@ -70,8 +70,12 @@ export default function DonateBook() {
   const [editAuthor, setEditAuthor] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
+  const [editCustomCategory, setEditCustomCategory] = useState("");
   const [savingEdits, setSavingEdits] = useState(false);
   const [approving, setApproving] = useState(false);
+
+  // Estado de Categoria Personalizada (formulário principal)
+  const [customCategory, setCustomCategory] = useState("");
 
   // Carregar categorias, perfil de admin e verificar modo convidado
   useEffect(() => {
@@ -325,15 +329,32 @@ export default function DonateBook() {
 
       // 3. Resolução segura de UUID da Categoria
       let resolvedCategoryId: string | null = null;
-      if (categoryId && !categoryId.startsWith("cat-")) {
-        resolvedCategoryId = categoryId;
-      } else if (categoryId) {
-        const selectedCat = categories.find((c) => c.id === categoryId);
-        if (selectedCat) {
+
+      // Obter o ID real da categoria (resolve personalizada se necessário)
+      let effectiveCategoryId = categoryId;
+      if (categoryId === "__custom__") {
+        const trimmed = customCategory.trim();
+        if (trimmed) {
+          // Verifica se já existe uma categoria com esse nome nas categorias carregadas
+          const existing = categories.find(
+            (c) => c.name.toLowerCase() === trimmed.toLowerCase()
+          );
+          effectiveCategoryId = existing?.id || `cat-custom-${trimmed.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`;
+        } else {
+          effectiveCategoryId = "";
+        }
+      }
+
+      if (effectiveCategoryId && !effectiveCategoryId.startsWith("cat-")) {
+        resolvedCategoryId = effectiveCategoryId;
+      } else if (effectiveCategoryId) {
+        const selectedCat = categories.find((c) => c.id === effectiveCategoryId);
+        const catName = selectedCat?.name || (categoryId === "__custom__" ? customCategory.trim() : null);
+        if (catName) {
           const { data: found } = await supabase
             .from("categories")
             .select("id")
-            .ilike("name", selectedCat.name)
+            .ilike("name", catName)
             .maybeSingle();
 
           if (found?.id) {
@@ -341,7 +362,7 @@ export default function DonateBook() {
           } else {
             const { data: created } = await supabase
               .from("categories")
-              .insert({ name: selectedCat.name })
+              .insert({ name: catName })
               .select("id")
               .maybeSingle();
 
@@ -421,6 +442,22 @@ export default function DonateBook() {
     setSavingEdits(true);
     setError("");
 
+    // Resolve categoria personalizada
+    let finalCategoryId = editCategoryId;
+    if (editCategoryId === "__custom__") {
+      const trimmed = editCustomCategory.trim();
+      if (!trimmed) {
+        setError("Por favor escreve o nome da categoria personalizada.");
+        setSavingEdits(false);
+        return;
+      }
+      const existing = categories.find(
+        (c) => c.name.toLowerCase() === trimmed.toLowerCase()
+      );
+      finalCategoryId = existing?.id ||
+        `cat-custom-${trimmed.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`;
+    }
+
     try {
       const { error: updateErr } = await supabase
         .from("books")
@@ -428,7 +465,7 @@ export default function DonateBook() {
           title: editTitle.trim(),
           author: editAuthor.trim(),
           description: editDescription.trim() || null,
-          category_id: editCategoryId || null,
+          category_id: finalCategoryId || null,
           updated_at: new Date().toISOString()
         })
         .eq("id", submittedBook.id);
@@ -440,7 +477,7 @@ export default function DonateBook() {
         title: editTitle.trim(),
         author: editAuthor.trim(),
         description: editDescription.trim(),
-        category_id: editCategoryId
+        category_id: finalCategoryId
       }));
 
       setIsEditingSubmitted(false);
@@ -496,6 +533,7 @@ export default function DonateBook() {
     setIsEditingSubmitted(false);
     setConfirmedReview(false);
     setError("");
+    setCustomCategory("");
   };
 
   const currentCategoryName = categories.find(
@@ -869,7 +907,10 @@ export default function DonateBook() {
                 </label>
                 <select
                   value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
+                  onChange={(e) => {
+                    setCategoryId(e.target.value);
+                    if (e.target.value !== "__custom__") setCustomCategory("");
+                  }}
                   className="w-full px-3.5 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:border-black dark:focus:border-white transition-all"
                 >
                   {categories.map((c) => (
@@ -877,7 +918,23 @@ export default function DonateBook() {
                       {c.name}
                     </option>
                   ))}
+                  <option value="__custom__">✏️ Outra categoria (escrever)...</option>
                 </select>
+
+                {/* Campo de Categoria Personalizada */}
+                {categoryId === "__custom__" && (
+                  <div className="mt-2.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                    <input
+                      type="text"
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      placeholder="Ex: Literatura Moçambicana, Contos Africanos..."
+                      className="w-full px-3.5 py-3 bg-white dark:bg-gray-900 border-2 border-black dark:border-white rounded-xl text-xs sm:text-sm font-medium focus:outline-none transition-all"
+                      autoFocus
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1 pl-1">Escreve o nome exato do género ou categoria que desejas atribuir a este livro.</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -984,7 +1041,10 @@ export default function DonateBook() {
                 </label>
                 <select
                   value={editCategoryId}
-                  onChange={(e) => setEditCategoryId(e.target.value)}
+                  onChange={(e) => {
+                    setEditCategoryId(e.target.value);
+                    if (e.target.value !== "__custom__") setEditCustomCategory("");
+                  }}
                   className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:outline-none focus:border-black dark:focus:border-white font-medium"
                 >
                   {categories.map((c) => (
@@ -992,7 +1052,23 @@ export default function DonateBook() {
                       {c.name}
                     </option>
                   ))}
+                  <option value="__custom__">✏️ Outra categoria (escrever)...</option>
                 </select>
+
+                {/* Campo de Categoria Personalizada no Modal de Edição */}
+                {editCategoryId === "__custom__" && (
+                  <div className="mt-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                    <input
+                      type="text"
+                      value={editCustomCategory}
+                      onChange={(e) => setEditCustomCategory(e.target.value)}
+                      placeholder="Ex: Literatura Moçambicana, Ensaio Filosófico..."
+                      className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border-2 border-black dark:border-white rounded-lg text-xs font-medium focus:outline-none transition-all"
+                      autoFocus
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1 pl-0.5">Escreve o nome da categoria a atribuir ao livro.</p>
+                  </div>
+                )}
               </div>
 
               <div>

@@ -51,6 +51,7 @@ export default function AdminBookSaleModal({
   const [physicalCondition, setPhysicalCondition] = useState("Novo");
   const [sellerWhatsApp, setSellerWhatsApp] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [customCategory, setCustomCategory] = useState("");
   const [bookType, setBookType] = useState<"physical" | "pdf" | "epub">("physical");
 
   // Vendedor e Localização
@@ -120,6 +121,7 @@ export default function AdminBookSaleModal({
     setShowPreviewModal(false);
     setSavedPreviewBook(null);
     setIsNewlySaved(false);
+    setCustomCategory("");
   }, [bookToEdit, isOpen, categories]);
 
   if (!isOpen) return null;
@@ -272,6 +274,21 @@ export default function AdminBookSaleModal({
       }
 
       // 2. Grava ou atualiza os dados completos do livro
+      // Resolve categoria personalizada se necessário
+      let finalCategoryId = categoryId || null;
+      if (categoryId === "__custom__") {
+        const trimmed = customCategory.trim();
+        if (trimmed) {
+          const existing = categories.find(
+            (c) => c.name.toLowerCase() === trimmed.toLowerCase()
+          );
+          finalCategoryId = existing?.id ||
+            `cat-custom-${trimmed.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`;
+        } else {
+          finalCategoryId = null;
+        }
+      }
+
       const saved = await upsertBookForSale({
         id: bookToEdit?.id,
         title: title.trim(),
@@ -282,7 +299,7 @@ export default function AdminBookSaleModal({
         stock_status: stockStatus,
         physical_condition: physicalCondition,
         seller_whatsapp: formatWhatsAppNumber(sellerWhatsApp),
-        category_id: categoryId || null,
+        category_id: finalCategoryId,
         cover_url: finalCoverUrl || null,
         file_type: bookType,
         is_for_sale: true,
@@ -474,7 +491,10 @@ export default function AdminBookSaleModal({
                   </label>
                   <select
                     value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
+                    onChange={(e) => {
+                      setCategoryId(e.target.value);
+                      if (e.target.value !== "__custom__") setCustomCategory("");
+                    }}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900 text-xs font-medium focus:outline-none focus:border-black dark:focus:border-white"
                   >
                     {categories.map((c) => (
@@ -482,7 +502,23 @@ export default function AdminBookSaleModal({
                         {c.name}
                       </option>
                     ))}
+                    <option value="__custom__">✏️ Outra categoria (escrever)...</option>
                   </select>
+
+                  {/* Campo de Categoria Personalizada */}
+                  {categoryId === "__custom__" && (
+                    <div className="mt-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <input
+                        type="text"
+                        value={customCategory}
+                        onChange={(e) => setCustomCategory(e.target.value)}
+                        placeholder="Ex: Literatura Moçambicana, Arte Contemporânea..."
+                        className="w-full px-3.5 py-2.5 bg-white dark:bg-gray-800 border-2 border-black dark:border-white rounded-xl text-xs font-medium focus:outline-none transition-all"
+                        autoFocus
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1 pl-0.5">Escreve o nome do género ou categoria a atribuir.</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Formato */}
