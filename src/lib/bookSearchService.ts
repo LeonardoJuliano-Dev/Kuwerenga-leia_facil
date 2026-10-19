@@ -35,37 +35,149 @@ export function cleanBookQuery(rawName: string): string {
 }
 
 /**
- * Tenta decompor nomes de ficheiro no formato "Autor - Título" ou "Título - Autor"
+ * Verifica se uma string se assemelha tipicamente a um título de obra literária
+ */
+export function looksLikeTitle(str: string): boolean {
+  const s = str.trim();
+  if (!s) return false;
+
+  // Inicia com artigos ou pronomes definidos/indefinidos em português/inglês/espanhol
+  if (/^(o|a|os|as|um|uma|uns|umas|the|an|el|la|los|las|un|una)\s+/i.test(s)) return true;
+
+  // Inicia com termos comuns em títulos de livros
+  if (/^(como|por que|porque|quando|onde|quem|qual|o que|guia|manual|história|historia|lições|licoes|princípios|principios|segredos|arte|poder|livro|fundamentos|regras|introdução|introducao|tratado|ensaio|diário|diario|cartas|memórias|memorias|contos|poemas|crónicas|cronicas|relato|caminho|método|metodo)\s+/i.test(s)) return true;
+
+  // Contém números (ex: 1984, 21 Lições, Volume 2, Livro 1)
+  if (/\b\d{1,4}\b/.test(s)) return true;
+
+  // Contém pontuação característica de títulos com subtítulo
+  if (/[:;?!]/.test(s)) return true;
+  if (/\b(vol|volume|edição|edicao|parte|livro|capítulo|capitulo)\b/i.test(s)) return true;
+
+  // Títulos descritivos geralmente contêm 5 ou mais palavras
+  const words = s.split(/\s+/).filter(Boolean);
+  if (words.length >= 5) return true;
+
+  return false;
+}
+
+/**
+ * Verifica se uma string se assemelha tipicamente a um nome de autor (pessoa)
+ */
+export function looksLikeAuthor(str: string): boolean {
+  const s = str.trim();
+  if (!s) return false;
+
+  // Nomes de autores não contêm números ou pontuações como : ? !
+  if (/[:;?!]/.test(s) || /\d/.test(s)) return false;
+
+  // Se começar por artigos típicos de títulos, não é nome de autor
+  if (/^(o|a|os|as|um|uma|the|como|guia|manual|história|historia|lições|licoes)\s+/i.test(s)) return false;
+
+  const words = s.split(/\s+/).filter(Boolean);
+  // Nomes de autores têm geralmente entre 2 a 4 palavras (ex: Mia Couto, Paulo Coelho, George Orwell, Machado de Assis)
+  if (words.length >= 2 && words.length <= 4) {
+    const validCapitalization = words.every((w, idx) => {
+      const lower = w.toLowerCase();
+      if (idx > 0 && ["de", "da", "do", "dos", "das", "e", "van", "von", "del", "la"].includes(lower)) {
+        return true;
+      }
+      return /^[A-ZÀ-Ú]/.test(w);
+    });
+    if (validCapitalization) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Decompõe inteligentemente nomes de ficheiro no formato "Título - Autor" ou "Autor - Título",
+ * identificando corretamente qual é o título da obra e qual é o nome do autor.
  */
 export function parseFileNameTitleAndAuthor(rawName: string): { title: string; author: string } {
-  let base = rawName.replace(/\.(pdf|epub|mobi|azw3|txt)$/i, "").trim();
-  base = base.replace(/(\[.*?\]|\(.*?\))/g, " ");
-  base = base.replace(/(z-library|oceanofpdf|doceru|lelivros|baixa-livros|pdfdrive|vdoc\.pub|elivros|annas-archive)/gi, "");
+  if (!rawName) return { title: "", author: "" };
 
-  // Se tiver hífen divisor
-  if (base.includes(" - ")) {
-    const parts = base.split(" - ").map((p) => p.trim()).filter(Boolean);
-    if (parts.length >= 2) {
-      // Geralmente "Autor - Título" ou "Título - Autor"
+  let base = rawName.replace(/\.(pdf|epub|mobi|azw3|txt)$/i, "").trim();
+
+  // 1. Remove sufixos e tags de sites conhecidos de download
+  base = base.replace(/(z-library|oceanofpdf|doceru|lelivros|baixa-livros|pdfdrive|vdoc\.pub|elivros|annas-archive|libgen)/gi, "");
+
+  // 2. Extrai autor se estiver formatado entre parêntesis ou colchetes: "Título (Autor)" ou "Título [Autor]"
+  const bracketMatch = base.match(/^(.*?)\s*[\(\[]([A-Za-zÀ-ÿ\s\.\,\'\-]+)[\)\]]\s*$/);
+  if (bracketMatch && bracketMatch[1] && bracketMatch[2]) {
+    const potentialTitle = bracketMatch[1].trim();
+    const potentialAuthor = bracketMatch[2].trim();
+    if (
+      potentialAuthor.length > 2 &&
+      !/^(pdf|epub|completo|livro|download|pt|en|scan|hq|edicao|\d+)$/i.test(potentialAuthor)
+    ) {
       return {
-        author: cleanBookQuery(parts[0]),
-        title: cleanBookQuery(parts.slice(1).join(" "))
+        title: cleanBookQuery(potentialTitle),
+        author: cleanBookQuery(potentialAuthor),
       };
     }
   }
 
-  // Se tiver 'por' ou 'by'
-  const byMatch = base.match(/^(.*?)\s+(?:por|by)\s+(.*)$/i);
+  // Remove parênteses restantes não relacionados com autoria
+  base = base.replace(/(\[.*?\]|\(.*?\))/g, " ");
+
+  // 3. Se tiver indicação explícita de autoria: "Título por Autor" ou "Título by Autor"
+  const byMatch = base.match(/^(.*?)\s+(?:por|by|escrito por)\s+(.*)$/i);
   if (byMatch && byMatch[1] && byMatch[2]) {
     return {
       title: cleanBookQuery(byMatch[1]),
-      author: cleanBookQuery(byMatch[2])
+      author: cleanBookQuery(byMatch[2]),
     };
+  }
+
+  // 4. Divisor de hífen ou travessão (" - ", " – ", " — " ou "_-_")
+  const normalizedSeparators = base
+    .replace(/[_\s]*[–—][_\s]*/g, " - ")
+    .replace(/_+/g, " ")
+    .replace(/\s+-\s+/g, " - ");
+
+  if (normalizedSeparators.includes(" - ")) {
+    const parts = normalizedSeparators.split(" - ").map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      const part0 = cleanBookQuery(parts[0]);
+      const part1 = cleanBookQuery(parts.slice(1).join(" "));
+
+      // Heurística de desambiguação inteligente entre Título e Autor
+      const part0IsTitle = looksLikeTitle(part0);
+      const part1IsTitle = looksLikeTitle(part1);
+      const part0IsAuthor = looksLikeAuthor(part0);
+      const part1IsAuthor = looksLikeAuthor(part1);
+
+      // Se part0 for claramente título ou part1 for claramente autor:
+      // Exemplo: "O Alquimista - Paulo Coelho" ou "1984 - George Orwell"
+      if ((part0IsTitle && !part1IsTitle) || (part1IsAuthor && !part0IsAuthor)) {
+        return {
+          title: part0,
+          author: part1,
+        };
+      }
+
+      // Se part1 for claramente título ou part0 for claramente autor:
+      // Exemplo: "Paulo Coelho - O Alquimista" ou "Mia Couto - O Outro Pé da Sereia"
+      if ((part1IsTitle && !part0IsTitle) || (part0IsAuthor && !part1IsAuthor)) {
+        return {
+          title: part1,
+          author: part0,
+        };
+      }
+
+      // Convenção padrão na vasta maioria dos livros digitais: "Título - Autor"
+      // (ex: "Terra Sonâmbula - Mia Couto")
+      return {
+        title: part0,
+        author: part1,
+      };
+    }
   }
 
   return {
     title: cleanBookQuery(base),
-    author: ""
+    author: "",
   };
 }
 
@@ -81,100 +193,212 @@ export function mapOfficialCategoryToAppCategory(
 
   const rules: { target: string; keywords: string[] }[] = [
     {
-      target: "Tecnologia, Programação & IA",
-      keywords: ["computer", "programming", "software", "technology", "artificial intelligence", "data science", "web", "computação", "tecnologia", "código", "algoritmo", "python", "javascript", "engenharia de software"]
+      target: "Ciência",
+      keywords: ["computer", "programming", "software", "technology", "artificial intelligence", "data science", "web", "computação", "tecnologia", "código", "algoritmo", "python", "javascript", "engenharia de software", "mathematics", "physics", "chemistry", "engineering", "science", "matemática", "física", "química", "engenharia", "ciências"]
     },
     {
-      target: "Finanças & Investimentos",
+      target: "Economia",
       keywords: ["finance", "investing", "investment", "money", "wealth", "stock", "finanças", "dinheiro", "ações", "mercado financeiro", "economia", "património", "juros"]
     },
     {
-      target: "Negócios & Empreendedorismo",
+      target: "Negócios",
       keywords: ["business", "entrepreneurship", "management", "leadership", "marketing", "sales", "strategy", "negócios", "empreendedorismo", "gestão", "liderança", "empresas", "vendas"]
     },
     {
-      target: "Literatura Moçambicana & Africana",
-      keywords: ["moçambique", "mozambique", "africa", "africana", "maputo", "mia couto", "craveirinha", "pauliana", "chiziane", "luanda", "angola", "savana", "literatura africana"]
-    },
-    {
-      target: "Desenvolvimento Pessoal & Motivação",
+      target: "Autoajuda",
       keywords: ["self-help", "motivation", "personal development", "habits", "productivity", "mindset", "autoajuda", "desenvolvimento pessoal", "hábitos", "motivação", "foco", "disciplina", "sucesso"]
     },
     {
-      target: "Ficção Científica & Fantasia",
-      keywords: ["science fiction", "sci-fi", "fantasy", "space", "galaxy", "magic", "ficção científica", "fantasia", "dragão", "espacial", "robô", "distopia", "futurismo"]
+      target: "Ficção Científica",
+      keywords: ["science fiction", "sci-fi", "space", "galaxy", "espacial", "robô", "futurismo"]
     },
     {
-      target: "História & Civilizações",
+      target: "Fantasia",
+      keywords: ["fantasy", "magic", "fantasia", "dragão", "feitiço", "mago", "elfo"]
+    },
+    {
+      target: "Distopia",
+      keywords: ["dystopia", "distopia", "totalitário", "autoritário", "futuro sombrio"]
+    },
+    {
+      target: "História",
       keywords: ["history", "civilization", "war", "empire", "revolution", "historical", "história", "guerra", "império", "século", "civilizações", "independência", "colonialismo"]
     },
     {
-      target: "Psicologia & Relações Humanas",
+      target: "Psicologia",
       keywords: ["psychology", "behavior", "emotion", "mental health", "relationships", "psicologia", "comportamento", "emoção", "terapia", "mente", "ansiedade", "relações"]
     },
     {
-      target: "Filosofia & Pensamento Crítico",
+      target: "Filosofia",
       keywords: ["philosophy", "ethics", "logic", "reason", "existence", "filosofia", "ética", "pensamento", "sócrates", "platão", "nietzsche", "estóico", "epicteto"]
     },
     {
-      target: "Poesia & Letras",
+      target: "Poesia",
       keywords: ["poetry", "poems", "verse", "poesia", "poemas", "versos", "lírica", "estrofe"]
     },
     {
-      target: "Policial, Mistério & Suspense",
-      keywords: ["mystery", "thriller", "crime", "detective", "suspense", "policial", "investigação", "assassinato", "mistério"]
+      target: "Romance Policial",
+      keywords: ["detective", "crime", "investigação", "policial", "sherlock", "agatha christie", "assassino", "investigador"]
     },
     {
-      target: "Saúde, Medicina & Bem-Estar",
+      target: "Suspense",
+      keywords: ["thriller", "suspense", "tensão", "mistério"]
+    },
+    {
+      target: "Mistério",
+      keywords: ["mystery", "mistério", "enigma", "segredo obscuro"]
+    },
+    {
+      target: "Saúde",
       keywords: ["health", "medicine", "fitness", "wellness", "diet", "nutrition", "saúde", "medicina", "bem-estar", "exercício", "alimentação", "nutrição", "clínica"]
     },
     {
-      target: "Direito, Legislação & Cidadania",
+      target: "Direito",
       keywords: ["law", "legal", "justice", "constitution", "legislation", "direito", "legislação", "leis", "constituição", "justiça", "advocacia", "cidadania"]
     },
     {
-      target: "Educação & Pedagogia",
+      target: "Educação",
       keywords: ["education", "teaching", "pedagogy", "school", "learning", "educação", "pedagogia", "ensino", "didática", "aprendizagem", "escola"]
     },
     {
-      target: "Infantil & Literatura Juvenil",
-      keywords: ["juvenile", "children", "kids", "fairy tale", "young adult", "infantil", "criança", "juvenil", "fábula", "contos infantis"]
+      target: "Infantojuvenil",
+      keywords: ["juvenile", "children", "kids", "fairy tale", "infantil", "criança", "fábula", "contos infantis"]
     },
     {
-      target: "Espiritualidade & Fé",
-      keywords: ["religion", "spirituality", "faith", "christianity", "bible", "prayer", "god", "religião", "espiritualidade", "fé", "bíblia", "oração", "deus", "evangelho"]
+      target: "Jovem Adulto",
+      keywords: ["young adult", "ya", "adolescente", "jovem adulto", "coming of age"]
     },
     {
-      target: "Biografias & Grandes Vidas",
-      keywords: ["biography", "autobiography", "memoir", "life story", "biografia", "autobiografia", "memórias"]
+      target: "Espiritualidade",
+      keywords: ["spirituality", "espiritualidade", "alma", "meditação", "paz interior"]
     },
     {
-      target: "Culinária & Gastronomia",
+      target: "Espiritismo",
+      keywords: ["spiritism", "espiritismo", "allan kardec", "chico xavier", "médium", "reencarnação"]
+    },
+    {
+      target: "Religião",
+      keywords: ["religion", "faith", "christianity", "bible", "prayer", "god", "religião", "fé", "bíblia", "oração", "deus", "evangelho", "teologia", "igreja"]
+    },
+    {
+      target: "Biografia",
+      keywords: ["biography", "memoir", "life story", "biografia", "memórias", "trajetória"]
+    },
+    {
+      target: "Autobiografia",
+      keywords: ["autobiography", "autobiografia", "minha vida"]
+    },
+    {
+      target: "Culinária",
       keywords: ["cooking", "cookbook", "culinary", "recipes", "food", "culinária", "gastronomia", "receitas", "cozinha"]
     },
     {
-      target: "Ciências Exatas & Engenharia",
-      keywords: ["mathematics", "physics", "chemistry", "engineering", "science", "matemática", "física", "química", "engenharia", "ciências"]
+      target: "Política",
+      keywords: ["politics", "political", "government", "política", "governo", "estado", "eleições", "democracia"]
     },
     {
-      target: "Política & Sociedade",
-      keywords: ["politics", "political", "society", "sociology", "government", "política", "sociologia", "governo", "cidadão"]
+      target: "Sociologia",
+      keywords: ["sociology", "society", "sociologia", "sociedade", "social", "culturas"]
     },
     {
-      target: "Arte, Fotografia & Cultura",
-      keywords: ["art", "photography", "design", "music", "cinema", "arte", "fotografia", "música", "cultura"]
+      target: "Artes",
+      keywords: ["art", "photography", "design", "cinema", "arte", "fotografia", "pintura", "arquitetura", "cultura"]
     },
     {
-      target: "Idiomas & Comunicação",
-      keywords: ["language", "linguistics", "grammar", "english", "portuguese", "dicionário", "idiomas", "gramática", "comunicação", "inglês"]
+      target: "Música",
+      keywords: ["music", "música", "canção", "álbum", "compositor", "partitura", "instrumento"]
     },
     {
-      target: "Aventura, Crónicas & Viagens",
-      keywords: ["adventure", "travel", "journey", "chronicles", "crónicas", "viagens", "aventura", "expedição"]
+      target: "Aventura",
+      keywords: ["adventure", "journey", "aventura", "expedição", "explorador"]
     },
     {
-      target: "Romance & Drama",
-      keywords: ["romance", "fiction", "drama", "novel", "love", "ficção", "novela", "paixão"]
+      target: "Viagens",
+      keywords: ["travel", "viagens", "viagem", "roteiro", "turismo", "mochilão"]
+    },
+    {
+      target: "Teatro",
+      keywords: ["theatre", "theater", "play", "dramaturgia", "teatro", "peça teatral", "ato", "cena"]
+    },
+    {
+      target: "Terror",
+      keywords: ["horror", "terror", "assombração", "pesadelo", "monstro", "vampiro"]
+    },
+    {
+      target: "Quadrinhos",
+      keywords: ["comics", "manga", "hq", "quadrinhos", "graphic novel", "tiras", "mangá"]
+    },
+    {
+      target: "Clássicos",
+      keywords: ["classic", "clássicos", "obras primas", "cânone", "literatura clássica"]
+    },
+    {
+      target: "Literatura Portuguesa",
+      keywords: ["literatura portuguesa", "portugal", "eça de queirós", "camões", "pessoa", "saramago", "lisboa", "porto"]
+    },
+    {
+      target: "Literatura Brasileira",
+      keywords: ["literatura brasileira", "brasil", "machado de assis", "clarice lispector", "jorge amado", "guimarães rosa"]
+    },
+    {
+      target: "Contos",
+      keywords: ["short stories", "contos", "coletânea de contos", "antologia"]
+    },
+    {
+      target: "Conto",
+      keywords: ["conto", "fábula curta"]
+    },
+    {
+      target: "Crônica",
+      keywords: ["crônica", "crónicas", "chronicles", "crónica"]
+    },
+    {
+      target: "Ensaios",
+      keywords: ["essays", "ensaios", "ensaio crítico"]
+    },
+    {
+      target: "Não Ficção",
+      keywords: ["non-fiction", "não ficção", "fato real", "documentário", "jornalismo"]
+    },
+    {
+      target: "Sátira",
+      keywords: ["satire", "sátira", "paródia", "ironia"]
+    },
+    {
+      target: "Comédia",
+      keywords: ["comedy", "humor", "comédia", "engraçado"]
+    },
+    {
+      target: "Épico",
+      keywords: ["epic", "épico", "ilíada", "odisseia", "heroico", "saga épica"]
+    },
+    {
+      target: "Romantismo",
+      keywords: ["romantismo", "romântico", "século xix romântico", "goethe", "alencar"]
+    },
+    {
+      target: "Realismo",
+      keywords: ["realismo", "realista", "balzac", "flaubert"]
+    },
+    {
+      target: "Naturalismo",
+      keywords: ["naturalismo", "naturalista", "zola", "aluísio azevedo"]
+    },
+    {
+      target: "Ficção Histórica",
+      keywords: ["historical fiction", "ficção histórica", "romance histórico"]
+    },
+    {
+      target: "Ficção Contemporânea",
+      keywords: ["contemporary fiction", "ficção contemporânea"]
+    },
+    {
+      target: "Drama",
+      keywords: ["drama", "conflito familiar", "tragédia"]
+    },
+    {
+      target: "Romance",
+      keywords: ["romance", "fiction", "novel", "love", "ficção", "novela", "paixão"]
     }
   ];
 
@@ -184,7 +408,7 @@ export function mapOfficialCategoryToAppCategory(
     }
   }
 
-  return "Romance & Drama";
+  return "Romance";
 }
 
 /**

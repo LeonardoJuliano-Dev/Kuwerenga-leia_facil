@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   RefreshCw,
   X,
-  FileCheck2
+  FileCheck2,
+  ArrowUpDown
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { saveBookOffline } from "../lib/offlineStorage";
@@ -252,6 +253,19 @@ export default function DonateBook() {
     setCoverFile(file);
     setCoverPreview(URL.createObjectURL(file));
     setExtractedNotice(false);
+  };
+
+  // Inverter Título e Autor caso tenham sido colocados em campos trocados
+  const handleSwapTitleAndAuthor = () => {
+    const prevTitle = title;
+    setTitle(author);
+    setAuthor(prevTitle);
+  };
+
+  const handleSwapEditTitleAndAuthor = () => {
+    const prevTitle = editTitle;
+    setEditTitle(editAuthor);
+    setEditAuthor(prevTitle);
   };
 
   // Submeter Doação (entra como pendente de aprovação)
@@ -777,31 +791,44 @@ export default function DonateBook() {
               </div>
             </div>
 
-            {/* 3. Título do Livro com Botão de Pesquisa Oficial */}
+            {/* 3. Título do Livro com Botão de Pesquisa Oficial e Troca Rápida */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">
                   Título do Livro *
                 </label>
-                <button
-                  type="button"
-                  onClick={handleManualOfficialSearch}
-                  disabled={searchingOfficial}
-                  className="text-[11px] font-medium text-black dark:text-white underline hover:opacity-80 flex items-center gap-1 disabled:opacity-50"
-                  title="Pesquisar sinopse e categoria oficiais nos catálogos mundiais"
-                >
-                  {searchingOfficial ? (
-                    <>
-                      <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                      <span>A pesquisar...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Search className="w-3 h-3" />
-                      <span>Pesquisar Catálogo</span>
-                    </>
+                <div className="flex items-center gap-2.5">
+                  {(title || author) && (
+                    <button
+                      type="button"
+                      onClick={handleSwapTitleAndAuthor}
+                      className="text-[11px] font-medium text-gray-500 hover:text-black dark:hover:text-white flex items-center gap-1 transition-colors"
+                      title="Inverter Título e Autor caso tenham ficado em campos trocados"
+                    >
+                      <ArrowUpDown className="w-3 h-3" />
+                      <span>Trocar com Autor</span>
+                    </button>
                   )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleManualOfficialSearch}
+                    disabled={searchingOfficial}
+                    className="text-[11px] font-medium text-black dark:text-white underline hover:opacity-80 flex items-center gap-1 disabled:opacity-50"
+                    title="Pesquisar sinopse e categoria oficiais nos catálogos mundiais"
+                  >
+                    {searchingOfficial ? (
+                      <>
+                        <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                        <span>A pesquisar...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-3 h-3" />
+                        <span>Pesquisar Catálogo</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
               <div className="relative">
                 <Book className="w-4.5 h-4.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -819,7 +846,7 @@ export default function DonateBook() {
             {/* 4. Autor */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
-                Autor(a) *
+                Nome do Autor(a) *
               </label>
               <div className="relative">
                 <FileText className="w-4.5 h-4.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -838,7 +865,7 @@ export default function DonateBook() {
             {categories.length > 0 && (
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
-                  Categoria Literária ({categories.length} Categorias)
+                  Género / Categoria Literária ({categories.length} Géneros)
                 </label>
                 <select
                   value={categoryId}
@@ -916,9 +943,21 @@ export default function DonateBook() {
 
             <div className="space-y-3.5 text-left text-xs sm:text-sm">
               <div>
-                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                  Título
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                    Título do Livro
+                  </label>
+                  {(editTitle || editAuthor) && (
+                    <button
+                      type="button"
+                      onClick={handleSwapEditTitleAndAuthor}
+                      className="text-[10px] font-medium text-gray-500 hover:text-black dark:hover:text-white flex items-center gap-1"
+                    >
+                      <ArrowUpDown className="w-3 h-3" />
+                      <span>Trocar com Autor</span>
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={editTitle}
@@ -929,7 +968,7 @@ export default function DonateBook() {
 
               <div>
                 <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                  Autor
+                  Nome do Autor(a)
                 </label>
                 <input
                   type="text"
@@ -941,7 +980,7 @@ export default function DonateBook() {
 
               <div>
                 <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                  Categoria
+                  Género / Categoria
                 </label>
                 <select
                   value={editCategoryId}

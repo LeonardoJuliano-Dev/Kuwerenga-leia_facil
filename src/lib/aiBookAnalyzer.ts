@@ -2,7 +2,13 @@ import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import ePub from "epubjs";
 import { EXPANDED_CATEGORIES, type AppCategory } from "./categoryData";
-import { searchOfficialBookMetadata, syncOfficialCategory } from "./bookSearchService";
+import {
+  searchOfficialBookMetadata,
+  syncOfficialCategory,
+  parseFileNameTitleAndAuthor,
+  looksLikeTitle,
+  looksLikeAuthor
+} from "./bookSearchService";
 
 // Garante que o worker do pdfjs está pronto
 if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
@@ -63,80 +69,212 @@ function detectCategoryFromContent(text: string, title: string): string {
 
   const rules: { name: string; keywords: string[] }[] = [
     {
-      name: "Tecnologia, Programação & IA",
-      keywords: ["código", "software", "programação", "javascript", "python", "computador", "algoritmo", "inteligência artificial", "web", "dados", "tecnologia"]
+      name: "Ciência",
+      keywords: ["código", "software", "programação", "javascript", "python", "computador", "algoritmo", "inteligência artificial", "web", "dados", "tecnologia", "física", "química", "matemática", "biologia", "ciência"]
     },
     {
-      name: "Finanças & Investimentos",
+      name: "Economia",
       keywords: ["dinheiro", "investimento", "finanças", "ações", "riqueza", "bolsa", "património", "juros", "lucro", "economia"]
     },
     {
-      name: "Negócios & Empreendedorismo",
+      name: "Negócios",
       keywords: ["empresa", "negócio", "empreendedor", "gestão", "liderança", "marketing", "vendas", "startup", "estratégia"]
     },
     {
-      name: "Literatura Moçambicana & Africana",
-      keywords: ["moçambique", "maputo", "mia couto", "craveirinha", "africano", "savana", "chiziane", "luanda", "angola", "beira", "nampula"]
+      name: "Autoajuda",
+      keywords: ["hábito", "mente", "sucesso", "motivação", "produtividade", "foco", "disciplina", "autoconhecimento", "potencial", "autoajuda"]
     },
     {
-      name: "Desenvolvimento Pessoal & Motivação",
-      keywords: ["hábito", "mente", "sucesso", "motivação", "produtividade", "foco", "disciplina", "autoconhecimento", "potencial"]
+      name: "Ficção Científica",
+      keywords: ["galáxia", "nave", "planeta", "espacial", "robô", "androide", "alienígena", "futurismo", "ficção científica"]
     },
     {
-      name: "Ficção Científica & Fantasia",
-      keywords: ["galáxia", "nave", "planeta", "magia", "dragão", "feitiço", "futuro", "espacial", "robô", "androide", "alienígena"]
+      name: "Fantasia",
+      keywords: ["magia", "dragão", "feitiço", "mago", "elfo", "bruxo", "feitiçaria", "fantasia"]
     },
     {
-      name: "História & Civilizações",
+      name: "Distopia",
+      keywords: ["distopia", "totalitário", "sociedade opressiva", "regime", "1984", "vigilância"]
+    },
+    {
+      name: "História",
       keywords: ["século", "guerra", "império", "revolução", "civilização", "história", "colónia", "independência", "antiguidade"]
     },
     {
-      name: "Psicologia & Relações Humanas",
-      keywords: ["comportamento", "psicologia", "emoção", "cérebro", "terapia", "ansiedade", "relação", "personalidade"]
+      name: "Psicologia",
+      keywords: ["comportamento", "psicologia", "emoção", "cérebro", "terapia", "ansiedade", "relação", "personalidade", "mente"]
     },
     {
-      name: "Filosofia & Pensamento Crítico",
+      name: "Filosofia",
       keywords: ["filosofia", "pensamento", "ética", "moral", "razão", "existência", "sócrates", "platão", "kant", "epicteto"]
     },
     {
-      name: "Poesia & Letras",
+      name: "Poesia",
       keywords: ["poema", "versos", "estrofe", "poesia", "rima", "lírica", "soneto"]
     },
     {
-      name: "Policial, Mistério & Suspense",
-      keywords: ["crime", "detetive", "assassinato", "mistério", "investigação", "polícia", "suspense", "vítima"]
+      name: "Romance Policial",
+      keywords: ["detetive", "crime", "investigação", "polícia", "sherlock", "assassino", "agatha christie", "policial"]
     },
     {
-      name: "Saúde, Medicina & Bem-Estar",
+      name: "Suspense",
+      keywords: ["suspense", "tensão", "perigo iminente", "perseguidor"]
+    },
+    {
+      name: "Mistério",
+      keywords: ["mistério", "enigma", "segredo", "desaparecimento"]
+    },
+    {
+      name: "Saúde",
       keywords: ["saúde", "corpo", "medicina", "alimentação", "exercício", "sono", "doença", "nutrição", "clínica"]
     },
     {
-      name: "Direito, Legislação & Cidadania",
+      name: "Direito",
       keywords: ["lei", "direito", "artigo", "constituição", "código penal", "tribunal", "advogado", "justiça"]
     },
     {
-      name: "Educação & Pedagogia",
+      name: "Educação",
       keywords: ["ensino", "escola", "aprendizagem", "pedagogia", "professor", "aluno", "didática", "aula"]
     },
     {
-      name: "Infantil & Literatura Juvenil",
-      keywords: ["criança", "conto de fadas", "infantil", "ilustrado", "brincadeira", "pequeno"]
+      name: "Infantojuvenil",
+      keywords: ["criança", "conto de fadas", "infantil", "ilustrado", "brincadeira", "pequeno", "infantojuvenil"]
     },
     {
-      name: "Espiritualidade & Fé",
-      keywords: ["deus", "bíblia", "oração", "espiritual", "fé", "alma", "igreja", "evangelho", "senhor"]
+      name: "Jovem Adulto",
+      keywords: ["adolescente", "jovem adulto", "colegial", "ensino médio"]
     },
     {
-      name: "Biografias & Grandes Vidas",
-      keywords: ["biografia", "memórias", "autobiografia", "vida e obra", "trajetória"]
+      name: "Espiritualidade",
+      keywords: ["espiritual", "alma", "paz interior", "meditação", "energia"]
     },
     {
-      name: "Culinária & Gastronomia",
+      name: "Espiritismo",
+      keywords: ["espiritismo", "kardec", "chico xavier", "médium", "reencarnação"]
+    },
+    {
+      name: "Religião",
+      keywords: ["deus", "bíblia", "oração", "fé", "igreja", "evangelho", "senhor", "jesus", "cristão", "religião"]
+    },
+    {
+      name: "Biografia",
+      keywords: ["biografia", "memórias", "vida e obra", "trajetória", "relato biográfico"]
+    },
+    {
+      name: "Autobiografia",
+      keywords: ["autobiografia", "minhas memórias", "minha trajetória"]
+    },
+    {
+      name: "Culinária",
       keywords: ["receita", "culinária", "ingredientes", "gastronomia", "prato", "cozinha"]
     },
     {
-      name: "Romance & Drama",
-      keywords: ["amor", "paixão", "coração", "romance", "drama", "casamento", "sentimento"]
+      name: "Política",
+      keywords: ["política", "governo", "estado", "eleição", "partido", "democracia", "cidadão"]
+    },
+    {
+      name: "Sociologia",
+      keywords: ["sociologia", "sociedade", "social", "classes sociais", "cultura coletiva"]
+    },
+    {
+      name: "Artes",
+      keywords: ["arte", "pintura", "escultura", "fotografia", "desenho", "museu"]
+    },
+    {
+      name: "Música",
+      keywords: ["música", "canção", "instrumento", "partitura", "cantor", "melodia"]
+    },
+    {
+      name: "Aventura",
+      keywords: ["aventura", "expedição", "selva", "viagem arriscada", "explorador"]
+    },
+    {
+      name: "Viagens",
+      keywords: ["viagens", "viagem", "turismo", "guia de viagem", "roteiro"]
+    },
+    {
+      name: "Teatro",
+      keywords: ["teatro", "peça teatral", "dramaturgia", "ato", "palco"]
+    },
+    {
+      name: "Terror",
+      keywords: ["terror", "horror", "monstro", "assombração", "pesadelo", "fantasma"]
+    },
+    {
+      name: "Quadrinhos",
+      keywords: ["quadrinhos", "hq", "mangá", "tirinhas", "graphic novel"]
+    },
+    {
+      name: "Clássicos",
+      keywords: ["clássicos", "obra prima clássica", "cânone literário"]
+    },
+    {
+      name: "Literatura Portuguesa",
+      keywords: ["portugal", "eça de queirós", "fernando pessoa", "saramago", "camões", "literatura portuguesa"]
+    },
+    {
+      name: "Literatura Brasileira",
+      keywords: ["brasil", "machado de assis", "clarice lispector", "jorge amado", "literatura brasileira"]
+    },
+    {
+      name: "Contos",
+      keywords: ["contos", "coletânea de contos", "antologia de contos"]
+    },
+    {
+      name: "Conto",
+      keywords: ["conto curto", "pequena história"]
+    },
+    {
+      name: "Crônica",
+      keywords: ["crônica", "crónicas", "crônica do cotidiano"]
+    },
+    {
+      name: "Ensaios",
+      keywords: ["ensaios", "ensaio crítico", "reflexão ensaística"]
+    },
+    {
+      name: "Não Ficção",
+      keywords: ["não ficção", "fato verídico", "reportagem", "investigação real"]
+    },
+    {
+      name: "Sátira",
+      keywords: ["sátira", "paródia", "crítica satírica", "ironia"]
+    },
+    {
+      name: "Comédia",
+      keywords: ["comédia", "humor", "divertido", "piada"]
+    },
+    {
+      name: "Épico",
+      keywords: ["épico", "ilíada", "odisseia", "poema épico", "feitos heroicos"]
+    },
+    {
+      name: "Romantismo",
+      keywords: ["romantismo", "romântico do século xix", "idealismo romântico"]
+    },
+    {
+      name: "Realismo",
+      keywords: ["realismo", "realista", "retrato fiel da sociedade"]
+    },
+    {
+      name: "Naturalismo",
+      keywords: ["naturalismo", "determinismo", "instinto biológico", "o cortiço"]
+    },
+    {
+      name: "Ficção Histórica",
+      keywords: ["ficção histórica", "ambientado no século", "cenário de época"]
+    },
+    {
+      name: "Ficção Contemporânea",
+      keywords: ["ficção contemporânea", "século xxi", "vida urbana atual"]
+    },
+    {
+      name: "Drama",
+      keywords: ["drama", "conflito íntimo", "dor emocional", "separação"]
+    },
+    {
+      name: "Romance",
+      keywords: ["amor", "paixão", "coração", "romance", "casamento", "sentimento", "namoro"]
     }
   ];
 
@@ -146,7 +284,7 @@ function detectCategoryFromContent(text: string, title: string): string {
     }
   }
 
-  return "Romance & Drama";
+  return "Romance";
 }
 
 /**
@@ -223,9 +361,15 @@ export async function analyzeBookWithAI(
         const info = (meta?.info as any) || {};
 
         if (info.Title && typeof info.Title === "string" && info.Title.trim().length > 2) {
-          extractedTitle = cleanExtractedTitle(info.Title);
+          if (info.Title.includes(" - ") || info.Title.includes(" – ")) {
+            const parsedMeta = parseFileNameTitleAndAuthor(info.Title);
+            if (parsedMeta.title) extractedTitle = parsedMeta.title;
+            if (parsedMeta.author) extractedAuthor = parsedMeta.author;
+          } else {
+            extractedTitle = cleanExtractedTitle(info.Title);
+          }
         }
-        if (info.Author && typeof info.Author === "string" && info.Author.trim().length > 2) {
+        if (info.Author && typeof info.Author === "string" && info.Author.trim().length > 2 && !extractedAuthor) {
           extractedAuthor = cleanExtractedAuthor(info.Author);
         }
         if (info.Subject && typeof info.Subject === "string") {
@@ -301,9 +445,22 @@ export async function analyzeBookWithAI(
       }
     }
 
-    // Fallback do título a partir do nome do ficheiro se ainda estiver vazio
-    if (!extractedTitle) {
-      extractedTitle = cleanExtractedTitle(file.name);
+    // Se título e autor parecerem invertidos após a leitura do ficheiro, normaliza
+    if (extractedTitle && extractedAuthor && looksLikeAuthor(extractedTitle) && looksLikeTitle(extractedAuthor)) {
+      const temp = extractedTitle;
+      extractedTitle = extractedAuthor;
+      extractedAuthor = temp;
+    }
+
+    // Fallback inteligente do título e autor a partir do nome do ficheiro se ainda estiverem vazios
+    if (!extractedTitle || !extractedAuthor) {
+      const parsedFromFile = parseFileNameTitleAndAuthor(file.name);
+      if (!extractedTitle && parsedFromFile.title) {
+        extractedTitle = parsedFromFile.title;
+      }
+      if (!extractedAuthor && parsedFromFile.author) {
+        extractedAuthor = parsedFromFile.author;
+      }
     }
 
     // ─────────────────────────────────────────────────────────────

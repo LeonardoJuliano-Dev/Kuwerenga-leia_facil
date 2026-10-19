@@ -21,7 +21,12 @@ import AdminBookSaleModal from "../components/AdminBookSaleModal";
 import BookSalePreviewModal from "../components/BookSalePreviewModal";
 import { supabase } from "../lib/supabase";
 import { getCached, setCached } from "../lib/cache";
-import { EXPANDED_CATEGORIES, loadAndSyncCategories, type AppCategory } from "../lib/categoryData";
+import {
+  EXPANDED_CATEGORIES,
+  loadAndSyncCategories,
+  resolveLegacyCategory,
+  type AppCategory
+} from "../lib/categoryData";
 import {
   checkIsAdmin,
   fetchBooksForSale,
@@ -187,7 +192,10 @@ export default function Explore() {
       b.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (b.description && b.description.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const matchesCategory = selectedCategory === "all" || b.category_id === selectedCategory;
+    const matchesCategory =
+      selectedCategory === "all" ||
+      b.category_id === selectedCategory ||
+      resolveLegacyCategory(b.category_id, categories) === selectedCategory;
 
     // 1. Se estiver na aba de moderação (Admin), mostra apenas pendentes
     if (catalogFilter === "pending_approval") {
@@ -834,9 +842,9 @@ export default function Explore() {
                   <Tag className="w-4 h-4 stroke-[2.2]" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm leading-tight">Filtrar por Categoria</h3>
+                  <h3 className="font-bold text-sm leading-tight">Categorias & Géneros Literários</h3>
                   <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                    {categories.length} categorias disponíveis
+                    {categories.length} géneros disponíveis
                   </span>
                 </div>
               </div>
@@ -910,7 +918,9 @@ export default function Explore() {
               {filteredCategoryList.map((cat) => {
                 const isSelected = selectedCategory === cat.id;
                 const catBookCount = allCombinedBooks.filter(
-                  (b) => b.category_id === cat.id
+                  (b) =>
+                    b.category_id === cat.id ||
+                    resolveLegacyCategory(b.category_id, categories) === cat.id
                 ).length;
 
                 return (

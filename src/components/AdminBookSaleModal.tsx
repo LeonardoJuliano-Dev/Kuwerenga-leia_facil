@@ -23,6 +23,7 @@ import {
   type BookSaleItem
 } from "../lib/storeService";
 import { analyzeBookWithAI } from "../lib/aiBookAnalyzer";
+import { parseFileNameTitleAndAuthor } from "../lib/bookSearchService";
 import BookSalePreviewModal from "./BookSalePreviewModal";
 
 interface AdminBookSaleModalProps {
@@ -170,10 +171,13 @@ export default function AdminBookSaleModal({
     if (ext === "pdf") setBookType("pdf");
     else if (ext === "epub") setBookType("epub");
 
-    // Sugere o título a partir do ficheiro se estiver vazio
-    if (!title.trim()) {
-      const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
-      setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
+    // Sugere título e autor inteligentemente a partir do nome do ficheiro
+    const parsed = parseFileNameTitleAndAuthor(file.name);
+    if (!title.trim() && parsed.title) {
+      setTitle(parsed.title);
+    }
+    if (!author.trim() && parsed.author) {
+      setAuthor(parsed.author);
     }
 
     // Extrai automaticamente a primeira página como imagem de capa
@@ -466,7 +470,7 @@ export default function AdminBookSaleModal({
                 {/* Categoria */}
                 <div>
                   <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                    Categoria
+                    Género / Categoria Literária
                   </label>
                   <select
                     value={categoryId}
