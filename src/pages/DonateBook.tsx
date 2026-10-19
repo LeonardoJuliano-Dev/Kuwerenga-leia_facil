@@ -724,14 +724,14 @@ export default function DonateBook() {
                 </button>
               )}
 
-              {/* Botão 2: Corrigir / Editar Detalhes e Capa */}
+              {/* Botão 2: Corrigir / Editar Detalhes */}
               <button
                 type="button"
                 onClick={handleOpenEditSubmitted}
                 className="w-full py-3 px-4 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-black dark:text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 transition-all"
               >
                 <Pencil className="w-4 h-4" />
-                <span>✏️ Corrigir / Editar Detalhes e Capa 📸</span>
+                <span>Corrigir / Editar Informações</span>
               </button>
 
               {/* Botão 3: Confirmação Imediata de Administrador */}
@@ -985,7 +985,7 @@ export default function DonateBook() {
                       {c.name}
                     </option>
                   ))}
-                  <option value="__custom__">✏️ Outra categoria (escrever)...</option>
+                  <option value="__custom__">Outra categoria (escrever)...</option>
                 </select>
 
                 {/* Campo de Categoria Personalizada */}
@@ -1046,24 +1046,23 @@ export default function DonateBook() {
         )}
       </main>
 
-      {/* ─── MODAL DE EDIÇÃO DO LIVRO SUBMETIDO (COMPLETO COM CAPA E RODAPÉ FIXO) ─── */}
+      {/* ─── MODAL DE EDIÇÃO DO LIVRO SUBMETIDO (RESPONSIVO MOBILE E SEM EMOJIS) ─── */}
       {isEditingSubmitted && submittedBook && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-800 shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex sm:items-center sm:justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-gray-900 w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg sm:rounded-3xl border-0 sm:border border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             
-            {/* Header Fixo com Emojis */}
-            <div className="shrink-0 px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-gray-900">
+            {/* Header Fixo */}
+            <div className="shrink-0 px-4 sm:px-6 py-3.5 sm:py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-gray-900 pt-[max(0.75rem,env(safe-area-inset-top))]">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs">
                   <Pencil className="w-4 h-4 stroke-[2.2]" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm sm:text-base flex items-center gap-1.5">
-                    <span>✏️ Editar Detalhes da Obra</span>
-                    <span className="text-xs">📚</span>
+                  <h3 className="font-bold text-sm sm:text-base leading-tight">
+                    Editar Detalhes da Obra
                   </h3>
-                  <p className="text-[11px] text-gray-400 leading-none mt-0.5">
-                    Ajusta os dados ou altera a imagem da capa ✨
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-none mt-0.5">
+                    Ajusta os dados ou altera a imagem da capa
                   </p>
                 </div>
               </div>
@@ -1078,13 +1077,14 @@ export default function DonateBook() {
             </div>
 
             {/* Corpo do Modal com Scroll Suave */}
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 overscroll-contain text-left text-xs sm:text-sm">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 overscroll-contain text-left text-xs sm:text-sm">
               
               {/* Secção de Capa com Upload e Pré-visualização Completa */}
-              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-3">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1">
-                    <span>🖼️ Imagem da Capa</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+                    <Image className="w-3.5 h-3.5 text-gray-400" />
+                    <span>Imagem da Capa</span>
                   </span>
                   {editCoverFile && (
                     <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
@@ -1094,7 +1094,7 @@ export default function DonateBook() {
                   )}
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-4 items-center sm:items-start">
+                <div className="flex flex-col sm:flex-row gap-3.5 sm:gap-4 items-center sm:items-start">
                   {/* Pré-visualização da Capa */}
                   <div className="w-24 h-34 sm:w-28 sm:h-38 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col items-center justify-center overflow-hidden shrink-0 relative shadow-sm group">
                     {editCoverPreview ? (
@@ -1117,7 +1117,7 @@ export default function DonateBook() {
                       className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1 cursor-pointer"
                     >
                       <Camera className="w-5 h-5" />
-                      <span>Trocar 📸</span>
+                      <span>Trocar</span>
                     </button>
                   </div>
 
@@ -1137,7 +1137,7 @@ export default function DonateBook() {
                       className="w-full py-2.5 px-3.5 rounded-xl bg-black dark:bg-white text-white dark:text-black text-xs font-bold flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-xs"
                     >
                       <Upload className="w-4 h-4 stroke-[2.2]" />
-                      <span>{editCoverPreview ? "📸 Alterar / Escolher Nova Capa" : "🖼️ Escolher Imagem de Capa"}</span>
+                      <span>{editCoverPreview ? "Alterar / Escolher Nova Capa" : "Escolher Imagem de Capa"}</span>
                     </button>
 
                     {editCoverFile && (
@@ -1150,12 +1150,12 @@ export default function DonateBook() {
                         className="w-full py-2 px-3 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 text-[11px] font-medium flex items-center justify-center gap-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
-                        <span>Restaurar Capa Original 🔄</span>
+                        <span>Restaurar Capa Original</span>
                       </button>
                     )}
 
                     <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed pt-1">
-                      Podes substituir a capa extraída por uma imagem de alta resolução em formato JPG ou PNG 🌟
+                      Formatos suportados: JPG, PNG ou WebP.
                     </p>
                   </div>
                 </div>
@@ -1165,7 +1165,7 @@ export default function DonateBook() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
-                    📖 Título do Livro *
+                    Título do Livro *
                   </label>
                   {(editTitle || editAuthor) && (
                     <button
@@ -1174,7 +1174,7 @@ export default function DonateBook() {
                       className="text-[11px] font-semibold text-gray-500 hover:text-black dark:hover:text-white flex items-center gap-1 px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-gray-800 transition-colors"
                     >
                       <ArrowUpDown className="w-3 h-3" />
-                      <span>Trocar com Autor 🔄</span>
+                      <span>Trocar com Autor</span>
                     </button>
                   )}
                 </div>
@@ -1191,7 +1191,7 @@ export default function DonateBook() {
               {/* Autor */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
-                  ✍️ Nome do Autor(a) *
+                  Nome do Autor(a) *
                 </label>
                 <input
                   type="text"
@@ -1206,7 +1206,7 @@ export default function DonateBook() {
               {/* Género / Categoria */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
-                  🏷️ Género / Categoria Literária
+                  Género / Categoria Literária
                 </label>
                 <select
                   value={editCategoryId}
@@ -1222,14 +1222,14 @@ export default function DonateBook() {
                       {c.name}
                     </option>
                   ))}
-                  <option value="__custom__">✏️ Outra categoria personalizada (escrever)...</option>
+                  <option value="__custom__">Outra categoria (escrever)...</option>
                 </select>
 
                 {/* Campo de Categoria Personalizada no Modal de Edição */}
                 {editCategoryId === "__custom__" && (
-                  <div className="mt-2.5 p-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/60 animate-in fade-in slide-in-from-top-2 duration-150 space-y-1.5">
-                    <label className="block text-[11px] font-bold text-amber-900 dark:text-amber-300">
-                      ✏️ Digita o Nome do Novo Género / Categoria:
+                  <div className="mt-2.5 p-3 rounded-xl bg-gray-100/70 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 animate-in fade-in slide-in-from-top-2 duration-150 space-y-1.5">
+                    <label className="block text-[11px] font-bold text-gray-800 dark:text-gray-200">
+                      Digita o Nome do Novo Género / Categoria:
                     </label>
                     <input
                       type="text"
@@ -1240,7 +1240,7 @@ export default function DonateBook() {
                       autoFocus
                     />
                     <p className="text-[10px] text-gray-500 dark:text-gray-400">
-                      Esta categoria será gravada para esta obra 🏷️
+                      Esta categoria será gravada para esta obra.
                     </p>
                   </div>
                 )}
@@ -1249,7 +1249,7 @@ export default function DonateBook() {
               {/* Sinopse */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
-                  📝 Sinopse ou Descrição da Obra
+                  Sinopse ou Descrição da Obra
                 </label>
                 <textarea
                   rows={4}
@@ -1261,15 +1261,16 @@ export default function DonateBook() {
               </div>
             </div>
 
-            {/* ─── Rodapé FIXO com Botões SEMPRE VISÍVEIS e com EMOJIS ─── */}
-            <div className="shrink-0 px-5 py-3.5 sm:py-4 border-t border-gray-100 dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md flex items-center justify-between gap-3 sticky bottom-0 z-20 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.4)]">
+            {/* Rodapé FIXO com Botões Sempre Visíveis */}
+            <div className="shrink-0 px-4 sm:px-6 py-3.5 sm:py-4 border-t border-gray-100 dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md flex items-center justify-between gap-3 sticky bottom-0 z-20 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.4)]">
               <button
                 type="button"
                 onClick={() => setIsEditingSubmitted(false)}
                 disabled={savingEdits}
                 className="py-2.5 px-4 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex items-center gap-1.5"
               >
-                <span>❌ Cancelar</span>
+                <X className="w-3.5 h-3.5" />
+                <span>Cancelar</span>
               </button>
 
               <button
@@ -1281,12 +1282,12 @@ export default function DonateBook() {
                 {savingEdits ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
-                    <span>⏳ A guardar alterações...</span>
+                    <span>A guardar alterações...</span>
                   </>
                 ) : (
                   <>
                     <Save className="w-4 h-4 stroke-[2.2]" />
-                    <span>💾 Guardar Alterações ✨</span>
+                    <span>Guardar Alterações</span>
                   </>
                 )}
               </button>

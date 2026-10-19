@@ -339,12 +339,11 @@ export default function AdminBookSaleModal({
                 <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
               </div>
               <div className="min-w-0">
-                <h2 className="font-bold text-sm sm:text-base leading-tight truncate flex items-center gap-1.5">
-                  <span>🛍️ {bookToEdit ? "Editar Livro para Venda" : "Cadastrar Livro para Venda"}</span>
-                  <span className="text-xs">✨</span>
+                <h2 className="font-bold text-sm sm:text-base leading-tight truncate">
+                  {bookToEdit ? "Editar Livro para Venda" : "Cadastrar Livro para Venda"}
                 </h2>
                 <span className="text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400 block truncate mt-0.5">
-                  👑 Painel de Administração • Gestão do Catálogo Comercial 📚
+                  Painel de Administração • Gestão do Catálogo Comercial
                 </span>
               </div>
             </div>
@@ -422,7 +421,7 @@ export default function AdminBookSaleModal({
                       className="w-full py-2.5 px-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs font-semibold flex items-center justify-center gap-1.5 hover:border-black dark:hover:border-white transition-all shadow-xs"
                     >
                       <BookOpen className="w-3.5 h-3.5 shrink-0" />
-                      <span className="truncate">{bookFile ? "📄 Trocar Ficheiro (PDF/ePub)" : "📄 Anexar PDF / ePub (Extrai Capa 🪄)"}</span>
+                      <span className="truncate">{bookFile ? "Trocar Ficheiro (PDF/ePub)" : "Anexar PDF / ePub (Extrai Capa)"}</span>
                     </button>
                   </div>
 
@@ -441,7 +440,7 @@ export default function AdminBookSaleModal({
                       className="w-full py-2.5 px-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-medium flex items-center justify-center gap-1.5 hover:text-black dark:hover:text-white transition-colors"
                     >
                       <Upload className="w-3.5 h-3.5 shrink-0" />
-                      <span className="truncate">{coverPreview ? "📸 Substituir Capa Manualmente 🖼️" : "🖼️ Carregar Imagem de Capa 📸"}</span>
+                      <span className="truncate">{coverPreview ? "Substituir Capa Manualmente" : "Carregar Imagem de Capa"}</span>
                     </button>
                   </div>
                 </div>
@@ -503,7 +502,7 @@ export default function AdminBookSaleModal({
                         {c.name}
                       </option>
                     ))}
-                    <option value="__custom__">✏️ Outra categoria (escrever)...</option>
+                    <option value="__custom__">Outra categoria (escrever)...</option>
                   </select>
 
                   {/* Campo de Categoria Personalizada */}
@@ -749,7 +748,8 @@ export default function AdminBookSaleModal({
                 disabled={loading}
                 className="py-2.5 px-3 sm:px-4 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 flex items-center gap-1.5"
               >
-                <span>❌ Cancelar</span>
+                <X className="w-3.5 h-3.5" />
+                <span>Cancelar</span>
               </button>
               <div className="flex items-center gap-2">
                 <button
@@ -759,7 +759,7 @@ export default function AdminBookSaleModal({
                   className="py-2.5 px-3 sm:px-4 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors text-gray-700 dark:text-gray-300"
                 >
                   <Eye className="w-3.5 h-3.5" />
-                  <span>👁️ Pré-visualizar 🔍</span>
+                  <span>Pré-visualizar</span>
                 </button>
                 <button
                   type="submit"
@@ -769,12 +769,12 @@ export default function AdminBookSaleModal({
                   {loading ? (
                     <>
                       <div className="w-3.5 h-3.5 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
-                      <span>⏳ A guardar alterações...</span>
+                      <span>A guardar alterações...</span>
                     </>
                   ) : (
                     <>
                       <CheckCircle className="w-4 h-4 stroke-[2]" />
-                      <span>{bookToEdit ? "💾 Atualizar Livro ✨" : "🚀 Publicar Livro ✨"}</span>
+                      <span>{bookToEdit ? "Atualizar Livro" : "Publicar Livro"}</span>
                     </>
                   )}
                 </button>
