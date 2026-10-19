@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft,
@@ -16,7 +16,11 @@ import {
   RefreshCw,
   X,
   FileCheck2,
-  ArrowUpDown
+  ArrowUpDown,
+  Camera,
+  Upload,
+  RotateCcw,
+  Save
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { saveBookOffline } from "../lib/offlineStorage";
@@ -71,8 +75,11 @@ export default function DonateBook() {
   const [editDescription, setEditDescription] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
   const [editCustomCategory, setEditCustomCategory] = useState("");
+  const [editCoverPreview, setEditCoverPreview] = useState("");
+  const [editCoverFile, setEditCoverFile] = useState<File | null>(null);
   const [savingEdits, setSavingEdits] = useState(false);
   const [approving, setApproving] = useState(false);
+  const editCoverInputRef = useRef<HTMLInputElement>(null);
 
   // Estado de Categoria Personalizada (formulário principal)
   const [customCategory, setCustomCategory] = useState("");
@@ -425,6 +432,8 @@ export default function DonateBook() {
       setEditAuthor(insertedBook.author);
       setEditDescription(insertedBook.description || "");
       setEditCategoryId(insertedBook.category_id || categoryId);
+      setEditCoverPreview(insertedBook.cover_url || "");
+      setEditCoverFile(null);
       setConfirmedReview(false);
       setSuccess(true);
 
@@ -436,18 +445,45 @@ export default function DonateBook() {
     }
   };
 
+  // Abrir o Modal de Edição do Livro Submetido inicializando todos os campos
+  const handleOpenEditSubmitted = () => {
+    if (!submittedBook) return;
+    setEditTitle(submittedBook.title || "");
+    setEditAuthor(submittedBook.author || "");
+    setEditDescription(submittedBook.description || "");
+    setEditCategoryId(submittedBook.category_id || "");
+    setEditCustomCategory("");
+    setEditCoverPreview(submittedBook.cover_url || "");
+    setEditCoverFile(null);
+    setIsEditingSubmitted(true);
+  };
+
+  // Ao selecionar nova imagem de capa no modal de edição
+  const handleEditCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("⚠️ Por favor escolhe uma imagem válida para a capa.");
+      return;
+    }
+
+    setEditCoverFile(file);
+    setEditCoverPreview(URL.createObjectURL(file));
+  };
+
   // Salvar Edições Feitas pelo Utilizador no Livro Submetido
   const handleSaveEdits = async () => {
     if (!submittedBook?.id) return;
     setSavingEdits(true);
     setError("");
 
-    // Resolve categoria personalizada
+    // 1. Resolve categoria personalizada
     let finalCategoryId = editCategoryId;
     if (editCategoryId === "__custom__") {
       const trimmed = editCustomCategory.trim();
       if (!trimmed) {
-        setError("Por favor escreve o nome da categoria personalizada.");
+        setError("⚠️ Por favor escreve o nome da categoria personalizada.");
         setSavingEdits(false);
         return;
       }
@@ -459,6 +495,34 @@ export default function DonateBook() {
     }
 
     try {
+      // 2. Upload da nova capa se foi selecionado novo ficheiro
+      let finalCoverUrl = submittedBook.cover_url;
+      if (editCoverFile) {
+        try {
+          const fileExt = editCoverFile.name.split(".").pop() || "jpg";
+          const coverPath = `donated_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+          const { error: uploadErr } = await supabase.storage
+            .from("covers")
+            .upload(coverPath, editCoverFile, { upsert: true });
+
+          if (!uploadErr) {
+            const { data: pubData } = supabase.storage.from("covers").getPublicUrl(coverPath);
+            finalCoverUrl = pubData.publicUrl;
+          } else {
+            const reader = new FileReader();
+            finalCoverUrl = await new Promise<string>((resolve) => {
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(editCoverFile);
+            });
+          }
+        } catch (uploadCatch) {
+          console.warn("⚠️ Fallback capa edição submetida:", uploadCatch);
+          finalCoverUrl = editCoverPreview || finalCoverUrl;
+        }
+      }
+
+      // 3. Atualizar livro na base de dados
       const { error: updateErr } = await supabase
         .from("books")
         .update({
@@ -466,23 +530,26 @@ export default function DonateBook() {
           author: editAuthor.trim(),
           description: editDescription.trim() || null,
           category_id: finalCategoryId || null,
+          cover_url: finalCoverUrl || null,
           updated_at: new Date().toISOString()
         })
         .eq("id", submittedBook.id);
 
       if (updateErr) throw updateErr;
 
+      // 4. Atualizar estado local
       setSubmittedBook((prev: any) => ({
         ...prev,
         title: editTitle.trim(),
         author: editAuthor.trim(),
         description: editDescription.trim(),
-        category_id: finalCategoryId
+        category_id: finalCategoryId,
+        cover_url: finalCoverUrl
       }));
 
       setIsEditingSubmitted(false);
     } catch (err: any) {
-      console.error("Erro ao salvar alterações:", err);
+      console.error("❌ Erro ao salvar alterações:", err);
       setError(err?.message || "Não foi possível guardar as alterações.");
     } finally {
       setSavingEdits(false);
@@ -657,14 +724,14 @@ export default function DonateBook() {
                 </button>
               )}
 
-              {/* Botão 2: Corrigir / Editar Detalhes */}
+              {/* Botão 2: Corrigir / Editar Detalhes e Capa */}
               <button
                 type="button"
-                onClick={() => setIsEditingSubmitted(true)}
+                onClick={handleOpenEditSubmitted}
                 className="w-full py-3 px-4 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-black dark:text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 transition-all"
               >
                 <Pencil className="w-4 h-4" />
-                <span>Corrigir / Editar Informações</span>
+                <span>✏️ Corrigir / Editar Detalhes e Capa 📸</span>
               </button>
 
               {/* Botão 3: Confirmação Imediata de Administrador */}
@@ -979,39 +1046,135 @@ export default function DonateBook() {
         )}
       </main>
 
-      {/* ─── MODAL DE EDIÇÃO DO LIVRO SUBMETIDO ─── */}
+      {/* ─── MODAL DE EDIÇÃO DO LIVRO SUBMETIDO (COMPLETO COM CAPA E RODAPÉ FIXO) ─── */}
       {isEditingSubmitted && submittedBook && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-lg w-full p-5 sm:p-6 border border-gray-200 dark:border-gray-800 shadow-xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-800 shadow-2xl animate-in zoom-in-95 duration-200">
             
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Pencil className="w-4 h-4" />
-                <h3 className="font-bold text-sm sm:text-base">Editar Detalhes da Obra</h3>
+            {/* Header Fixo com Emojis */}
+            <div className="shrink-0 px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-gray-900">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs">
+                  <Pencil className="w-4 h-4 stroke-[2.2]" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base flex items-center gap-1.5">
+                    <span>✏️ Editar Detalhes da Obra</span>
+                    <span className="text-xs">📚</span>
+                  </h3>
+                  <p className="text-[11px] text-gray-400 leading-none mt-0.5">
+                    Ajusta os dados ou altera a imagem da capa ✨
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsEditingSubmitted(false)}
-                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"
+                className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-black dark:hover:text-white transition-colors"
+                title="Fechar"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-3.5 text-left text-xs sm:text-sm">
+            {/* Corpo do Modal com Scroll Suave */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 overscroll-contain text-left text-xs sm:text-sm">
+              
+              {/* Secção de Capa com Upload e Pré-visualização Completa */}
+              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1">
+                    <span>🖼️ Imagem da Capa</span>
+                  </span>
+                  {editCoverFile && (
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" />
+                      <span>Nova capa pronta</span>
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4 items-center sm:items-start">
+                  {/* Pré-visualização da Capa */}
+                  <div className="w-24 h-34 sm:w-28 sm:h-38 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col items-center justify-center overflow-hidden shrink-0 relative shadow-sm group">
+                    {editCoverPreview ? (
+                      <img
+                        src={editCoverPreview}
+                        alt="Capa do Livro"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center p-2 text-center text-gray-400">
+                        <Image className="w-7 h-7 mb-1 opacity-60" />
+                        <span className="text-[10px] font-semibold">Sem capa</span>
+                      </div>
+                    )}
+
+                    {/* Botão de câmara em hover */}
+                    <button
+                      type="button"
+                      onClick={() => editCoverInputRef.current?.click()}
+                      className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1 cursor-pointer"
+                    >
+                      <Camera className="w-5 h-5" />
+                      <span>Trocar 📸</span>
+                    </button>
+                  </div>
+
+                  {/* Ações da Capa */}
+                  <div className="flex-1 w-full space-y-2">
+                    <input
+                      ref={editCoverInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleEditCoverChange}
+                      className="hidden"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => editCoverInputRef.current?.click()}
+                      className="w-full py-2.5 px-3.5 rounded-xl bg-black dark:bg-white text-white dark:text-black text-xs font-bold flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-xs"
+                    >
+                      <Upload className="w-4 h-4 stroke-[2.2]" />
+                      <span>{editCoverPreview ? "📸 Alterar / Escolher Nova Capa" : "🖼️ Escolher Imagem de Capa"}</span>
+                    </button>
+
+                    {editCoverFile && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditCoverFile(null);
+                          setEditCoverPreview(submittedBook.cover_url || "");
+                        }}
+                        className="w-full py-2 px-3 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 text-[11px] font-medium flex items-center justify-center gap-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Restaurar Capa Original 🔄</span>
+                      </button>
+                    )}
+
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed pt-1">
+                      Podes substituir a capa extraída por uma imagem de alta resolução em formato JPG ou PNG 🌟
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Título */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                    Título do Livro
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                    📖 Título do Livro *
                   </label>
                   {(editTitle || editAuthor) && (
                     <button
                       type="button"
                       onClick={handleSwapEditTitleAndAuthor}
-                      className="text-[10px] font-medium text-gray-500 hover:text-black dark:hover:text-white flex items-center gap-1"
+                      className="text-[11px] font-semibold text-gray-500 hover:text-black dark:hover:text-white flex items-center gap-1 px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-gray-800 transition-colors"
                     >
                       <ArrowUpDown className="w-3 h-3" />
-                      <span>Trocar com Autor</span>
+                      <span>Trocar com Autor 🔄</span>
                     </button>
                   )}
                 </div>
@@ -1019,25 +1182,31 @@ export default function DonateBook() {
                   type="text"
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:outline-none focus:border-black dark:focus:border-white font-medium"
+                  className="w-full px-3.5 py-2.5 bg-gray-50/70 dark:bg-black border border-gray-200 dark:border-gray-700 rounded-xl font-semibold text-xs sm:text-sm focus:outline-none focus:border-black dark:focus:border-white transition-all"
+                  placeholder="Título da obra"
+                  required
                 />
               </div>
 
+              {/* Autor */}
               <div>
-                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                  Nome do Autor(a)
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                  ✍️ Nome do Autor(a) *
                 </label>
                 <input
                   type="text"
                   value={editAuthor}
                   onChange={(e) => setEditAuthor(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:outline-none focus:border-black dark:focus:border-white font-medium"
+                  className="w-full px-3.5 py-2.5 bg-gray-50/70 dark:bg-black border border-gray-200 dark:border-gray-700 rounded-xl font-semibold text-xs sm:text-sm focus:outline-none focus:border-black dark:focus:border-white transition-all"
+                  placeholder="Nome do autor"
+                  required
                 />
               </div>
 
+              {/* Género / Categoria */}
               <div>
-                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                  Género / Categoria
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                  🏷️ Género / Categoria Literária
                 </label>
                 <select
                   value={editCategoryId}
@@ -1045,62 +1214,84 @@ export default function DonateBook() {
                     setEditCategoryId(e.target.value);
                     if (e.target.value !== "__custom__") setEditCustomCategory("");
                   }}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:outline-none focus:border-black dark:focus:border-white font-medium"
+                  className="w-full px-3.5 py-2.5 bg-gray-50/70 dark:bg-black border border-gray-200 dark:border-gray-700 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:border-black dark:focus:border-white transition-all"
                 >
+                  <option value="">— Sem categoria definida —</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
                   ))}
-                  <option value="__custom__">✏️ Outra categoria (escrever)...</option>
+                  <option value="__custom__">✏️ Outra categoria personalizada (escrever)...</option>
                 </select>
 
                 {/* Campo de Categoria Personalizada no Modal de Edição */}
                 {editCategoryId === "__custom__" && (
-                  <div className="mt-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="mt-2.5 p-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/60 animate-in fade-in slide-in-from-top-2 duration-150 space-y-1.5">
+                    <label className="block text-[11px] font-bold text-amber-900 dark:text-amber-300">
+                      ✏️ Digita o Nome do Novo Género / Categoria:
+                    </label>
                     <input
                       type="text"
                       value={editCustomCategory}
                       onChange={(e) => setEditCustomCategory(e.target.value)}
-                      placeholder="Ex: Literatura Moçambicana, Ensaio Filosófico..."
-                      className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border-2 border-black dark:border-white rounded-lg text-xs font-medium focus:outline-none transition-all"
+                      placeholder="Ex: Literatura Moçambicana, Contos Africanos..."
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-900 border-2 border-black dark:border-white rounded-lg text-xs font-medium focus:outline-none transition-all"
                       autoFocus
                     />
-                    <p className="text-[10px] text-gray-400 mt-1 pl-0.5">Escreve o nome da categoria a atribuir ao livro.</p>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                      Esta categoria será gravada para esta obra 🏷️
+                    </p>
                   </div>
                 )}
               </div>
 
+              {/* Sinopse */}
               <div>
-                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                  Sinopse
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                  📝 Sinopse ou Descrição da Obra
                 </label>
                 <textarea
                   rows={4}
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:outline-none focus:border-black dark:focus:border-white font-medium resize-none leading-relaxed"
+                  placeholder="Escreve uma sinopse cativante da obra..."
+                  className="w-full px-3.5 py-2.5 bg-gray-50/70 dark:bg-black border border-gray-200 dark:border-gray-700 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:border-black dark:focus:border-white transition-all resize-none leading-relaxed"
                 />
               </div>
             </div>
 
-            <div className="flex gap-2 pt-2 justify-end">
+            {/* ─── Rodapé FIXO com Botões SEMPRE VISÍVEIS e com EMOJIS ─── */}
+            <div className="shrink-0 px-5 py-3.5 sm:py-4 border-t border-gray-100 dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md flex items-center justify-between gap-3 sticky bottom-0 z-20 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.4)]">
               <button
                 type="button"
                 onClick={() => setIsEditingSubmitted(false)}
-                className="px-4 py-2 rounded-xl text-xs font-medium border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800"
+                disabled={savingEdits}
+                className="py-2.5 px-4 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex items-center gap-1.5"
               >
-                Cancelar
+                <span>❌ Cancelar</span>
               </button>
+
               <button
                 type="button"
                 onClick={handleSaveEdits}
                 disabled={savingEdits || !editTitle.trim() || !editAuthor.trim()}
-                className="px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold hover:opacity-90 disabled:opacity-50"
+                className="py-2.5 px-5 sm:px-6 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-md disabled:opacity-50 disabled:pointer-events-none"
               >
-                {savingEdits ? "A guardar..." : "Guardar Alterações"}
+                {savingEdits ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
+                    <span>⏳ A guardar alterações...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 stroke-[2.2]" />
+                    <span>💾 Guardar Alterações ✨</span>
+                  </>
+                )}
               </button>
             </div>
+
           </div>
         </div>
       )}
