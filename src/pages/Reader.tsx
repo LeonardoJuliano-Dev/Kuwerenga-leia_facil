@@ -25,7 +25,9 @@ import {
   Moon,
   Laptop,
   Clock,
-  CheckCircle2
+  CheckCircle2,
+  Sparkles,
+  Info
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import "pdfjs-dist/web/pdf_viewer.css";
@@ -392,6 +394,7 @@ export default function Reader() {
   const [dictionaryLoading, setDictionaryLoading] = useState(false);
   const [dictionaryResult, setDictionaryResult] = useState<DefinitionResult | null>(null);
   const [dictionaryError, setDictionaryError] = useState<string | null>(null);
+  const [copiedDefFeedback, setCopiedDefFeedback] = useState(false);
 
   // Estados para Saltar de Página
   const [showJumpPopover, setShowJumpPopover] = useState(false);
@@ -1617,6 +1620,30 @@ export default function Reader() {
     setShowDictionaryModal(false);
   };
 
+  const handleCopyDefinition = async () => {
+    if (!dictionaryResult) return;
+    try {
+      const parts = [
+        `${dictionaryResult.term}${dictionaryResult.grammaticalClass ? ` (${dictionaryResult.grammaticalClass})` : ""}`,
+      ];
+      if (dictionaryResult.inflectionNote) {
+        parts.push(dictionaryResult.inflectionNote);
+      }
+      parts.push("");
+      dictionaryResult.definitions.forEach((d, i) => {
+        parts.push(`${i + 1}. ${d}`);
+      });
+      if (dictionaryResult.examples && dictionaryResult.examples.length > 0) {
+        parts.push("");
+        parts.push("Exemplo:");
+        dictionaryResult.examples.forEach((ex) => parts.push(`"${ex}"`));
+      }
+      await navigator.clipboard.writeText(parts.join("\n"));
+      setCopiedDefFeedback(true);
+      setTimeout(() => setCopiedDefFeedback(false), 1600);
+    } catch {}
+  };
+
   // ─── Cleanup EPUB on unmount ──────────────────────────────────
 
   useEffect(() => {
@@ -2465,19 +2492,43 @@ export default function Reader() {
               ) : dictionaryResult ? (
                 <div>
                   {/* Cabeçalho do Termo */}
-                  <div className="flex items-baseline gap-2.5 mb-2 flex-wrap">
+                  <div className="flex items-baseline gap-2 mb-1.5 flex-wrap">
                     <h2 className="text-xl font-bold tracking-tight capitalize">{dictionaryResult.term}</h2>
                     {dictionaryResult.grammaticalClass && (
-                      <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[11px] font-semibold">
+                      <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-[11px] font-semibold border border-gray-200 dark:border-gray-700">
                         {dictionaryResult.grammaticalClass}
                       </span>
                     )}
                     {dictionaryResult.type === "phrase" && (
-                      <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[11px] font-semibold">
+                      <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-[11px] font-semibold border border-gray-200 dark:border-gray-700">
                         Expressão
                       </span>
                     )}
                   </div>
+
+                  {/* Lema Raiz quando é Forma Flexionada */}
+                  {dictionaryResult.baseForm && dictionaryResult.baseForm.toLowerCase() !== dictionaryResult.term.toLowerCase() && (
+                    <div className="flex items-center gap-1.5 mb-2.5 flex-wrap">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Forma base / Lema:</span>
+                      <button
+                        type="button"
+                        onClick={() => handleLookupDefinition(dictionaryResult.baseForm)}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200/80 dark:border-amber-800 text-amber-800 dark:text-amber-200 font-bold text-xs hover:bg-amber-100 dark:hover:bg-amber-900/60 active:scale-95 transition-all"
+                        title={`Consultar a definição de ${dictionaryResult.baseForm}`}
+                      >
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        <span>{dictionaryResult.baseForm}</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Nota de Flexão Gramatical */}
+                  {dictionaryResult.inflectionNote && (
+                    <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/50 rounded-xl text-xs text-amber-900 dark:text-amber-200 mb-3 flex items-start gap-2">
+                      <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <span className="font-medium leading-relaxed">{dictionaryResult.inflectionNote}</span>
+                    </div>
+                  )}
 
                   {dictionaryResult.etymology && (
                     <p className="text-xs italic text-gray-400 mb-4">
@@ -2493,7 +2544,7 @@ export default function Reader() {
                     <ol className="space-y-2.5">
                       {dictionaryResult.definitions.map((def, idx) => (
                         <li key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm leading-relaxed">
-                          <span className="w-5 h-5 rounded-full bg-gray-100 dark:bg-gray-800 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5 text-gray-600 dark:text-gray-300">
+                          <span className="w-5 h-5 rounded-full bg-gray-100 dark:bg-gray-800 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
                             {idx + 1}
                           </span>
                           <span className="flex-1">{def}</span>
@@ -2502,10 +2553,61 @@ export default function Reader() {
                     </ol>
                   </div>
 
+                  {/* Exemplos de uso */}
+                  {dictionaryResult.examples && dictionaryResult.examples.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 space-y-2">
+                      <h4 className="text-[11px] uppercase tracking-wider font-bold text-gray-400 flex items-center gap-1.5">
+                        <BookOpen className="w-3 h-3 text-gray-400" />
+                        <span>Exemplo de uso</span>
+                      </h4>
+                      <div className="space-y-1.5">
+                        {dictionaryResult.examples.map((ex, idx) => (
+                          <blockquote
+                            key={idx}
+                            className="text-xs italic text-gray-600 dark:text-gray-300 pl-3 border-l-2 border-amber-400 dark:border-amber-500 py-0.5"
+                          >
+                            "{ex}"
+                          </blockquote>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sinónimos Interativos */}
+                  {dictionaryResult.synonyms && dictionaryResult.synonyms.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+                      <h4 className="text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-2">
+                        Sinónimos
+                      </h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {dictionaryResult.synonyms.map((syn, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleLookupDefinition(syn)}
+                            className="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-medium hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black border border-gray-200 dark:border-gray-700 transition-colors"
+                          >
+                            {syn}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Fonte */}
                   <div className="mt-5 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[10px] text-gray-400">
                     <span>
-                      Fonte: {dictionaryResult.source === "dicionario" ? "Dicionário Aberto da Língua Portuguesa" : dictionaryResult.source === "wikipedia" ? "Wikipédia Lusófona" : "Memória de Vocabulário"}
+                      Fonte: {
+                        dictionaryResult.source === "wiktionary"
+                          ? "Wikcionário Lusófono (Base Aberta Atualizada)"
+                          : dictionaryResult.source === "dicionario"
+                          ? "Dicionário da Língua Portuguesa"
+                          : dictionaryResult.source === "wikipedia"
+                          ? "Wikipédia Lusófona (Enciclopédia)"
+                          : dictionaryResult.source === "gemini"
+                          ? "Análise Semântica Contextual"
+                          : "Léxico Integrado da Plataforma"
+                      }
                     </span>
                     {dictionaryResult.source === "local" && (
                       <span className="text-emerald-500 font-medium">Disponível Offline</span>
@@ -2520,18 +2622,43 @@ export default function Reader() {
             </div>
 
             {/* Ações do Rodapé do Modal */}
-            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3">
-              {dictionaryResult ? (
-                <button
-                  onClick={handleSaveDefinitionAsNote}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold shadow-xs hover:opacity-90 active:scale-95 transition-all"
-                >
-                  <MessageSquarePlus className="w-3.5 h-3.5" />
-                  <span>Guardar como Nota</span>
-                </button>
-              ) : <div />}
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2.5 flex-wrap">
+              <div className="flex items-center gap-2">
+                {dictionaryResult && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCopyDefinition}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-black dark:text-white rounded-xl text-xs font-semibold shadow-xs hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all"
+                      title="Copiar definição para a área de transferência"
+                    >
+                      {copiedDefFeedback ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-500" />
+                          <span className="text-emerald-600 dark:text-emerald-400 font-bold">Copiado</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-gray-500" />
+                          <span>Copiar</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveDefinitionAsNote}
+                      className="flex items-center gap-1.5 px-3.5 py-2 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold shadow-xs hover:opacity-90 active:scale-95 transition-all"
+                    >
+                      <MessageSquarePlus className="w-3.5 h-3.5" />
+                      <span>Guardar Nota</span>
+                    </button>
+                  </>
+                )}
+              </div>
 
               <button
+                type="button"
                 onClick={() => setShowDictionaryModal(false)}
                 className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               >
