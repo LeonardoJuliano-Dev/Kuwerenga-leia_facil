@@ -8,10 +8,12 @@ import {
   BookmarkCheck,
   Send,
   Trash2,
-  Phone
+  Phone,
+  TrendingUp
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { buildWhatsAppLink, getLocalStoreBooks } from "../lib/storeService";
+import { recordBookRead, formatReadCount, getLocalReadRecords } from "../lib/bookMetricsService";
 
 interface BookData {
   id: string;
@@ -24,6 +26,7 @@ interface BookData {
   total_pages: number;
   avg_rating: number;
   total_ratings: number;
+  read_count?: number;
   category: { name: string } | null;
   created_at: string;
   is_for_sale?: boolean;
@@ -71,7 +74,7 @@ export default function BookDetails() {
         if (user) setCurrentUserId(user.id);
 
         // 1. Carregar Detalhes do Livro
-        const { data: bookRecord, error: bookErr } = await supabase
+        let { data: bookRecord, error: bookErr } = await supabase
           .from("books")
           .select(`
             id,
@@ -90,13 +93,49 @@ export default function BookDetails() {
             currency,
             stock_status,
             seller_whatsapp,
+            read_count,
             category:categories(name)
           `)
           .eq("id", id)
           .maybeSingle();
 
+        // Se falhar (por exemplo, coluna read_count ainda não migrada na BD), faz fallback seguro
+        if (bookErr) {
+          const fallbackRes = await supabase
+            .from("books")
+            .select(`
+              id,
+              title,
+              author,
+              description,
+              cover_url,
+              file_url,
+              file_type,
+              total_pages,
+              avg_rating,
+              total_ratings,
+              created_at,
+              is_for_sale,
+              price,
+              currency,
+              stock_status,
+              seller_whatsapp,
+              category:categories(name)
+            `)
+            .eq("id", id)
+            .maybeSingle();
+          bookRecord = fallbackRes.data as any;
+        }
+
+        const localRecords = getLocalReadRecords();
+        const localCount = id ? (localRecords[id]?.count || 0) : 0;
+
         if (bookRecord) {
-          setBook(bookRecord as any);
+          const dbReads = typeof bookRecord.read_count === "number" ? bookRecord.read_count : 0;
+          setBook({
+            ...(bookRecord as any),
+            read_count: Math.max(dbReads, localCount),
+          });
         } else {
           // Fallback para livros de loja locais
           const localMatch = getLocalStoreBooks().find((b) => b.id === id);
@@ -106,6 +145,7 @@ export default function BookDetails() {
               total_pages: localMatch.total_pages || 0,
               avg_rating: 5,
               total_ratings: 1,
+              read_count: localCount,
               category: null,
             } as any);
           } else if (bookErr) {
@@ -350,8 +390,8 @@ export default function BookDetails() {
           <h1 className="text-2xl font-bold tracking-tight mb-1">{book.title}</h1>
           <p className="text-sm text-gray-500 mb-4">{book.author}</p>
 
-          {/* Rating Badge */}
-          <div className="flex items-center gap-2 mb-6">
+          {/* Rating Badge e Métricas de Leitura */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
             <div className="flex text-amber-500">
               {[1, 2, 3, 4, 5].map((star) => (
                 <Star
@@ -366,6 +406,16 @@ export default function BookDetails() {
               {book.avg_rating > 0 ? Number(book.avg_rating).toFixed(1) : "Sem notas"}
             </span>
             <span className="text-xs text-gray-400">({book.total_ratings} avaliações)</span>
+
+            {(book.read_count || 0) > 0 && (
+              <>
+                <span className="text-gray-300 dark:text-gray-700 text-xs">•</span>
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-900/60">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  <span>{formatReadCount(book.read_count)}</span>
+                </span>
+              </>
+            )}
           </div>
 
           {/* Botão de Leitura Direta ou Compra via WhatsApp */}
@@ -423,6 +473,7 @@ export default function BookDetails() {
               {book.file_url && book.file_type !== "physical" && (
                 <Link
                   to={`/reader?bookId=${book.id}`}
+                  onClick={() => recordBookRead(book.id)}
                   className="w-full py-3 rounded-2xl font-semibold text-xs border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white transition-colors flex items-center justify-center gap-2"
                 >
                   <BookOpen className="w-4 h-4" />
@@ -433,6 +484,7 @@ export default function BookDetails() {
           ) : (
             <Link
               to={`/reader?bookId=${book.id}`}
+              onClick={() => recordBookRead(book.id)}
               className="w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-2xl font-bold text-sm shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2"
             >
               <BookOpen className="w-5 h-5" />

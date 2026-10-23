@@ -20,7 +20,9 @@ import {
   Upload,
   Image as ImageIcon,
   Sparkles,
-  RotateCcw
+  RotateCcw,
+  TrendingUp,
+  Award
 } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import AdminBookSaleModal from "../components/AdminBookSaleModal";
@@ -40,6 +42,7 @@ import {
   deleteBookAsAdmin,
   type BookSaleItem
 } from "../lib/storeService";
+import { getLocalReadRecords, formatReadCount } from "../lib/bookMetricsService";
 
 interface Book {
   id: string;
@@ -53,6 +56,7 @@ interface Book {
   category_id: string | null;
   avg_rating?: number;
   total_ratings?: number;
+  read_count?: number;
   created_at: string;
   // Moderação
   is_approved?: boolean;
@@ -81,7 +85,7 @@ export default function Explore() {
   const [categorySearchQuery, setCategorySearchQuery] = useState("");
   
   // Filtro de Formato / Catálogo
-  const [catalogFilter, setCatalogFilter] = useState<"all" | "free" | "store" | "pdf" | "epub" | "pending_approval">("all");
+  const [catalogFilter, setCatalogFilter] = useState<"all" | "most_read" | "free" | "store" | "pdf" | "epub" | "pending_approval">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(() => !getCached<Book[]>("explore_books"));
   const [isAdmin, setIsAdmin] = useState(false);
@@ -106,11 +110,13 @@ export default function Explore() {
 
   const navigate = useNavigate();
 
-  // Verifica se a URL solicita a aba de aprovações
+  // Verifica se a URL solicita a aba de aprovações ou os mais lidos
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("tab") === "admin_approvals") {
       setCatalogFilter("pending_approval");
+    } else if (params.get("sort") === "most_read" || params.get("filter") === "most_read") {
+      setCatalogFilter("most_read");
     }
   }, []);
 
@@ -127,15 +133,34 @@ export default function Explore() {
         setCategories(mergedCategories);
         setCached("explore_categories", mergedCategories);
 
-        // 3. Livros digitais gratuitos / doados (incluindo status de aprovação)
-        const { data: bookList, error } = await supabase
+        // 3. Livros digitais gratuitos / doados (incluindo status de aprovação e métricas)
+        let { data: bookList, error } = await supabase
           .from("books")
-          .select("id, title, author, description, cover_url, file_url, file_type, total_pages, category_id, avg_rating, total_ratings, created_at, is_for_sale, price, currency, stock_status, seller_whatsapp, uploaded_by, is_approved")
+          .select("id, title, author, description, cover_url, file_url, file_type, total_pages, category_id, avg_rating, total_ratings, created_at, is_for_sale, price, currency, stock_status, seller_whatsapp, uploaded_by, is_approved, read_count")
           .order("created_at", { ascending: false });
 
-        if (!error && bookList) {
-          setBooks(bookList as Book[]);
-          setCached("explore_books", bookList);
+        if (error || !bookList) {
+          const fallbackRes = await supabase
+            .from("books")
+            .select("id, title, author, description, cover_url, file_url, file_type, total_pages, category_id, avg_rating, total_ratings, created_at, is_for_sale, price, currency, stock_status, seller_whatsapp, uploaded_by, is_approved")
+            .order("created_at", { ascending: false });
+          bookList = fallbackRes.data as any;
+        }
+
+        const localRecords = getLocalReadRecords();
+
+        if (bookList) {
+          const enrichedBooks: Book[] = bookList.map((b: any) => {
+            const dbCount = typeof b.read_count === "number" ? b.read_count : 0;
+            const localCount = localRecords[b.id]?.count || 0;
+            return {
+              ...b,
+              read_count: Math.max(dbCount, localCount),
+            };
+          });
+
+          setBooks(enrichedBooks);
+          setCached("explore_books", enrichedBooks);
         }
 
         // 4. Livros à venda
@@ -178,6 +203,7 @@ export default function Explore() {
         file_type: sb.file_type || "physical",
         total_pages: sb.total_pages || 0,
         category_id: sb.category_id || null,
+        read_count: 0,
         created_at: sb.created_at,
         is_for_sale: true,
         price: sb.price,
@@ -229,11 +255,17 @@ export default function Explore() {
     let matchesFilter = true;
     if (catalogFilter === "free") matchesFilter = !b.is_for_sale && b.is_approved !== false;
     else if (catalogFilter === "store") matchesFilter = Boolean(b.is_for_sale);
+    else if (catalogFilter === "most_read") matchesFilter = b.is_approved !== false;
     else if (catalogFilter === "pdf") matchesFilter = b.file_type === "pdf" && !b.is_for_sale && b.is_approved !== false;
     else if (catalogFilter === "epub") matchesFilter = b.file_type === "epub" && !b.is_for_sale && b.is_approved !== false;
 
     return matchesSearch && matchesCategory && matchesFilter;
   });
+
+  // Livros ordenados e apresentados (se for Mais Lidos, ordena estritamente por número de leituras)
+  const displayedBooks = catalogFilter === "most_read"
+    ? [...filteredBooks].sort((a, b) => (b.read_count || 0) - (a.read_count || 0))
+    : filteredBooks;
 
   // Ações de Administrador: Aprovar Livro Doado
   const handleApproveBook = async (e: React.MouseEvent, book: Book) => {
@@ -480,6 +512,7 @@ export default function Explore() {
 
   const storeCount = allCombinedBooks.filter((b) => b.is_for_sale).length;
   const freeCount = allCombinedBooks.filter((b) => !b.is_for_sale).length;
+  const mostReadCount = allCombinedBooks.filter((b) => (b.read_count || 0) > 0).length;
   const currentCategoryName = categories.find((c) => c.id === selectedCategory)?.name || "Todas as Categorias";
 
   // Categorias filtradas pela barra de pesquisa interna do seletor
@@ -507,6 +540,8 @@ export default function Explore() {
               <span className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 block mt-0.5">
                 {catalogFilter === "store"
                   ? "Livraria Kuwerenga • Livros impressos e encomendas via WhatsApp"
+                  : catalogFilter === "most_read"
+                  ? "Ranking oficial dos livros mais lidos pela comunidade"
                   : "Livros digitais gratuitos e livros impressos à venda"}
               </span>
             </div>
@@ -571,6 +606,19 @@ export default function Explore() {
             >
               <span>Todo o Catálogo</span>
               <span className="text-[10px] opacity-75">({allCombinedBooks.length})</span>
+            </button>
+
+            <button
+              onClick={() => setCatalogFilter("most_read")}
+              className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
+                catalogFilter === "most_read"
+                  ? "bg-amber-500 text-black shadow-xs scale-[1.02]"
+                  : "bg-white dark:bg-gray-900 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/60 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Mais Lidos</span>
+              {mostReadCount > 0 && <span className="text-[10px] opacity-90">({mostReadCount})</span>}
             </button>
 
             <button
@@ -719,10 +767,12 @@ export default function Explore() {
                 ? "Livros para Compra & Encomenda"
                 : catalogFilter === "free"
                 ? "Livros Digitais para Ler Grátis"
+                : catalogFilter === "most_read"
+                ? "Ranking dos Livros Mais Lidos"
                 : "Catálogo Disponível"}
               {" "}
               <span className="text-xs text-gray-400 font-normal">
-                ({filteredBooks.length} {filteredBooks.length === 1 ? "livro" : "livros"})
+                ({displayedBooks.length} {displayedBooks.length === 1 ? "livro" : "livros"})
               </span>
             </h2>
           </div>
@@ -732,7 +782,7 @@ export default function Explore() {
               <div className="w-8 h-8 border-2 border-black dark:border-white border-t-transparent dark:border-t-transparent rounded-full animate-spin"></div>
               <p className="text-xs text-gray-400">A carregar catálogo de livros...</p>
             </div>
-          ) : filteredBooks.length === 0 ? (
+          ) : displayedBooks.length === 0 ? (
             <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 text-center my-6 shadow-xs">
               <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <BookOpen className="w-7 h-7" />
@@ -743,6 +793,8 @@ export default function Explore() {
                   ? "Tenta pesquisar por outro termo ou remover os filtros de pesquisa."
                   : catalogFilter === "pending_approval"
                   ? "Não existem livros pendentes de moderação neste momento. Todas as doações estão revistas e aprovadas."
+                  : catalogFilter === "most_read"
+                  ? "Ainda não foram registadas leituras na plataforma. Sê o primeiro a ler uma obra para abrir o ranking comunitário!"
                   : catalogFilter === "store"
                   ? isAdmin
                     ? "Ainda não existem livros cadastrados para venda. Como administrador, podes adicionar o primeiro livro!"
@@ -772,7 +824,7 @@ export default function Explore() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
-              {filteredBooks.map((book) => {
+              {displayedBooks.map((book, bookIdx) => {
                 const isSale = Boolean(book.is_for_sale);
                 const isOutOfStock = book.stock_status === "out_of_stock";
 
@@ -810,10 +862,30 @@ export default function Explore() {
 
                       {/* Badge sobre a capa para livros à venda */}
                       {isSale && (
-                        <div className="absolute top-1 left-1 sm:top-1.5 sm:left-1.5">
+                        <div className="absolute top-1 left-1 sm:top-1.5 sm:left-1.5 z-10">
                           <span className="px-1.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider bg-black/85 text-white backdrop-blur-xs flex items-center gap-1 shadow-xs">
                             <Tag className="w-2.5 h-2.5 text-emerald-400" />
                             {book.price ? `${book.price} ${book.currency || "MT"}` : "À Venda"}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Badge sobre a capa para os Mais Lidos */}
+                      {catalogFilter === "most_read" && (
+                        <div className="absolute top-1 left-1 sm:top-1.5 sm:left-1.5 z-10">
+                          <span
+                            className={`px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs ${
+                              bookIdx === 0
+                                ? "bg-amber-400 text-black"
+                                : bookIdx === 1
+                                ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white"
+                                : bookIdx === 2
+                                ? "bg-amber-700 text-white"
+                                : "bg-black/85 backdrop-blur-xs text-white"
+                            }`}
+                          >
+                            {bookIdx === 0 && <Award className="w-2.5 h-2.5 stroke-[2.5]" />}
+                            {bookIdx + 1}º
                           </span>
                         </div>
                       )}
@@ -848,6 +920,14 @@ export default function Explore() {
                           ) : (
                             <span className="inline-block uppercase tracking-wider text-[9px] font-bold px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
                               {book.file_type} • Grátis
+                            </span>
+                          )}
+
+                          {/* Métrica de Leitura */}
+                          {(book.read_count || 0) > 0 && (
+                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/60 flex items-center gap-1">
+                              <TrendingUp className="w-2.5 h-2.5" />
+                              <span>{formatReadCount(book.read_count)}</span>
                             </span>
                           )}
                         </div>

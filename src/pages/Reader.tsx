@@ -57,6 +57,7 @@ import { getCached, setCached } from "../lib/cache";
 import { recordReadingSession } from "../lib/profileService";
 import { syncWithServiceWorkerForBackground } from "../lib/notificationService";
 import { applyTheme } from "../lib/theme";
+import { recordBookRead } from "../lib/bookMetricsService";
 
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -203,7 +204,11 @@ export default function Reader() {
     supabase.auth.getUser().then(({ data }) => {
       setCurrentUserId(data.user?.id || null);
     });
-  }, []);
+    // Regista início de leitura nas métricas globais e locais da obra
+    if (bookId && bookId !== "demo-book" && !bookId.startsWith("local-")) {
+      recordBookRead(bookId).catch(() => {});
+    }
+  }, [bookId]);
 
   useEffect(() => {
     const timer = setInterval(() => {

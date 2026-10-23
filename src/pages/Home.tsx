@@ -1,12 +1,31 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, Compass, Users, Library, Bell, BookOpen, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Search,
+  Compass,
+  Users,
+  Library,
+  Bell,
+  BookOpen,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  TrendingUp,
+  Clock,
+  Award,
+  Sparkles
+} from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import NotificationsModal from "../components/NotificationsModal";
 import { subscribeToNotifications, getUnreadNotificationsCount } from "../lib/notificationService";
 import { supabase } from "../lib/supabase";
 import { getCached, setCached } from "../lib/cache";
 import { getLocalCustomBooks } from "../lib/bookshelfService";
+import {
+  fetchMostReadBooks,
+  formatReadCount,
+  type MostReadBook
+} from "../lib/bookMetricsService";
 
 interface Book {
   id: string;
@@ -30,8 +49,10 @@ interface CurrentReading {
 export default function Home() {
   const [readingList, setReadingList] = useState<CurrentReading[]>(() => getCached<CurrentReading[]>("home_reading_list") || []);
   const [featuredBooks, setFeaturedBooks] = useState<Book[]>(() => getCached<Book[]>("home_featured_books") || []);
+  const [mostReadBooks, setMostReadBooks] = useState<MostReadBook[]>(() => getCached<MostReadBook[]>("home_most_read_books") || []);
+  const [featuredTab, setFeaturedTab] = useState<"most_read" | "recent">("most_read");
   const [searchQuery, setSearchQuery] = useState("");
-  const [loading, setLoading] = useState(() => !getCached<Book[]>("home_featured_books"));
+  const [loading, setLoading] = useState(() => !getCached<Book[]>("home_featured_books") && !getCached<MostReadBook[]>("home_most_read_books"));
   const sliderRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -151,6 +172,13 @@ export default function Home() {
         if (books) {
           setFeaturedBooks(books as Book[]);
           setCached("home_featured_books", books);
+        }
+
+        // 3. Livros Mais Lidos da Comunidade
+        const mostRead = await fetchMostReadBooks(8);
+        if (mostRead && mostRead.length > 0) {
+          setMostReadBooks(mostRead);
+          setCached("home_most_read_books", mostRead);
         }
       } catch (err) {
         console.error("Erro ao carregar dados da Home:", err);
@@ -401,12 +429,47 @@ export default function Home() {
           </Link>
         </section>
 
-        {/* Em Destaque (Real) */}
+        {/* Em Destaque / Mais Lidos */}
         <section className="px-4 sm:px-6 mb-8 app-container">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold">Em destaque</h2>
-            <Link to="/explore" className="text-xs text-gray-500 font-medium hover:underline">
-              Ver todos ({featuredBooks.length})
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-lg font-bold">Em destaque</h2>
+
+              {/* Seletor de Abas: Mais Lidos e Recentes */}
+              <div className="inline-flex p-0.5 rounded-xl bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setFeaturedTab("most_read")}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    featuredTab === "most_read"
+                      ? "bg-black dark:bg-white text-white dark:text-black shadow-xs"
+                      : "text-gray-500 hover:text-black dark:hover:text-white"
+                  }`}
+                >
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  <span>Mais Lidos</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFeaturedTab("recent")}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    featuredTab === "recent"
+                      ? "bg-black dark:bg-white text-white dark:text-black shadow-xs"
+                      : "text-gray-500 hover:text-black dark:hover:text-white"
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Recentes</span>
+                </button>
+              </div>
+            </div>
+
+            <Link
+              to={featuredTab === "most_read" ? "/explore?sort=most_read" : "/explore"}
+              className="text-xs text-gray-500 hover:text-black dark:hover:text-white font-medium hover:underline inline-flex items-center gap-1 self-start sm:self-auto"
+            >
+              <span>{featuredTab === "most_read" ? "Ver ranking completo" : `Ver todos (${featuredBooks.length})`}</span>
+              <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 
@@ -414,6 +477,145 @@ export default function Home() {
             <div className="flex items-center justify-center py-10">
               <div className="w-6 h-6 border-2 border-black dark:border-white border-t-transparent rounded-full animate-spin"></div>
             </div>
+          ) : featuredTab === "most_read" ? (
+            mostReadBooks.length === 0 ? (
+              <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 text-center">
+                <p className="text-xs text-gray-500 mb-3">Ainda não foram registadas leituras na plataforma.</p>
+                <Link
+                  to="/explore"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-semibold"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span>Explorar e Começar a Ler</span>
+                </Link>
+              </div>
+            ) : (
+              <div>
+                {/* Destaque Spotlight: Livro Mais Lido #1 */}
+                {mostReadBooks[0] && (
+                  <div className="mb-4 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300/40 dark:border-amber-500/30 flex items-center justify-between gap-3.5 transition-all">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <Link to={`/book/${mostReadBooks[0].id}`} className="relative shrink-0 group">
+                        <div className="w-14 sm:w-16 aspect-[2/3] rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800 border border-amber-400/60 dark:border-amber-500/60 shadow-sm">
+                          {mostReadBooks[0].cover_url ? (
+                            <img
+                              src={mostReadBooks[0].cover_url}
+                              alt={mostReadBooks[0].title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-black text-white p-1 text-center flex flex-col justify-center">
+                              <span className="font-serif text-[8px] font-bold line-clamp-2 leading-tight">
+                                {mostReadBooks[0].title}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <span className="absolute -top-1.5 -left-1.5 px-1.5 py-0.5 rounded-full bg-amber-400 text-black text-[9px] font-black uppercase tracking-wider flex items-center gap-0.5 shadow-xs">
+                          <Award className="w-2.5 h-2.5 stroke-[2.5]" />
+                          1º
+                        </span>
+                      </Link>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                          <span className="text-[9px] uppercase tracking-wider font-extrabold text-amber-600 dark:text-amber-400">
+                            Top 1 Comunitário
+                          </span>
+                          <span className="text-[10px] text-gray-400">•</span>
+                          <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300 flex items-center gap-1">
+                            <TrendingUp className="w-3 h-3 text-amber-500" />
+                            {formatReadCount(mostReadBooks[0].read_count)}
+                          </span>
+                        </div>
+                        <Link to={`/book/${mostReadBooks[0].id}`}>
+                          <h3 className="text-sm font-bold truncate leading-tight hover:underline">
+                            {mostReadBooks[0].title}
+                          </h3>
+                        </Link>
+                        <p className="text-xs text-gray-500 truncate mt-0.5">{mostReadBooks[0].author}</p>
+                      </div>
+                    </div>
+
+                    <Link
+                      to={`/book/${mostReadBooks[0].id}`}
+                      className="shrink-0 px-3.5 py-2 rounded-xl bg-black dark:bg-white text-white dark:text-black text-xs font-bold active:scale-95 transition-all shadow-xs"
+                    >
+                      Ver Obra
+                    </Link>
+                  </div>
+                )}
+
+                {/* Grade do Ranking dos Mais Lidos */}
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
+                  {mostReadBooks.map((book) => {
+                    const rank = book.rank || 1;
+                    return (
+                      <Link
+                        key={book.id}
+                        to={`/book/${book.id}`}
+                        className="group"
+                      >
+                        <div className="w-full aspect-[2/3] bg-gray-100 dark:bg-gray-800 rounded-xl mb-2 overflow-hidden flex flex-col items-center justify-center border border-gray-200 dark:border-gray-700 shadow-xs relative">
+                          {book.cover_url ? (
+                            <img
+                              src={book.cover_url}
+                              alt={book.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                          ) : (
+                            <div className="w-full h-full p-2 flex flex-col justify-between bg-black text-white text-center">
+                              <span className="text-[7px] uppercase tracking-widest text-gray-400">
+                                {book.file_type}
+                              </span>
+                              <span className="font-serif text-[10px] font-bold line-clamp-3 leading-tight">
+                                {book.title}
+                              </span>
+                              <span className="text-[7px] text-gray-400 truncate">{book.author}</span>
+                            </div>
+                          )}
+
+                          {/* Medalha / Badge de Ranking */}
+                          {rank === 1 ? (
+                            <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-amber-400 text-black text-[9px] font-black uppercase tracking-wider flex items-center gap-0.5 shadow-sm">
+                              <Award className="w-2.5 h-2.5 stroke-[2.5]" />
+                              1º
+                            </span>
+                          ) : rank === 2 ? (
+                            <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white text-[9px] font-black shadow-sm">
+                              2º
+                            </span>
+                          ) : rank === 3 ? (
+                            <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-amber-700 text-white text-[9px] font-black shadow-sm">
+                              3º
+                            </span>
+                          ) : (
+                            <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-black/75 backdrop-blur-xs text-white text-[9px] font-bold shadow-xs">
+                              {rank}º
+                            </span>
+                          )}
+
+                          {/* Tag do formato */}
+                          <span className="absolute top-2 right-2 text-[8px] uppercase font-bold px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-xs text-white">
+                            {book.file_type}
+                          </span>
+                        </div>
+
+                        <h4 className="text-xs font-bold leading-tight line-clamp-1 group-hover:underline">
+                          {book.title}
+                        </h4>
+                        <p className="text-[10px] text-gray-500 truncate">{book.author}</p>
+
+                        <div className="flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 mt-1">
+                          <TrendingUp className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{formatReadCount(book.read_count)}</span>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )
           ) : featuredBooks.length === 0 ? (
             <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 text-center">
               <p className="text-xs text-gray-500 mb-3">Ainda não foram adicionados livros à plataforma.</p>
@@ -427,7 +629,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
-              {featuredBooks.map((book) => (
+              {featuredBooks.map((book, idx) => (
                 <Link
                   key={book.id}
                   to={`/book/${book.id}`}
@@ -451,6 +653,17 @@ export default function Home() {
                         <span className="text-[7px] text-gray-400 truncate">{book.author}</span>
                       </div>
                     )}
+
+                    {idx < 2 && (
+                      <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-black/75 backdrop-blur-xs text-white text-[9px] font-bold flex items-center gap-1 shadow-xs">
+                        <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                        Novo
+                      </span>
+                    )}
+
+                    <span className="absolute top-2 right-2 text-[8px] uppercase font-bold px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-xs text-white">
+                      {book.file_type}
+                    </span>
                   </div>
                   <h4 className="text-xs font-bold leading-tight line-clamp-1 group-hover:underline">
                     {book.title}
